@@ -945,8 +945,8 @@ export default function App() {
               <div className="absolute top-0 left-0 w-full h-3" style={{ background: `linear-gradient(90deg, ${COLORS.inkOrange}, ${COLORS.inkBlue})` }}></div>
               
               <Medal size={64} className="mx-auto mb-6" style={{ color: COLORS.inkOrange }} />
-              <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-[0.2em] text-white">黑馬<span style={{color: COLORS.inkBlue}}>誕生</span></h2>
-              <p className="font-bold tracking-widest mb-10 text-lg" style={{ color: COLORS.textMuted }}>全三輪瑞士制賽事・最終結果</p>
+              <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-[0.2em] text-white">賽事<span style={{color: COLORS.inkBlue}}>結果</span></h2>
+              <p className="font-bold tracking-widest mb-10 text-lg" style={{ color: COLORS.textMuted }}>挑戰組賽事・最終結果</p>
 
               <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: COLORS.cardBorder }}>
                 <table className="w-full text-left border-collapse bg-black/40">
