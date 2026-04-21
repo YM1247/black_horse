@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Users, Swords, UserPlus, Play, CheckCircle, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check } from 'lucide-react';
 
-const SCHOOLS = ['學校 A', '學校 B', '學校 C', '學校 D'];
+const SCHOOLS = ['輔仁大學', '臺灣大學', '政治大學', '臺北城市科大'];
 const MAX_ROUNDS = 3;
 
 // 主題色票 (對應黑馬記念圖片)
@@ -650,15 +650,11 @@ export default function App() {
         
         {/* Header - 水墨黑馬記念風格 */}
         <header className="mb-12 text-center space-y-4 pt-4">
-          <div className="inline-flex items-center justify-center p-4 rounded-full border-2 border-dashed shadow-2xl brush-border"
-               style={{ backgroundColor: COLORS.card, borderColor: COLORS.inkOrange, color: COLORS.inkOrange }}>
-            <Swords size={48} strokeWidth={1.5} />
-          </div>
-          <h1 className="text-5xl md:text-6xl font-black tracking-[0.2em] uppercase" style={{ color: COLORS.textMain, textShadow: `2px 2px 0px ${COLORS.inkBlue}` }}>
+          <h1 className="text-5xl md:text-6xl font-black tracking-[0.2em] uppercase" style={{ color: COLORS.textMain }}>
             黑馬<span style={{color: COLORS.inkOrange}}>記念</span>
           </h1>
           <p className="font-bold tracking-widest text-lg" style={{ color: COLORS.textMuted }}>
-            瑞士制配對系統 • {MAX_ROUNDS} 輪對決 • 五評委判決
+            挑戰組瑞士制配對系統
           </p>
         </header>
 
