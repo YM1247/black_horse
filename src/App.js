@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Users, Swords, UserPlus, Play, CheckCircle, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check } from 'lucide-react';
+import { Trophy, Users, Swords, UserPlus, Play, CheckCircle, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
 
 const SCHOOLS = ['輔仁大學', '臺灣大學', '政治大學', '臺北城市科大'];
 const MAX_ROUNDS = 3;
@@ -89,6 +89,43 @@ export default function App() {
     const newPlayer = { id: crypto.randomUUID(), name: newName.trim(), school: newSchool, wins: 0, votes: 0, isBye: false };
     setPlayers([...players, newPlayer]);
     setNewName('');
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+      const lines = text.split(/\r?\n/);
+      const newPlayers = [];
+      
+      lines.forEach((line, index) => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) return;
+        
+        const parts = trimmedLine.split(',');
+        if (parts.length >= 1) {
+          // 如果第一行看起來像標題，跳過不匯入
+          if (index === 0 && (parts[0].toLowerCase().includes('name') || parts[0].includes('姓名') || parts[0].includes('名稱') || parts[0].includes('選手'))) return;
+          
+          const name = parts[0].trim();
+          // 如果 CSV 有提供學校就使用，沒有則預設帶入第一個預設學校
+          const school = parts.length > 1 && parts[1].trim() ? parts[1].trim() : SCHOOLS[0];
+          
+          if (name) {
+            newPlayers.push({ id: crypto.randomUUID(), name, school, wins: 0, votes: 0, isBye: false });
+          }
+        }
+      });
+      
+      if (newPlayers.length > 0) {
+        setPlayers(prev => [...prev, ...newPlayers]);
+      }
+      e.target.value = null; // 重置 input 讓下次可以選同一個檔案
+    };
+    reader.readAsText(file);
   };
 
   const loadMockData = () => {
@@ -603,11 +640,11 @@ export default function App() {
             <div className="flex items-center gap-4 mb-6">
               <AlertTriangle size={32} style={{ color: COLORS.inkOrange }} />
               <h3 className="text-2xl font-black tracking-widest text-white">
-                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'REMATCH' ? '保留選手重賽' : confirmAction.type === 'FULL_RESET' ? '完全重設賽事' : confirmAction.type === 'LOAD_SAVE' ? '讀取賽事紀錄' : confirmAction.type === 'DELETE_SAVE' ? '刪除賽事紀錄' : confirmAction.type === 'GO_HOME' ? '回到首頁' : ''}
+                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'REMATCH' ? '保留選手重賽' : confirmAction.type === 'FULL_RESET' ? '完全重設賽事' : confirmAction.type === 'LOAD_SAVE' ? '讀取賽事紀錄' : confirmAction.type === 'DELETE_SAVE' ? '刪除賽事紀錄' : confirmAction.type === 'GO_HOME' ? '回到首頁' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : ''}
               </h3>
             </div>
             <p className="mb-8 font-bold leading-relaxed text-base" style={{ color: COLORS.textMuted }}>
-              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'REMATCH' ? '確定要保留現有的選手名單，清空所有戰績並重新開始報名階段嗎？' : confirmAction.type === 'FULL_RESET' ? '此動作將會清除所有選手名單與賽程資料，確定要返回初始狀態嗎？' : confirmAction.type === 'LOAD_SAVE' ? '確定要讀取這筆紀錄嗎？當前未儲存的進度將會完全遺失。' : confirmAction.type === 'DELETE_SAVE' ? '確定要永久刪除這筆存檔嗎？此動作無法復原。' : confirmAction.type === 'GO_HOME' ? '確定要回到首頁嗎？如果直接離開，當前未儲存的賽程將會遺失。' : ''}
+              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'REMATCH' ? '確定要保留現有的選手名單，清空所有戰績並重新開始報名階段嗎？' : confirmAction.type === 'FULL_RESET' ? '此動作將會清除所有選手名單與賽程資料，確定要返回初始狀態嗎？' : confirmAction.type === 'LOAD_SAVE' ? '確定要讀取這筆紀錄嗎？當前未儲存的進度將會完全遺失。' : confirmAction.type === 'DELETE_SAVE' ? '確定要永久刪除這筆存檔嗎？此動作無法復原。' : confirmAction.type === 'GO_HOME' ? '確定要回到首頁嗎？如果直接離開，當前未儲存的賽程將會遺失。' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : ''}
             </p>
             
             {confirmAction.type === 'GO_HOME' ? (
@@ -635,9 +672,10 @@ export default function App() {
                     else if (confirmAction.type === 'FULL_RESET') confirmFullReset();
                     else if (confirmAction.type === 'LOAD_SAVE') executeLoadSave(confirmAction.saveId);
                     else if (confirmAction.type === 'DELETE_SAVE') executeDeleteSave(confirmAction.saveId);
+                    else if (confirmAction.type === 'CLEAR_PLAYERS') { setPlayers([]); setConfirmAction(null); }
                   }}
                   className="px-6 py-2.5 rounded-lg font-black tracking-widest brush-border"
-                  style={{ backgroundColor: confirmAction.type === 'DELETE_SAVE' ? '#ef4444' : COLORS.inkOrange, color: COLORS.bg }}>
+                  style={{ backgroundColor: (confirmAction.type === 'DELETE_SAVE' || confirmAction.type === 'CLEAR_PLAYERS') ? '#ef4444' : COLORS.inkOrange, color: COLORS.bg }}>
                   確定執行
                 </button>
               </div>
@@ -684,8 +722,15 @@ export default function App() {
                   </button>
                 </form>
 
-                <div className="mt-8 pt-8 border-t border-dashed" style={{ borderColor: COLORS.cardBorder }}>
-                  <button onClick={loadMockData} className="w-full font-bold py-3 rounded-xl transition-colors text-sm tracking-widest border border-dashed"
+                <div className="mt-8 pt-8 border-t border-dashed flex flex-col gap-3" style={{ borderColor: COLORS.cardBorder }}>
+                  <label className="w-full font-bold py-3 rounded-xl transition-colors text-sm tracking-widest border border-dashed flex items-center justify-center gap-2 cursor-pointer hover:bg-white/5"
+                    style={{ backgroundColor: 'transparent', color: COLORS.inkOrange, borderColor: COLORS.inkOrange }}>
+                    <Upload size={18} />
+                    匯入 CSV 選手名單
+                    <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                  </label>
+                  
+                  <button onClick={loadMockData} className="w-full font-bold py-3 rounded-xl transition-colors text-sm tracking-widest border border-dashed hover:bg-white/5"
                     style={{ backgroundColor: 'transparent', color: COLORS.inkBlue, borderColor: COLORS.inkBlue }}>
                     載入測試名單 (8人)
                   </button>
@@ -699,11 +744,20 @@ export default function App() {
                   <h2 className="text-xl font-black flex items-center gap-3 tracking-widest" style={{ color: COLORS.inkOrange }}>
                     <Users size={24} /> 參賽陣容 ({players.length})
                   </h2>
-                  <button onClick={startTournament} disabled={players.length < 2}
-                    className="flex items-center gap-2 px-8 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg disabled:opacity-30 transition-all hover:scale-105 active:scale-95 brush-border"
-                    style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>
-                    <Play size={20} fill="currentColor" /> 開始抽籤
-                  </button>
+                  <div className="flex gap-3 w-full sm:w-auto">
+                    {players.length > 0 && (
+                      <button onClick={() => setConfirmAction({ type: 'CLEAR_PLAYERS' })}
+                        className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-all hover:bg-red-500/10 border border-dashed text-sm tracking-widest flex-1 sm:flex-none"
+                        style={{ color: '#ef4444', borderColor: '#ef4444' }}>
+                        <Trash2 size={18} /> 清空名單
+                      </button>
+                    )}
+                    <button onClick={startTournament} disabled={players.length < 2}
+                      className="flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg disabled:opacity-30 transition-all hover:scale-105 active:scale-95 brush-border flex-1 sm:flex-none"
+                      style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>
+                      <Play size={20} fill="currentColor" /> 開始抽籤
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="overflow-x-auto rounded-xl border" style={{ borderColor: COLORS.cardBorder }}>
