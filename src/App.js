@@ -130,14 +130,14 @@ export default function App() {
 
   const loadMockData = () => {
     const mockPlayers = [
-      { id: crypto.randomUUID(), name: 'player-001', school: '學校 A', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-002', school: '學校 A', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-003', school: '學校 B', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-004', school: '學校 B', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-005', school: '學校 C', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-006', school: '學校 C', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-007', school: '學校 D', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-008', school: '學校 D', wins: 0, votes: 0, isBye: false },
+      { id: crypto.randomUUID(), name: 'player-001', school: '輔仁大學', wins: 0, votes: 0, isBye: false },
+      { id: crypto.randomUUID(), name: 'player-002', school: '輔仁大學', wins: 0, votes: 0, isBye: false },
+      { id: crypto.randomUUID(), name: 'player-003', school: '臺灣大學', wins: 0, votes: 0, isBye: false },
+      { id: crypto.randomUUID(), name: 'player-004', school: '臺灣大學', wins: 0, votes: 0, isBye: false },
+      { id: crypto.randomUUID(), name: 'player-005', school: '政治大學', wins: 0, votes: 0, isBye: false },
+      { id: crypto.randomUUID(), name: 'player-006', school: '政治大學', wins: 0, votes: 0, isBye: false },
+      { id: crypto.randomUUID(), name: 'player-007', school: '臺北城市科大', wins: 0, votes: 0, isBye: false },
+      { id: crypto.randomUUID(), name: 'player-008', school: '臺北城市科大', wins: 0, votes: 0, isBye: false },
     ];
     setPlayers(mockPlayers);
   };
