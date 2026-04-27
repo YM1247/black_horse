@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/black_horse/static/css/main.f36b059e.css",
-    "main.js": "/black_horse/static/js/main.391764d7.js",
+    "main.css": "/black_horse/static/css/main.d71f4659.css",
+    "main.js": "/black_horse/static/js/main.14c542a8.js",
     "static/js/453.50e5f708.chunk.js": "/black_horse/static/js/453.50e5f708.chunk.js",
     "index.html": "/black_horse/index.html",
-    "main.f36b059e.css.map": "/black_horse/static/css/main.f36b059e.css.map",
-    "main.391764d7.js.map": "/black_horse/static/js/main.391764d7.js.map",
+    "main.d71f4659.css.map": "/black_horse/static/css/main.d71f4659.css.map",
+    "main.14c542a8.js.map": "/black_horse/static/js/main.14c542a8.js.map",
     "453.50e5f708.chunk.js.map": "/black_horse/static/js/453.50e5f708.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.f36b059e.css",
-    "static/js/main.391764d7.js"
+    "static/css/main.d71f4659.css",
+    "static/js/main.14c542a8.js"
   ]
 }
