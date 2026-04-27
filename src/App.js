@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Users, Swords, UserPlus, Play, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
+import { Trophy, Users, Swords, UserPlus, Play, CheckCircle, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
 
 const SCHOOLS = ['輔仁大學', '臺灣大學', '政治大學', '臺北城市科大'];
 const MAX_ROUNDS = 3;
@@ -85,9 +85,10 @@ export default function App() {
 
   const handleAddPlayer = (e) => {
     e.preventDefault();
-    if (!newName.trim()) return;
-    const newPlayer = { id: crypto.randomUUID(), name: newName.trim(), school: newSchool, wins: 0, votes: 0, isBye: false };
-    setPlayers([...players, newPlayer]);
+    const trimmedName = newName.trim();
+    if (!trimmedName || players.some(p => p.name === trimmedName)) return; // 避免重複名稱
+    const newPlayer = { id: crypto.randomUUID(), name: trimmedName, school: newSchool, wins: 0, votes: 0, isWithdrawn: false };
+    setPlayers(prev => [...prev, newPlayer]);
     setNewName('');
   };
 
@@ -114,8 +115,8 @@ export default function App() {
           // 如果 CSV 有提供學校就使用，沒有則預設帶入第一個預設學校
           const school = parts.length > 1 && parts[1].trim() ? parts[1].trim() : SCHOOLS[0];
           
-          if (name) {
-            newPlayers.push({ id: crypto.randomUUID(), name, school, wins: 0, votes: 0, isBye: false });
+          if (name && !players.some(p => p.name === name) && !newPlayers.some(p => p.name === name)) { // 避免重複名稱
+            newPlayers.push({ id: crypto.randomUUID(), name, school, wins: 0, votes: 0, isWithdrawn: false });
           }
         }
       });
@@ -130,14 +131,14 @@ export default function App() {
 
   const loadMockData = () => {
     const mockPlayers = [
-      { id: crypto.randomUUID(), name: 'player-001', school: '輔仁大學', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-002', school: '輔仁大學', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-003', school: '臺灣大學', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-004', school: '臺灣大學', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-005', school: '政治大學', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-006', school: '政治大學', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-007', school: '臺北城市科大', wins: 0, votes: 0, isBye: false },
-      { id: crypto.randomUUID(), name: 'player-008', school: '臺北城市科大', wins: 0, votes: 0, isBye: false },
+      { id: crypto.randomUUID(), name: 'player-001', school: '輔仁大學', wins: 0, votes: 0, isWithdrawn: false },
+      { id: crypto.randomUUID(), name: 'player-002', school: '輔仁大學', wins: 0, votes: 0, isWithdrawn: false },
+      { id: crypto.randomUUID(), name: 'player-003', school: '臺灣大學', wins: 0, votes: 0, isWithdrawn: false },
+      { id: crypto.randomUUID(), name: 'player-004', school: '臺灣大學', wins: 0, votes: 0, isWithdrawn: false },
+      { id: crypto.randomUUID(), name: 'player-005', school: '政治大學', wins: 0, votes: 0, isWithdrawn: false },
+      { id: crypto.randomUUID(), name: 'player-006', school: '政治大學', wins: 0, votes: 0, isWithdrawn: false },
+      { id: crypto.randomUUID(), name: 'player-007', school: '臺北城市科大', wins: 0, votes: 0, isWithdrawn: false },
+      { id: crypto.randomUUID(), name: 'player-008', school: '臺北城市科大', wins: 0, votes: 0, isWithdrawn: false },
     ];
     setPlayers(mockPlayers);
   };
@@ -176,109 +177,104 @@ export default function App() {
 
   // --- 賽事核心邏輯 ---
   const startTournament = () => {
-    let tournamentPlayers = [...players];
-    if (tournamentPlayers.length % 2 !== 0) {
-      tournamentPlayers.push({ id: 'BYE', name: '輪空 (BYE)', school: '-', wins: 0, votes: 0, isBye: true });
-    }
     setPhase('playing');
-    generateRound(1, tournamentPlayers);
+    generateRound(1, players.filter(p => !p.isWithdrawn)); // 第一輪只配對未棄賽選手
   };
 
-  const generateRound = (roundNum, currentPlayers) => {
+  // 全新配對引擎 (支援抽離尚未進行的比賽與魔王配對)
+  const pairPlayers = (roundNum, playersToPair) => {
     let newMatches = [];
+    let pool = [...playersToPair];
+    let mcMatch = null;
+    const MC_PLAYER = { id: 'MC', name: 'MC (主辦/魔王)', school: '-', wins: 0, votes: 0, isMC: true };
+
+    if (pool.length % 2 !== 0) {
+      let chosenIdx = 0;
+      if (roundNum === 1) {
+        chosenIdx = Math.floor(Math.random() * pool.length); // 第一輪隨機選
+      } else {
+        pool.sort((a, b) => {
+          if (b.wins !== a.wins) return b.wins - a.wins;
+          return b.votes - a.votes;
+        });
+        chosenIdx = 0; // 取戰績最高者
+      }
+      let chosenPlayer = pool.splice(chosenIdx, 1)[0];
+      mcMatch = { id: crypto.randomUUID(), p1: chosenPlayer, p2: MC_PLAYER, p1Votes: null, p2Votes: null, isMCMatch: true, isDone: false };
+    }
     
     if (roundNum === 1) {
       let success = false;
       let attempts = 0;
       while (!success && attempts < 100) {
         attempts++;
-        let pool = shuffle([...currentPlayers]);
+        let tempPool = shuffle([...pool]);
         let tempMatches = [];
         let ok = true;
         
-        while (pool.length >= 2) {
-          let p1 = pool.pop();
-          if (p1.isBye) {
-             let p2 = pool.pop();
-             tempMatches.push({ id: crypto.randomUUID(), p1, p2, p1Votes: 0, p2Votes: 5, isByeMatch: true });
-             continue;
-          }
-
-          let p2Idx = pool.findIndex(p => p.school !== p1.school || p.isBye);
+        while (tempPool.length >= 2) {
+          let p1 = tempPool.pop();
+          let p2Idx = tempPool.findIndex(p => p.school !== p1.school);
           if (p2Idx === -1) { ok = false; break; }
-          let p2 = pool.splice(p2Idx, 1)[0];
-          
-          if (p2.isBye) { tempMatches.push({ id: crypto.randomUUID(), p1, p2, p1Votes: 5, p2Votes: 0, isByeMatch: true }); } 
-          else { tempMatches.push({ id: crypto.randomUUID(), p1, p2, p1Votes: null, p2Votes: null, isByeMatch: false }); }
+          let p2 = tempPool.splice(p2Idx, 1)[0];
+          tempMatches.push({ id: crypto.randomUUID(), p1, p2, p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
         }
         if (ok) { success = true; newMatches = tempMatches; }
       }
       if (!success) {
-        let pool = shuffle([...currentPlayers]);
-        while (pool.length >= 2) {
-          let p1 = pool.pop(); let p2 = pool.pop(); let isByeMatch = p1.isBye || p2.isBye;
-          newMatches.push({ id: crypto.randomUUID(), p1, p2, p1Votes: p1.isBye ? 0 : (p2.isBye ? 5 : null), p2Votes: p2.isBye ? 0 : (p1.isBye ? 5 : null), isByeMatch });
+        let tempPool = shuffle([...pool]);
+        while (tempPool.length >= 2) {
+          newMatches.push({ id: crypto.randomUUID(), p1: tempPool.pop(), p2: tempPool.pop(), p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
         }
       }
     } else {
-      let pool = [...currentPlayers.filter(p => !p.isBye)];
-      let byePlayer = currentPlayers.find(p => p.isBye);
       let groups = {};
-      
       pool.forEach(p => { if (!groups[p.wins]) groups[p.wins] = []; groups[p.wins].push(p); });
       let scoreKeys = Object.keys(groups).map(Number).sort((a, b) => b - a); 
       
       for (let i = 0; i < scoreKeys.length; i++) {
         let s = scoreKeys[i];
         if (groups[s].length % 2 !== 0) {
+          // 處理奇數組：將分數最低的選手上浮到下一組
           let minVotes = Math.min(...groups[s].map(p => p.votes));
           let candsLow = groups[s].filter(p => p.votes === minVotes);
           let pLow = candsLow[Math.floor(Math.random() * candsLow.length)];
-          groups[s] = groups[s].filter(p => p.id !== pLow.id); 
+          groups[s] = groups[s].filter(p => p.id !== pLow.id); // 從池中移除
           
           let nextS = -1;
           for (let j = i + 1; j < scoreKeys.length; j++) {
             if (groups[scoreKeys[j]].length > 0) { nextS = scoreKeys[j]; break; }
           }
           if (nextS !== -1) {
+            // 從下一組中選取分數最高的選手進行配對
             let maxVotes = Math.max(...groups[nextS].map(p => p.votes));
             let candsHigh = groups[nextS].filter(p => p.votes === maxVotes);
             let pHigh = candsHigh[Math.floor(Math.random() * candsHigh.length)];
-            groups[nextS] = groups[nextS].filter(p => p.id !== pHigh.id);
-            newMatches.push({ id: crypto.randomUUID(), p1: pLow, p2: pHigh, p1Votes: null, p2Votes: null, isByeMatch: false });
-          } else if (byePlayer) {
-            newMatches.push({ id: crypto.randomUUID(), p1: pLow, p2: byePlayer, p1Votes: 5, p2Votes: 0, isByeMatch: true });
-            byePlayer = null;
+            groups[nextS] = groups[nextS].filter(p => p.id !== pHigh.id); // 從池中移除
+            newMatches.push({ id: crypto.randomUUID(), p1: pLow, p2: pHigh, p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
           }
         }
         
         let remaining = shuffle(groups[s]);
         while (remaining.length >= 2) {
-          newMatches.push({ id: crypto.randomUUID(), p1: remaining.pop(), p2: remaining.pop(), p1Votes: null, p2Votes: null, isByeMatch: false });
-        }
-        if (remaining.length === 1 && byePlayer) {
-          newMatches.push({ id: crypto.randomUUID(), p1: remaining.pop(), p2: byePlayer, p1Votes: 5, p2Votes: 0, isByeMatch: true });
-          byePlayer = null;
+          newMatches.push({ id: crypto.randomUUID(), p1: remaining.pop(), p2: remaining.pop(), p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
         }
       }
     }
     
-    // 寫入快照
-    newMatches = newMatches.map(match => ({
-      ...match, p1WinsSnapshot: match.p1.wins, p1VotesSnapshot: match.p1.votes, p2WinsSnapshot: match.p2.wins, p2VotesSnapshot: match.p2.votes
+    if (mcMatch) {
+      newMatches.push(mcMatch);
+    }
+
+    return newMatches.map(match => ({
+      ...match, p1WinsSnapshot: match.p1.wins || 0, p1VotesSnapshot: match.p1.votes || 0, p2WinsSnapshot: match.p2.wins || 0, p2VotesSnapshot: match.p2.votes || 0
     }));
+  };
 
-    // 套用 BYE
-    let updatedPlayers = [...currentPlayers];
-    newMatches.forEach(match => {
-      if (match.isByeMatch) {
-        let p1 = updatedPlayers.find(p => p.id === match.p1.id); let p2 = updatedPlayers.find(p => p.id === match.p2.id);
-        if (p1 && !p1.isBye) { p1.votes += match.p1Votes; if (match.p1Votes > match.p2Votes) p1.wins += 1; }
-        if (p2 && !p2.isBye) { p2.votes += match.p2Votes; if (match.p2Votes > match.p1Votes) p2.wins += 1; }
-      }
-    });
-
+  const generateRound = (roundNum, currentPlayers) => {
+    let newMatches = pairPlayers(roundNum, currentPlayers.filter(p => !p.isWithdrawn && !p.isMC)); // 確保 MC 選手不參與配對池
     setRounds(prev => [...prev, newMatches]);
+    let updatedPlayers = [...currentPlayers];
     setPlayers(updatedPlayers);
   };
 
@@ -295,8 +291,8 @@ export default function App() {
       r.forEach(m => {
         if (m.p1Votes !== null && m.p2Votes !== null) {
           let p1 = updatedPlayers.find(p => p.id === m.p1.id); let p2 = updatedPlayers.find(p => p.id === m.p2.id);
-          if (p1 && !p1.isBye) { p1.votes += m.p1Votes; if (m.p1Votes > m.p2Votes) p1.wins += 1; }
-          if (p2 && !p2.isBye) { p2.votes += m.p2Votes; if (m.p2Votes > m.p1Votes) p2.wins += 1; }
+          if (p1 && !p1.isMC) { p1.votes += m.p1Votes; if (m.p1Votes > m.p2Votes) p1.wins += 1; }
+          if (p2 && !p2.isMC) { p2.votes += m.p2Votes; if (m.p2Votes > m.p1Votes) p2.wins += 1; }
         }
       });
     });
@@ -321,15 +317,15 @@ export default function App() {
 
     if (match.p1Votes !== null && match.p2Votes !== null) {
       let p1 = updatedPlayers.find(p => p.id === match.p1.id); let p2 = updatedPlayers.find(p => p.id === match.p2.id);
-      if (p1 && !p1.isBye) { p1.votes -= match.p1Votes; if (match.p1Votes > match.p2Votes) p1.wins -= 1; }
-      if (p2 && !p2.isBye) { p2.votes -= match.p2Votes; if (match.p2Votes > match.p1Votes) p2.wins -= 1; }
+      if (p1 && !p1.isMC) { p1.votes -= match.p1Votes; if (match.p1Votes > match.p2Votes) p1.wins -= 1; }
+      if (p2 && !p2.isMC) { p2.votes -= match.p2Votes; if (match.p2Votes > match.p1Votes) p2.wins -= 1; }
     }
 
     match.p1Votes = p1Score; match.p2Votes = p2Score;
 
     let p1 = updatedPlayers.find(p => p.id === match.p1.id); let p2 = updatedPlayers.find(p => p.id === match.p2.id);
-    if (p1 && !p1.isBye) { p1.votes += p1Score; if (p1Score > p2Score) p1.wins += 1; }
-    if (p2 && !p2.isBye) { p2.votes += p2Score; if (p2Score > p1Score) p2.wins += 1; }
+    if (p1 && !p1.isMC) { p1.votes += p1Score; if (p1Score > p2Score) p1.wins += 1; }
+    if (p2 && !p2.isMC) { p2.votes += p2Score; if (p2Score > p1Score) p2.wins += 1; }
 
     setRounds(updatedRounds); setPlayers(updatedPlayers);
   };
@@ -348,15 +344,47 @@ export default function App() {
 
   const confirmFullReset = () => { setPlayers([]); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setConfirmAction(null); };
   const confirmRematch = () => {
-    const resetPlayers = players.filter(p => !p.isBye).map(p => ({ ...p, wins: 0, votes: 0 }));
+    const resetPlayers = players.map(p => ({ ...p, wins: 0, votes: 0, isWithdrawn: false }));
     setPlayers(resetPlayers); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setConfirmAction(null);
   };
 
-  // 並列計算與棄賽排名的全新函數
+  const confirmWithdraw = (playerId) => {
+    let updatedPlayers = players.map(p => p.id === playerId ? { ...p, isWithdrawn: true } : p);
+    setPlayers(updatedPlayers);
+
+    let currentRoundMatches = rounds[currentRoundNum - 1];
+    if (!currentRoundMatches) { setConfirmAction(null); return; }
+    
+    let playedMatches = currentRoundMatches.filter(m => m.p1Votes !== null && m.p2Votes !== null);
+    let unplayedMatches = currentRoundMatches.filter(m => m.p1Votes === null || m.p2Votes === null);
+
+    // 收集該輪還沒比完的選手 (排除魔王與棄賽者)
+    let unplayedPlayers = [];
+    unplayedMatches.forEach(m => {
+      if (m.p1.id !== playerId && !m.p1.isMC && !updatedPlayers.find(p => p.id === m.p1.id)?.isWithdrawn) unplayedPlayers.push(updatedPlayers.find(p => p.id === m.p1.id));
+      if (m.p2.id !== playerId && !m.p2.isMC && !updatedPlayers.find(p => p.id === m.p2.id)?.isWithdrawn) unplayedPlayers.push(updatedPlayers.find(p => p.id === m.p2.id));
+    });
+    unplayedPlayers = unplayedPlayers.filter(p => p);
+
+    if (unplayedPlayers.length > 0) {
+      // 重抽剩餘的對戰
+      let newUnplayedMatches = pairPlayers(currentRoundNum, unplayedPlayers);
+      let newRounds = [...rounds];
+      newRounds[currentRoundNum - 1] = [...playedMatches, ...newUnplayedMatches];
+      setRounds(newRounds);
+    } else {
+      let newRounds = [...rounds];
+      newRounds[currentRoundNum - 1] = playedMatches;
+      setRounds(newRounds);
+    }
+    setConfirmAction(null);
+  };
+
+  // 並列計算功能
   const getRankedPlayersWithTies = () => {
-    const activePlayers = [...players].filter(p => !p.isWithdrawn && !p.isBye && !p.isMC).sort((a, b) => {
-      if (b.wins !== a.wins) return b.wins - a.wins;
-      return b.votes - a.votes;
+    const activePlayers = [...players].filter(p => !p.isWithdrawn && !p.isMC).sort((a, b) => { // 排除 MC 選手
+      if (b.wins !== a.wins) return b.wins - a.wins; 
+      return b.votes - a.votes; 
     });
 
     let rank = 1;
@@ -369,7 +397,7 @@ export default function App() {
       return p;
     });
 
-    const withdrawnPlayers = [...players].filter(p => p.isWithdrawn && !p.isBye && !p.isMC).map(p => ({ ...p, displayRank: '棄賽' }));
+    const withdrawnPlayers = [...players].filter(p => p.isWithdrawn && !p.isMC).map(p => ({ ...p, displayRank: '棄賽' })); // 棄賽選手顯示「棄賽」
     return [...rankedActive, ...withdrawnPlayers];
   };
 
@@ -381,8 +409,8 @@ export default function App() {
         {rounds.map((roundMatches, rIdx) => {
           const groups = roundMatches.reduce((acc, match) => {
             const w1 = match.p1WinsSnapshot || 0; const w2 = match.p2WinsSnapshot || 0;
-            const isFloat = !match.isByeMatch && (w1 !== w2);
-            const effectiveW2 = match.isByeMatch ? w1 : w2;
+            const isFloat = !match.isMCMatch && (w1 !== w2);
+            const effectiveW2 = match.isMCMatch ? w1 : w2;
             const score = w1 + effectiveW2;
 
             if (!acc[score]) { acc[score] = { isFloat, matches: [], label: isFloat ? '跨組對戰' : `${w1} - ${rIdx - w1}` }; }
@@ -442,7 +470,7 @@ export default function App() {
                                     </span>
                                     {p1Won && <span style={{ color: accentColor }} className="text-sm shrink-0">✓</span>}
                                   </div>
-                                  {!match.p1.isBye && (
+                                  {!match.p1.isMC && (
                                     <div className="text-[11px] font-bold mt-1 opacity-70 whitespace-nowrap" style={{ color: accentColor }}>
                                       {match.p1WinsSnapshot}W {match.p1VotesSnapshot}票
                                     </div>
@@ -469,7 +497,7 @@ export default function App() {
                                       {match.p2.name}
                                     </span>
                                   </div>
-                                  {!match.p2.isBye && (
+                                  {!match.p2.isMC && (
                                     <div className="text-[11px] font-bold mt-1 opacity-70 whitespace-nowrap" style={{ color: accentColor }}>
                                       {match.p2WinsSnapshot}W {match.p2VotesSnapshot}票
                                     </div>
@@ -478,10 +506,7 @@ export default function App() {
                               </div>
 
                               {/* 比分輸入按鈕區塊 (唯讀模式下不顯示) */}
-                              {!isReadOnly && (
-                                match.isByeMatch ? (
-                                  <div className="mt-3 text-center text-xs font-bold text-green-400 border-t border-slate-800 pt-2">自動判定：5 - 0</div>
-                                ) : (
+                              {!isReadOnly && !match.isMCMatch && ( // MC 對戰不顯示比分按鈕
                                   <div className="grid grid-cols-6 gap-1 mt-3 border-t border-slate-800 pt-3">
                                     {[ {v1: 5, v2: 0}, {v1: 4, v2: 1}, {v1: 3, v2: 2}, {v1: 2, v2: 3}, {v1: 1, v2: 4}, {v1: 0, v2: 5} ].map((score) => {
                                       const isSelected = match.p1Votes === score.v1 && match.p2Votes === score.v2;
@@ -501,7 +526,9 @@ export default function App() {
                                       )
                                     })}
                                   </div>
-                                )
+                              )}
+                              {isReadOnly && match.isMCMatch && match.p1Votes !== null && match.p2Votes !== null && (
+                                <div className="mt-3 text-center text-xs font-bold text-purple-400 border-t border-slate-800 pt-2">MC 對戰結果：{match.p1Votes} - {match.p2Votes}</div>
                               )}
                             </div>
                           );
@@ -654,11 +681,11 @@ export default function App() {
             <div className="flex items-center gap-4 mb-6">
               <AlertTriangle size={32} style={{ color: COLORS.inkOrange }} />
               <h3 className="text-2xl font-black tracking-widest text-white">
-                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'REMATCH' ? '保留選手重賽' : confirmAction.type === 'FULL_RESET' ? '完全重設賽事' : confirmAction.type === 'LOAD_SAVE' ? '讀取賽事紀錄' : confirmAction.type === 'DELETE_SAVE' ? '刪除賽事紀錄' : confirmAction.type === 'GO_HOME' ? '回到首頁' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : ''}
+                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'REMATCH' ? '保留選手重賽' : confirmAction.type === 'FULL_RESET' ? '完全重設賽事' : confirmAction.type === 'LOAD_SAVE' ? '讀取賽事紀錄' : confirmAction.type === 'DELETE_SAVE' ? '刪除賽事紀錄' : confirmAction.type === 'GO_HOME' ? '回到首頁' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : confirmAction.type === 'WITHDRAW' ? `確定要讓 ${confirmAction.playerName} 棄賽嗎？` : ''}
               </h3>
             </div>
             <p className="mb-8 font-bold leading-relaxed text-base" style={{ color: COLORS.textMuted }}>
-              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'REMATCH' ? '確定要保留現有的選手名單，清空所有戰績並重新開始報名階段嗎？' : confirmAction.type === 'FULL_RESET' ? '此動作將會清除所有選手名單與賽程資料，確定要返回初始狀態嗎？' : confirmAction.type === 'LOAD_SAVE' ? '確定要讀取這筆紀錄嗎？當前未儲存的進度將會完全遺失。' : confirmAction.type === 'DELETE_SAVE' ? '確定要永久刪除這筆存檔嗎？此動作無法復原。' : confirmAction.type === 'GO_HOME' ? '確定要回到首頁嗎？如果直接離開，當前未儲存的賽程將會遺失。' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : ''}
+              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'REMATCH' ? '確定要保留現有的選手名單，清空所有戰績並重新開始報名階段嗎？' : confirmAction.type === 'FULL_RESET' ? '此動作將會清除所有選手名單與賽程資料，確定要返回初始狀態嗎？' : confirmAction.type === 'LOAD_SAVE' ? '確定要讀取這筆紀錄嗎？當前未儲存的進度將會完全遺失。' : confirmAction.type === 'DELETE_SAVE' ? '確定要永久刪除這筆存檔嗎？此動作無法復原。' : confirmAction.type === 'GO_HOME' ? '確定要回到首頁嗎？如果直接離開，當前未儲存的賽程將會遺失。' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? '棄賽後，該選手將退出後續賽程，且當前輪次尚未進行的對戰將會重新抽籤，此動作無法復原。' : ''}
             </p>
             
             {confirmAction.type === 'GO_HOME' ? (
@@ -687,9 +714,10 @@ export default function App() {
                     else if (confirmAction.type === 'LOAD_SAVE') executeLoadSave(confirmAction.saveId);
                     else if (confirmAction.type === 'DELETE_SAVE') executeDeleteSave(confirmAction.saveId);
                     else if (confirmAction.type === 'CLEAR_PLAYERS') { setPlayers([]); setConfirmAction(null); }
+                    else if (confirmAction.type === 'WITHDRAW') confirmWithdraw(confirmAction.playerId);
                   }}
                   className="px-6 py-2.5 rounded-lg font-black tracking-widest brush-border"
-                  style={{ backgroundColor: (confirmAction.type === 'DELETE_SAVE' || confirmAction.type === 'CLEAR_PLAYERS') ? '#ef4444' : COLORS.inkOrange, color: COLORS.bg }}>
+                  style={{ backgroundColor: (confirmAction.type === 'DELETE_SAVE' || confirmAction.type === 'CLEAR_PLAYERS' || confirmAction.type === 'WITHDRAW') ? '#ef4444' : COLORS.inkOrange, color: COLORS.bg }}>
                   確定執行
                 </button>
               </div>
@@ -874,7 +902,6 @@ export default function App() {
                                 </div>
                               </div>
 
-                              {!match.isMCMatch && ( // MC 對戰不顯示比分按鈕
                                 <div className="grid grid-cols-6 gap-1 mt-2">
                                   {[ {v1: 5, v2: 0}, {v1: 4, v2: 1}, {v1: 3, v2: 2}, {v1: 2, v2: 3}, {v1: 1, v2: 4}, {v1: 0, v2: 5} ].map((score) => {
                                     const isSelected = match.p1Votes === score.v1 && match.p2Votes === score.v2;
@@ -889,10 +916,6 @@ export default function App() {
                                     )
                                   })}
                                 </div>
-                              )}
-                              {match.isMCMatch && match.p1Votes !== null && match.p2Votes !== null && (
-                                <div className="text-center py-2 rounded-lg font-black text-xs border border-purple-900 bg-purple-900/20 text-purple-400">MC 對戰結果：{match.p1Votes} - {match.p2Votes}</div>
-                              )}
                             </div>
                           );
                         })}
@@ -931,7 +954,8 @@ export default function App() {
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <div className="font-black text-white text-base">{p.name}</div>
+                              <div className="font-black text-white text-base flex items-center">{p.name}</div>
+                              {!p.isWithdrawn && <button onClick={() => setConfirmAction({ type: 'WITHDRAW', playerId: p.id, playerName: p.name })} className="ml-2 px-1.5 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/20 rounded border border-red-500/30 transition-colors">棄賽</button>}
                               {p.displayRank <= 2 && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
                             </div>
                             <div className="text-[10px] font-bold mt-0.5 tracking-wider" style={{ color: COLORS.textMuted }}>{p.school}</div>
