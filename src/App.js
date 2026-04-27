@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Users, Swords, UserPlus, Play, CheckCircle, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
+import { Trophy, Users, Swords, UserPlus, Play, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
 
 const SCHOOLS = ['輔仁大學', '臺灣大學', '政治大學', '臺北城市科大'];
 const MAX_ROUNDS = 3;
@@ -352,11 +352,25 @@ export default function App() {
     setPlayers(resetPlayers); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setConfirmAction(null);
   };
 
-  const getRankedPlayers = () => {
-    return [...players].filter(p => !p.isBye).sort((a, b) => {
-      if (b.wins !== a.wins) return b.wins - a.wins; 
-      return b.votes - a.votes; 
+  // 並列計算與棄賽排名的全新函數
+  const getRankedPlayersWithTies = () => {
+    const activePlayers = [...players].filter(p => !p.isWithdrawn && !p.isBye && !p.isMC).sort((a, b) => {
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      return b.votes - a.votes;
     });
+
+    let rank = 1;
+    const rankedActive = activePlayers.map((p, index) => {
+      if (index > 0) {
+        const prev = activePlayers[index - 1];
+        if (p.wins === prev.wins && p.votes === prev.votes) p.displayRank = prev.displayRank;
+        else { rank = index + 1; p.displayRank = rank; }
+      } else p.displayRank = rank;
+      return p;
+    });
+
+    const withdrawnPlayers = [...players].filter(p => p.isWithdrawn && !p.isBye && !p.isMC).map(p => ({ ...p, displayRank: '棄賽' }));
+    return [...rankedActive, ...withdrawnPlayers];
   };
 
   // --- 繪製樹狀圖共用函數 (用於進行中與結算畫面) ---
@@ -827,11 +841,11 @@ export default function App() {
                       </div>
                       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {roundMatches.map((match) => {
-                          const isFloat = !match.isByeMatch && (match.p1WinsSnapshot !== match.p2WinsSnapshot);
+                          const isFloat = !match.isMCMatch && (match.p1WinsSnapshot !== match.p2WinsSnapshot);
                           return (
                             <div key={match.id} className={`rounded-xl p-5 flex flex-col justify-between relative transition-all border-2 brush-border shadow-md`}
                                  style={{ backgroundColor: COLORS.bg, borderColor: isFloat ? COLORS.inkOrange : COLORS.cardBorder }}>
-                              {match.isByeMatch && <div className="absolute top-0 right-0 text-[10px] font-black px-3 py-1 rounded-bl-lg z-10 bg-green-500 text-black">輪空勝</div>}
+                              {match.isMCMatch && <div className="absolute top-0 right-0 text-[10px] font-black px-3 py-1 rounded-bl-lg z-10 bg-purple-500 text-white shadow-md border-l border-b border-purple-700">對戰魔王</div>}
                               {isFloat && <div className="absolute top-0 left-0 w-full text-[10px] font-black py-1 text-center tracking-widest uppercase z-10" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>跨組對戰</div>}
                               
                               <div className={`flex justify-between items-center mb-4 ${isFloat ? 'mt-6' : ''}`}>
@@ -844,7 +858,7 @@ export default function App() {
                                     {match.p1.name}
                                   </div>
                                   <div className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>{match.p1.school}</div>
-                                  {!match.p1.isBye && <div className="inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-black" style={{ backgroundColor: '#1e293b', color: COLORS.inkBlue }}>{match.p1WinsSnapshot}W {match.p1VotesSnapshot}票</div>}
+                                  {!match.p1.isMC && <div className="inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-black" style={{ backgroundColor: '#1e293b', color: COLORS.inkBlue }}>{match.p1WinsSnapshot}W {match.p1VotesSnapshot}票</div>}
                                 </div>
                                 <div className="px-2 font-black italic text-sm" style={{ color: isFloat ? COLORS.inkOrange : COLORS.inkBlue }}>VS</div>
                                 <div className="flex-1 text-center">
@@ -856,13 +870,11 @@ export default function App() {
                                     {match.p2.name}
                                   </div>
                                   <div className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>{match.p2.school}</div>
-                                  {!match.p2.isBye && <div className="inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-black" style={{ backgroundColor: '#1e293b', color: COLORS.inkBlue }}>{match.p2WinsSnapshot}W {match.p2VotesSnapshot}票</div>}
+                                  {!match.p2.isMC && <div className="inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-black" style={{ backgroundColor: '#1e293b', color: COLORS.inkBlue }}>{match.p2WinsSnapshot}W {match.p2VotesSnapshot}票</div>}
                                 </div>
                               </div>
 
-                              {match.isByeMatch ? (
-                                <div className="text-center py-2 rounded-lg font-black text-xs border border-green-900 bg-green-900/20 text-green-400">自動判定：5 - 0</div>
-                              ) : (
+                              {!match.isMCMatch && ( // MC 對戰不顯示比分按鈕
                                 <div className="grid grid-cols-6 gap-1 mt-2">
                                   {[ {v1: 5, v2: 0}, {v1: 4, v2: 1}, {v1: 3, v2: 2}, {v1: 2, v2: 3}, {v1: 1, v2: 4}, {v1: 0, v2: 5} ].map((score) => {
                                     const isSelected = match.p1Votes === score.v1 && match.p2Votes === score.v2;
@@ -877,6 +889,9 @@ export default function App() {
                                     )
                                   })}
                                 </div>
+                              )}
+                              {match.isMCMatch && match.p1Votes !== null && match.p2Votes !== null && (
+                                <div className="text-center py-2 rounded-lg font-black text-xs border border-purple-900 bg-purple-900/20 text-purple-400">MC 對戰結果：{match.p1Votes} - {match.p2Votes}</div>
                               )}
                             </div>
                           );
@@ -906,24 +921,24 @@ export default function App() {
                     <Trophy size={24} /> 即時排名
                   </h3>
                   <div className="space-y-3">
-                    {getRankedPlayers().map((p, idx) => (
-                      <div key={p.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${idx < 2 ? 'bg-[#1a1f26]' : 'hover:bg-white/5'}`}
-                           style={{ borderColor: idx < 2 ? COLORS.inkOrange : COLORS.cardBorder }}>
+                    {getRankedPlayersWithTies().filter(p => p.displayRank !== '棄賽').map((p) => (
+                      <div key={p.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${p.displayRank <= 2 ? 'bg-[#1a1f26]' : 'hover:bg-white/5'}`}
+                           style={{ borderColor: p.displayRank <= 2 ? COLORS.inkOrange : COLORS.cardBorder }}>
                         <div className="flex items-center gap-4">
-                          <div className={`w-6 text-center font-black text-xl ${idx < 2 ? '' : 'text-slate-600'}`}
-                               style={idx < 2 ? { color: COLORS.inkOrange } : {}}>
-                            {idx + 1}
+                          <div className={`w-6 text-center font-black text-xl ${p.displayRank <= 2 ? '' : 'text-slate-600'}`}
+                               style={p.displayRank <= 2 ? { color: COLORS.inkOrange } : {}}>
+                            {p.displayRank}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
                               <div className="font-black text-white text-base">{p.name}</div>
-                              {idx < 2 && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
+                              {p.displayRank <= 2 && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
                             </div>
                             <div className="text-[10px] font-bold mt-0.5 tracking-wider" style={{ color: COLORS.textMuted }}>{p.school}</div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-black text-base" style={{ color: idx < 2 ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins} W</div>
+                          <div className="font-black text-base" style={{ color: p.displayRank <= 2 ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins} W</div>
                           <div className="text-xs font-bold" style={{ color: COLORS.textMuted }}>{p.votes} pt</div>
                         </div>
                       </div>
@@ -960,19 +975,19 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {getRankedPlayers().map((p, idx) => (
-                      <tr key={p.id} className={`border-b transition-colors ${idx < 2 ? 'bg-[#1a1f26]' : 'hover:bg-white/5'}`} style={{ borderColor: idx < 2 ? COLORS.inkOrange : COLORS.cardBorder }}>
-                        <td className="p-5 text-center font-black text-2xl" style={{ color: idx < 2 ? COLORS.inkOrange : COLORS.textMuted }}>
-                          {idx + 1}
+                    {getRankedPlayersWithTies().map((p) => (
+                      <tr key={p.id} className={`border-b transition-colors ${p.isWithdrawn ? 'opacity-40 bg-black/50' : (p.displayRank <= 2 ? 'bg-[#1a1f26]' : 'hover:bg-white/5')}`} style={{ borderColor: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.cardBorder }}>
+                        <td className="p-5 text-center font-black text-2xl" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.textMuted }}>
+                          {p.displayRank}
                         </td>
                         <td className="p-5 font-black text-white text-xl">
                           <div className="flex items-center gap-3">
-                            <span style={{ color: idx < 2 ? COLORS.inkOrange : 'white' }}>{p.name}</span>
-                            {idx < 2 && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
+                            <span style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : 'white' }}>{p.name} {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded">已棄賽</span>}</span>
+                            {p.displayRank <= 2 && !p.isWithdrawn && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
                           </div>
                         </td>
                         <td className="p-5 font-bold" style={{ color: COLORS.textMuted }}>{p.school}</td>
-                        <td className="p-5 text-center font-black text-2xl" style={{ color: idx < 2 ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins}</td>
+                        <td className="p-5 text-center font-black text-2xl" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins}</td>
                         <td className="p-5 text-center font-black text-lg" style={{ color: COLORS.textMuted }}>{p.votes}</td>
                       </tr>
                     ))}
