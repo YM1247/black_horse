@@ -19,16 +19,17 @@ Phase 2 應拆成三個明確責任：
 
 ```text
 GitHub Pages
-  ├── 後台管理介面 ── Firebase Authentication
+  ├── 後台管理介面 ── Firebase Anonymous Authentication
   └── 公開查詢前台 ──┐
                      └── Cloud Firestore
                           ├── tournaments/{eventCode}
                           ├── tournaments/{eventCode}/auditLogs/{logId}
-                          └── admins/{uid}
+                          ├── settings/admin
+                          └── adminSessions/{uid}
 ```
 
-- 後台：以單一共用 token 登入、建立賽事、管理名單、產生輪次、輸入或更正比分、處理棄賽與結束賽事。
-- Authentication：固定管理員 Email 搭配共用 token 作為密碼。Firestore 以管理員 UID 授權寫入。
+- 後台：只輸入單一共用 token，建立賽事、管理名單、產生輪次、輸入或更正比分、處理棄賽與結束賽事。
+- Authentication：自動建立匿名 Firebase 使用者取得 UID，不要求 Email。token 在瀏覽器雜湊後由 Security Rules 驗證。
 - Firestore：保存賽事狀態，透過 `onSnapshot` 即時同步。Web 端啟用 IndexedDB 持久快取以支援離線操作。
 - 前台：以公開網址查看指定賽事的輪次、比分、戰績與狀態。
 - 稽核：比分與重要狀態變更另外建立 audit log；Security Rules 禁止更新或刪除既有紀錄。
@@ -38,8 +39,9 @@ GitHub Pages
 ## 安全模型
 
 - 公開使用者只能讀取 `isPublic == true` 的指定賽事。
-- 管理員必須通過 Firebase Auth，且 UID 存在於 `admins` 集合才可新增或修改賽事。
-- `admins` 不允許前端自行寫入，需由 Firebase Console 建立。
+- 管理員匿名 UID 必須具有 `adminSessions/{uid}`，且 session 雜湊符合不可由前端讀取的 `settings/admin.tokenHash`。
+- `settings/admin` 不允許任何前端讀寫，需由 Firebase Console 建立。
+- 管理 session 只能由本人建立或刪除，不能更新；token 變更後舊 session 立即無效。
 - audit log 僅允許管理員新增，所有前端使用者都不可修改或刪除。
 - Firebase Web 設定本身不是秘密；管理 token、Firebase CLI 登入資訊與本機 `.env` 不可提交。
 

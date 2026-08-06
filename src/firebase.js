@@ -8,16 +8,15 @@ import {
 } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || 'AIzaSyBS1bTKlv56ld8Tf87gjVT9-ZWEUk1ny_I',
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || 'black-horse-7b932.firebaseapp.com',
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || 'black-horse-7b932',
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || 'black-horse-7b932.firebasestorage.app',
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || '595413568597',
+  appId: process.env.REACT_APP_FIREBASE_APP_ID || '1:595413568597:web:c1ecfaf6b8ba9c096a18dc'
 };
 
-export const firebaseAdminEmail = process.env.REACT_APP_FIREBASE_ADMIN_EMAIL || '';
-export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean) && Boolean(firebaseAdminEmail);
+export const isFirebaseConfigured = process.env.NODE_ENV !== 'test' && Object.values(firebaseConfig).every(Boolean);
 
 let services = null;
 

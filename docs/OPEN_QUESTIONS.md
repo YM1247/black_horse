@@ -10,22 +10,22 @@
 
 ## 已確認：Phase 2
 
-1. 使用 Firebase，優先限制在 Spark 免費方案可用的功能。
-2. 後台使用單一共用憑證。實作為固定管理員 Email 搭配一組共用 token 作為 Firebase Auth 密碼；操作介面只要求輸入 token。
-3. 保存比分修改歷程，稽核紀錄建立後不可由前端更新或刪除。
-4. 公開前台以賽事代碼查詢；賽事可永久保存，管理員可切換是否公開。
-5. 使用 Firestore 即時 listener，資料更新不需重新整理。
-6. 啟用 Firestore Web 持久快取；支援的瀏覽器可離線讀寫並在恢復連線後同步。
+1. 使用 Firebase Spark 方案與 GitHub Pages。
+2. Firebase Web App 公開設定已納入程式，可由環境變數覆寫。
+3. 後台只輸入一組管理 token，不使用 Email 帳號。
+4. token 在瀏覽器計算 SHA-256；Firestore 僅保存雜湊，不保存明文。
+5. Firebase Anonymous Auth 提供 Security Rules 所需的臨時 UID，通過 token 後建立 `adminSessions/{uid}`。
+6. 每次管理寫入都確認 session tokenHash 仍等於 `settings/admin.tokenHash`，更換 token 可讓舊 session 失效。
+7. 保存比分修改歷程，稽核紀錄建立後不可由前端更新或刪除。
+8. 公開前台以賽事代碼查詢；賽事可永久保存，管理員可切換是否公開。
+9. 使用 Firestore 即時 listener 與瀏覽器持久快取。
 
-## 尚待提供：Firebase 專案設定
+## Firebase 尚需人工完成
 
-開始連接正式雲端環境前需要：
-
-1. Firebase Web App 的公開設定：`apiKey`、`authDomain`、`projectId`、`storageBucket`、`messagingSenderId`、`appId`。
-2. Firebase Authentication 中建立的管理員 Email（前端只顯示 token 欄位）。
-3. 管理員帳號 UID，以便在 Firestore 建立 `admins/{uid}` 授權文件。
-
-這些不是密碼；實際 token 不可提交 Git，應只在 Firebase Authentication 中設定並由管理人員保管。
+1. Firebase Authentication 啟用 Anonymous provider。
+2. 依 [FIREBASE_SETUP.md](FIREBASE_SETUP.md) 計算 tokenHash。
+3. Firestore Console 建立 `settings/admin` 文件及 `tokenHash` 欄位。
+4. 發布最新版 `firestore.rules`。
 
 ## Phase 3：尚待確認
 

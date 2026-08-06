@@ -1,5 +1,16 @@
 # 開發紀錄
 
+## 2026-08-06｜Token-only 管理驗證
+
+### 修改內容
+
+- 移除固定管理員 Email 與 Email/Password Auth。
+- 改用 Firebase Anonymous Auth，自動取得 Security Rules 所需 UID。
+- 管理 token 在瀏覽器計算 SHA-256，資料庫只保存 `settings/admin.tokenHash`。
+- 通過 token 驗證後建立 `adminSessions/{uid}`；所有管理寫入都重新確認目前 tokenHash。
+- token 輪替會立即使舊 session 失效。
+- 加入安全的本機 token 雜湊指令、Firebase 預設公開 config 與更新後的設定文件。
+
 ## 2026-08-06｜Phase 2 雲端操作與公開前台
 
 ### 修改內容

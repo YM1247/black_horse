@@ -6,13 +6,43 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
+    function adminSettingsExist() {
+      return exists(/databases/$(database)/documents/settings/admin);
+    }
+
+    function adminSessionExists() {
       return signedIn()
-        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+        && exists(/databases/$(database)/documents/adminSessions/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return adminSettingsExist()
+        && adminSessionExists()
+        && get(/databases/$(database)/documents/adminSessions/$(request.auth.uid)).data.tokenHash
+          == get(/databases/$(database)/documents/settings/admin).data.tokenHash;
+    }
+
+    match /settings/{documentId} {
+      allow read, write: if false;
+    }
+
+    match /adminSessions/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid && isAdmin();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && adminSettingsExist()
+        && request.resource.data.keys().hasOnly(['tokenHash', 'createdAt'])
+        && request.resource.data.tokenHash is string
+        && request.resource.data.tokenHash.size() == 64
+        && request.resource.data.tokenHash
+          == get(/databases/$(database)/documents/settings/admin).data.tokenHash;
+      allow update: if false;
+      allow delete: if signedIn() && request.auth.uid == uid;
     }
 
     match /admins/{uid} {
-      allow read: if isAdmin();
+      allow read: if false;
       allow write: if false;
     }
 
@@ -30,4 +60,3 @@ service cloud.firestore {
     }
   }
 }
-

@@ -281,7 +281,8 @@ function TournamentAdminApp() {
     event.preventDefault();
     setCloudError('');
     try {
-      await signInAdminWithToken(adminToken);
+      const user = await signInAdminWithToken(adminToken);
+      setAdminUser(user);
       setAdminToken('');
     } catch {
       setCloudError('登入失敗，請確認管理 token 與 Firebase 設定。');
