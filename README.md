@@ -16,7 +16,7 @@
 
 ## 本機開發
 
-需求：Node.js 18 以上與 npm。
+需求：Node.js 20 以上與 npm。
 
 ```bash
 npm install
@@ -48,11 +48,12 @@ Bob
 
 ## 資料保存
 
-目前資料僅保存在瀏覽器 `localStorage`，清除網站資料會移除賽事。Phase 2 將改為前後端分離並由伺服器保存；尚未確認的設計決策列於 [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md)。
+未設定 Firebase 時，資料保存在瀏覽器 `localStorage`。Phase 2 的 Firebase 資料層、即時 listener、離線快取、管理員驗證與 Security Rules 已建立；正式啟用方式見 [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)。
 
 ## 文件
 
 - [Phase 1 實作說明](docs/PHASE1.md)
 - [系統架構與演進方向](docs/ARCHITECTURE.md)
+- [Firebase 設定與部署](docs/FIREBASE_SETUP.md)
 - [開發紀錄](docs/DEVELOPMENT_LOG.md)
 - [待確認問題](docs/OPEN_QUESTIONS.md)

@@ -1,5 +1,23 @@
 # 開發紀錄
 
+## 2026-08-06｜Firebase 資料層基礎
+
+### 修改內容
+
+- 安裝 Firebase Web SDK 12.17.1。
+- 新增可選式 Firebase 初始化；未提供環境變數時維持本機模式。
+- 啟用 Firestore 多分頁持久快取與 realtime snapshot metadata。
+- 建立單一管理員 token 登入、賽事建立／更新／訂閱及後台列表 repository。
+- 每次雲端變更以 batch 同步建立 audit log。
+- 新增 Firestore Security Rules，限制管理員寫入並禁止更改稽核紀錄。
+- 新增環境設定範本與完整 Firebase 設定文件。
+
+### 驗證與相依安全
+
+- 10 項自動化測試通過，production build 成功。
+- `npm audit fix` 將稽核結果由 42 項降至 28 項。
+- 剩餘項目位於已停止主要開發的 Create React App／`react-scripts` 工具鏈；npm 提供的 `--force` 修補會錯誤改裝 `react-scripts@0.0.0`，因此未採用。後續應獨立安排遷移至 Vite，不在 Firebase 功能批次中進行破壞性升級。
+
 ## 2026-08-06｜瑞士制規則核心重構
 
 ### 修改內容
