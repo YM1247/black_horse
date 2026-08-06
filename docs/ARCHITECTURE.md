@@ -13,22 +13,46 @@ React UI / 賽事規則
 
 `src/App.js` 同時負責畫面、瑞士制配對、比分計算、排名與本地保存。這適合單機操作，但無法讓前台觀眾即時查詢，也缺乏伺服器端的一致性、權限控管與永久保存。
 
-## Phase 2 目標邊界
+## Phase 2 技術架構
 
 Phase 2 應拆成三個明確責任：
 
 ```text
-後台管理介面 ──┐
-               ├── API / 即時事件 ── 賽事資料庫
-公開查詢前台 ──┘
+GitHub Pages
+  ├── 後台管理介面 ── Firebase Authentication
+  └── 公開查詢前台 ──┐
+                     └── Cloud Firestore
+                          ├── tournaments/{eventCode}
+                          ├── tournaments/{eventCode}/auditLogs/{logId}
+                          └── admins/{uid}
 ```
 
-- 後台：建立賽事、管理名單、產生輪次、輸入或更正比分、處理棄賽與結束賽事。
-- API：驗證管理員權限、執行賽事狀態轉換、保證比分與排名一致、提供公開唯讀資料。
+- 後台：以單一共用 token 登入、建立賽事、管理名單、產生輪次、輸入或更正比分、處理棄賽與結束賽事。
+- Authentication：固定管理員 Email 搭配共用 token 作為密碼。Firestore 以管理員 UID 授權寫入。
+- Firestore：保存賽事狀態，透過 `onSnapshot` 即時同步。Web 端啟用 IndexedDB 持久快取以支援離線操作。
 - 前台：以公開網址查看指定賽事的輪次、比分、戰績與狀態。
-- 資料庫：保存賽事、選手、參賽關係、輪次、對戰與比分歷程。
+- 稽核：比分與重要狀態變更另外建立 audit log；Security Rules 禁止更新或刪除既有紀錄。
 
-重要原則是把配對、計分、排名等規則抽成可測試的領域層，前後台不可各自複製一份規則。
+為維持 Spark 免費方案，Phase 2 不依賴 Cloud Functions。重要原則是把配對、計分、排名等規則抽成可測試的領域層，前後台不可各自複製一份規則。賽事資料先保存為單一 Firestore document，以便離線與即時同步整體狀態；若未來規模接近 Firestore 單一文件限制，再將輪次與對戰拆成子集合。
+
+## 安全模型
+
+- 公開使用者只能讀取 `isPublic == true` 的指定賽事。
+- 管理員必須通過 Firebase Auth，且 UID 存在於 `admins` 集合才可新增或修改賽事。
+- `admins` 不允許前端自行寫入，需由 Firebase Console 建立。
+- audit log 僅允許管理員新增，所有前端使用者都不可修改或刪除。
+- Firebase Web 設定本身不是秘密；管理 token、Firebase CLI 登入資訊與本機 `.env` 不可提交。
+
+## 免費方案考量
+
+Firebase Spark 目前提供 Firestore 每日免費讀寫額度，且一般 Email/Password Authentication 可在免費方案使用。公開前台採「輸入代碼後直接監聽單一賽事文件」，避免持續監聽整個賽事集合造成不必要讀取。
+
+官方參考：
+
+- [Firestore 即時更新](https://firebase.google.com/docs/firestore/query-data/listen)
+- [Firestore 離線資料](https://firebase.google.com/docs/firestore/manage-data/enable-offline)
+- [Email/Password Authentication](https://firebase.google.com/docs/auth/web/password-auth)
+- [Firebase Spark 方案](https://firebase.google.com/docs/projects/billing/firebase-pricing-plans)
 
 ## Phase 3 目標邊界
 
@@ -42,13 +66,11 @@ Phase 2 應拆成三個明確責任：
 
 ## 建議的實作順序
 
-1. 確認 [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) 的核心決策。
-2. 將現有配對、計分、排名與資料遷移從 `App.js` 抽成純函式並增加規則測試。
-3. 定義資料庫 schema、API 契約與賽事狀態機。
-4. 實作後台驗證與賽事管理 API。
+1. 將現有配對、計分、排名與資料遷移從 `App.js` 抽成純函式並增加規則測試。
+2. 定義 Firestore schema、Security Rules 與賽事狀態機。
+3. 實作 Firebase 初始化、後台驗證與賽事 repository。
 5. 將目前操作畫面改接 API。
 6. 建立公開唯讀前台與即時更新。
 7. 再加入報名匯入、選手合併、系列積分與排行榜。
 
-後端技術、部署位置與即時更新方式尚未確認，因此本文件刻意只定義責任邊界，不指定框架或供應商。
-
+正式連線仍需要 [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) 列出的 Firebase Web App 設定與管理員 UID。

@@ -1,5 +1,21 @@
 # 開發紀錄
 
+## 2026-08-06｜Phase 2 技術決策
+
+### 已確認
+
+- 後端採 Firebase Spark 免費方案，使用 Cloud Firestore 與 Firebase Authentication。
+- 後台以固定管理員 Email + 共用 token 登入；前台只呈現 token 欄位。
+- 公開前台以賽事代碼查詢，使用 Firestore realtime listener 且不需重新整理。
+- 支援瀏覽器持久快取與離線寫入同步。
+- 重要修改建立不可更新、不可刪除的 audit log。
+- 確認固定三輪、重賽避免、MC 次數、四層排名與棄賽判敗規則。
+
+### 尚待
+
+- Firebase Web App 公開設定、管理員 Email 與 UID。
+- Phase 3 的系列積分及選手識別規則。
+
 ## 2026-08-06｜Phase 1 完成
 
 ### 修改內容
@@ -29,4 +45,3 @@
 ### 尚未實作
 
 Phase 2 與 Phase 3 涉及後端選型、權限、正式賽制細節、積分公式與外部表單資料契約。問題已記錄於 `docs/OPEN_QUESTIONS.md`，待確認後實作。
-
