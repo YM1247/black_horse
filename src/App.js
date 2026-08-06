@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Users, Swords, UserPlus, Play, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
+import { pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 
 const MAX_ROUNDS = 3;
 const SUPPORTED_JUDGE_COUNTS = [3, 5];
@@ -30,17 +31,6 @@ const COLORS = {
   inkOrangeDark: '#d4a17a',
   textMain: '#e2e8f0',
   textMuted: '#64748b'
-};
-
-// Helper: 隨機打亂陣列
-const shuffle = (array) => {
-  let currentIndex = array.length, randomIndex;
-  while (currentIndex !== 0) {
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex--;
-    [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
-  }
-  return array;
 };
 
 // Helper: 從 localStorage 安全地讀取並解析 JSON
@@ -275,102 +265,16 @@ export default function App() {
     generateRound(1, players.filter(p => !p.isWithdrawn)); // 第一輪只配對未棄賽選手
   };
 
-  // 全新配對引擎 (支援抽離尚未進行的比賽與魔王配對)
-  const pairPlayers = (roundNum, playersToPair) => {
-    let newMatches = [];
-    let pool = [...playersToPair];
-    let mcMatch = null;
-    const MC_PLAYER = { id: 'MC', name: 'MC', wins: 0, votes: 0, isMC: true };
-
-    if (pool.length % 2 !== 0) {
-      let chosenIdx = 0;
-      if (roundNum === 1) {
-        chosenIdx = Math.floor(Math.random() * pool.length); // 第一輪隨機選
-      } else {
-        pool.sort((a, b) => {
-          if (b.wins !== a.wins) return b.wins - a.wins;
-          return b.votes - a.votes;
-        });
-        chosenIdx = 0; // 取戰績最高者
-      }
-      let chosenPlayer = pool.splice(chosenIdx, 1)[0];
-      mcMatch = { id: createId(), p1: chosenPlayer, p2: MC_PLAYER, p1Votes: null, p2Votes: null, isMCMatch: true, isDone: false };
-    }
-    
-    if (roundNum === 1) {
-      let tempPool = shuffle([...pool]);
-      while (tempPool.length >= 2) {
-        newMatches.push({ id: createId(), p1: tempPool.pop(), p2: tempPool.pop(), p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
-      }
-    } else {
-      let groups = {};
-      pool.forEach(p => { if (!groups[p.wins]) groups[p.wins] = []; groups[p.wins].push(p); });
-      let scoreKeys = Object.keys(groups).map(Number).sort((a, b) => b - a); 
-      
-      for (let i = 0; i < scoreKeys.length; i++) {
-        let s = scoreKeys[i];
-        if (groups[s].length % 2 !== 0) {
-          // 處理奇數組：將分數最低的選手上浮到下一組
-          let minVotes = Math.min(...groups[s].map(p => p.votes));
-          let candsLow = groups[s].filter(p => p.votes === minVotes);
-          let pLow = candsLow[Math.floor(Math.random() * candsLow.length)];
-          groups[s] = groups[s].filter(p => p.id !== pLow.id); // 從池中移除
-          
-          let nextS = -1;
-          for (let j = i + 1; j < scoreKeys.length; j++) {
-            if (groups[scoreKeys[j]].length > 0) { nextS = scoreKeys[j]; break; }
-          }
-          if (nextS !== -1) {
-            // 從下一組中選取分數最高的選手進行配對
-            let maxVotes = Math.max(...groups[nextS].map(p => p.votes));
-            let candsHigh = groups[nextS].filter(p => p.votes === maxVotes);
-            let pHigh = candsHigh[Math.floor(Math.random() * candsHigh.length)];
-            groups[nextS] = groups[nextS].filter(p => p.id !== pHigh.id); // 從池中移除
-            newMatches.push({ id: createId(), p1: pLow, p2: pHigh, p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
-          }
-        }
-        
-        let remaining = shuffle(groups[s]);
-        while (remaining.length >= 2) {
-          newMatches.push({ id: createId(), p1: remaining.pop(), p2: remaining.pop(), p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
-        }
-      }
-    }
-    
-    if (mcMatch) {
-      newMatches.push(mcMatch);
-    }
-
-    return newMatches.map(match => ({
-      ...match, p1WinsSnapshot: match.p1.wins || 0, p1VotesSnapshot: match.p1.votes || 0, p2WinsSnapshot: match.p2.wins || 0, p2VotesSnapshot: match.p2.votes || 0
-    }));
-  };
-
   const generateRound = (roundNum, currentPlayers) => {
-    let newMatches = pairPlayers(roundNum, currentPlayers.filter(p => !p.isWithdrawn && !p.isMC)); // 確保 MC 選手不參與配對池
+    const newMatches = pairSwissRound({ players: currentPlayers, rounds, roundNum });
     setRounds(prev => [...prev, newMatches]);
-    let updatedPlayers = [...currentPlayers];
-    setPlayers(updatedPlayers);
+    setPlayers([...currentPlayers]);
   };
 
   const applyHistoricalEdit = (roundIndex, matchId, p1Score, p2Score) => {
-    let newRounds = rounds.slice(0, roundIndex + 1);
-    const roundMatches = [...newRounds[roundIndex]];
-    const matchIndex = roundMatches.findIndex(m => m.id === matchId);
-    roundMatches[matchIndex] = { ...roundMatches[matchIndex], p1Votes: p1Score, p2Votes: p2Score };
-    newRounds[roundIndex] = roundMatches;
-
-    let updatedPlayers = players.map(p => ({ ...p, wins: 0, votes: 0 }));
-
-    newRounds.forEach(r => {
-      r.forEach(m => {
-        if (m.p1Votes !== null && m.p2Votes !== null) {
-          let p1 = updatedPlayers.find(p => p.id === m.p1.id); let p2 = updatedPlayers.find(p => p.id === m.p2.id);
-          if (p1 && !p1.isMC) { p1.votes += m.p1Votes; if (m.p1Votes > m.p2Votes) p1.wins += 1; }
-          if (p2 && !p2.isMC) { p2.votes += m.p2Votes; if (m.p2Votes > m.p1Votes) p2.wins += 1; }
-        }
-      });
-    });
+    const truncatedRounds = rounds.slice(0, roundIndex + 1);
+    const newRounds = updateMatchScore(truncatedRounds, roundIndex, matchId, p1Score, p2Score);
+    const updatedPlayers = recalculatePlayerRecords(players, newRounds);
 
     setRounds(newRounds); setPlayers(updatedPlayers); setCurrentRoundNum(roundIndex + 1);
     setPhase('playing'); setConfirmAction(null);
@@ -381,27 +285,11 @@ export default function App() {
       setConfirmAction({ type: 'EDIT_HISTORY', roundIndex, matchId, p1Score, p2Score });
       return;
     }
-    const updatedRounds = rounds.map(round => round.map(match => ({ ...match })));
-    const currentRoundMatches = updatedRounds[roundIndex];
-    const matchIndex = currentRoundMatches.findIndex(m => m.id === matchId);
-    if (matchIndex === -1) return;
-    const match = currentRoundMatches[matchIndex];
+    const match = rounds[roundIndex]?.find(item => item.id === matchId);
+    if (!match) return;
     if (match.p1Votes === p1Score && match.p2Votes === p2Score) return;
-
-    let updatedPlayers = players.map(player => ({ ...player }));
-
-    if (match.p1Votes !== null && match.p2Votes !== null) {
-      let p1 = updatedPlayers.find(p => p.id === match.p1.id); let p2 = updatedPlayers.find(p => p.id === match.p2.id);
-      if (p1 && !p1.isMC) { p1.votes -= match.p1Votes; if (match.p1Votes > match.p2Votes) p1.wins -= 1; }
-      if (p2 && !p2.isMC) { p2.votes -= match.p2Votes; if (match.p2Votes > match.p1Votes) p2.wins -= 1; }
-    }
-
-    match.p1Votes = p1Score; match.p2Votes = p2Score;
-
-    let p1 = updatedPlayers.find(p => p.id === match.p1.id); let p2 = updatedPlayers.find(p => p.id === match.p2.id);
-    if (p1 && !p1.isMC) { p1.votes += p1Score; if (p1Score > p2Score) p1.wins += 1; }
-    if (p2 && !p2.isMC) { p2.votes += p2Score; if (p2Score > p1Score) p2.wins += 1; }
-
+    const updatedRounds = updateMatchScore(rounds, roundIndex, matchId, p1Score, p2Score);
+    const updatedPlayers = recalculatePlayerRecords(players, updatedRounds);
     setRounds(updatedRounds); setPlayers(updatedPlayers);
   };
 
@@ -424,57 +312,26 @@ export default function App() {
   };
 
   const confirmWithdraw = (playerId) => {
-    let updatedPlayers = players.map(p => p.id === playerId ? { ...p, isWithdrawn: true } : p);
-    setPlayers(updatedPlayers);
-
-    let currentRoundMatches = rounds[currentRoundNum - 1];
-    if (!currentRoundMatches) { setConfirmAction(null); return; }
-    
-    let playedMatches = currentRoundMatches.filter(m => m.p1Votes !== null && m.p2Votes !== null);
-    let unplayedMatches = currentRoundMatches.filter(m => m.p1Votes === null || m.p2Votes === null);
-
-    // 收集該輪還沒比完的選手 (排除魔王與棄賽者)
-    let unplayedPlayers = [];
-    unplayedMatches.forEach(m => {
-      if (m.p1.id !== playerId && !m.p1.isMC && !updatedPlayers.find(p => p.id === m.p1.id)?.isWithdrawn) unplayedPlayers.push(updatedPlayers.find(p => p.id === m.p1.id));
-      if (m.p2.id !== playerId && !m.p2.isMC && !updatedPlayers.find(p => p.id === m.p2.id)?.isWithdrawn) unplayedPlayers.push(updatedPlayers.find(p => p.id === m.p2.id));
-    });
-    unplayedPlayers = unplayedPlayers.filter(p => p);
-
-    if (unplayedPlayers.length > 0) {
-      // 重抽剩餘的對戰
-      let newUnplayedMatches = pairPlayers(currentRoundNum, unplayedPlayers);
-      let newRounds = [...rounds];
-      newRounds[currentRoundNum - 1] = [...playedMatches, ...newUnplayedMatches];
-      setRounds(newRounds);
-    } else {
-      let newRounds = [...rounds];
-      newRounds[currentRoundNum - 1] = playedMatches;
-      setRounds(newRounds);
+    let updatedPlayers = players.map(p => p.id === playerId ? { ...p, isWithdrawn: true } : { ...p });
+    let updatedRounds = rounds;
+    const roundIndex = currentRoundNum - 1;
+    const unplayedMatch = rounds[roundIndex]?.find(match =>
+      (match.p1.id === playerId || match.p2.id === playerId) &&
+      (match.p1Votes === null || match.p2Votes === null)
+    );
+    if (unplayedMatch) {
+      const p1Score = unplayedMatch.p1.id === playerId ? 0 : judgeCount;
+      const p2Score = unplayedMatch.p2.id === playerId ? 0 : judgeCount;
+      updatedRounds = updateMatchScore(rounds, roundIndex, unplayedMatch.id, p1Score, p2Score);
+      updatedPlayers = recalculatePlayerRecords(updatedPlayers, updatedRounds);
     }
+    setPlayers(updatedPlayers);
+    setRounds(updatedRounds);
     setConfirmAction(null);
   };
 
   // 並列計算功能
-  const getRankedPlayersWithTies = () => {
-    const activePlayers = players.filter(p => !p.isWithdrawn && !p.isMC).map(p => ({ ...p })).sort((a, b) => { // 排除 MC 選手
-      if (b.wins !== a.wins) return b.wins - a.wins; 
-      return b.votes - a.votes; 
-    });
-
-    let rank = 1;
-    const rankedActive = activePlayers.map((p, index) => {
-      if (index > 0) {
-        const prev = activePlayers[index - 1];
-        if (p.wins === prev.wins && p.votes === prev.votes) p.displayRank = prev.displayRank;
-        else { rank = index + 1; p.displayRank = rank; }
-      } else p.displayRank = rank;
-      return p;
-    });
-
-    const withdrawnPlayers = [...players].filter(p => p.isWithdrawn && !p.isMC).map(p => ({ ...p, displayRank: '棄賽' })); // 棄賽選手顯示「棄賽」
-    return [...rankedActive, ...withdrawnPlayers];
-  };
+  const getRankedPlayersWithTies = () => rankPlayers(players, rounds);
 
   // --- 繪製樹狀圖共用函數 (用於進行中與結算畫面) ---
   const renderBracket = (isReadOnly = false) => (
@@ -758,7 +615,7 @@ export default function App() {
               </h3>
             </div>
             <p className="mb-8 font-bold leading-relaxed text-base" style={{ color: COLORS.textMuted }}>
-              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'REMATCH' ? '確定要保留現有的選手名單，清空所有戰績並重新開始報名階段嗎？' : confirmAction.type === 'FULL_RESET' ? '此動作將會清除所有選手名單與賽程資料，確定要返回初始狀態嗎？' : confirmAction.type === 'LOAD_SAVE' ? '確定要讀取這筆紀錄嗎？當前未儲存的進度將會完全遺失。' : confirmAction.type === 'DELETE_SAVE' ? '確定要永久刪除這筆存檔嗎？此動作無法復原。' : confirmAction.type === 'GO_HOME' ? '確定要回到首頁嗎？如果直接離開，當前未儲存的賽程將會遺失。' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? '棄賽後，該選手將退出後續賽程，且當前輪次尚未進行的對戰將會重新抽籤，此動作無法復原。' : ''}
+              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'REMATCH' ? '確定要保留現有的選手名單，清空所有戰績並重新開始報名階段嗎？' : confirmAction.type === 'FULL_RESET' ? '此動作將會清除所有選手名單與賽程資料，確定要返回初始狀態嗎？' : confirmAction.type === 'LOAD_SAVE' ? '確定要讀取這筆紀錄嗎？當前未儲存的進度將會完全遺失。' : confirmAction.type === 'DELETE_SAVE' ? '確定要永久刪除這筆存檔嗎？此動作無法復原。' : confirmAction.type === 'GO_HOME' ? '確定要回到首頁嗎？如果直接離開，當前未儲存的賽程將會遺失。' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? `棄賽前已完成的成績會保留；本輪未完成的對戰將直接判為 0:${judgeCount} 敗，且退出後續輪次。` : ''}
             </p>
             
             {confirmAction.type === 'GO_HOME' ? (
@@ -1041,8 +898,11 @@ export default function App() {
                                 {p.name}
                                 {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>}
                               </div>
-                              {p.displayRank <= 2 && !p.isWithdrawn && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
+                              {!p.isWithdrawn && (p.needsTiebreaker || p.displayRank <= 2) && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>{p.needsTiebreaker ? '需加賽' : '晉級'}</span>}
                             </div>
+                            {!p.isWithdrawn && <div className="text-[10px] font-bold mt-1 whitespace-nowrap" style={{ color: COLORS.textMuted }}>
+                              對手勝率 {(p.opponentWinRate * 100).toFixed(1)}% · 次級 {(p.opponentsOpponentWinRate * 100).toFixed(1)}%
+                            </div>}
                           </div>
                         </div>
                         <div className="text-right">
@@ -1064,7 +924,7 @@ export default function App() {
           <div className="space-y-12 max-w-7xl mx-auto flex flex-col items-center">
             
             {/* 最終排名區塊 */}
-            <div className="w-full max-w-4xl p-10 md:p-14 rounded-3xl shadow-2xl text-center relative overflow-hidden border-2 brush-border"
+            <div className="w-full max-w-6xl p-10 md:p-14 rounded-3xl shadow-2xl text-center relative overflow-hidden border-2 brush-border"
                  style={{ backgroundColor: COLORS.card, borderColor: COLORS.inkOrange }}>
               <div className="absolute top-0 left-0 w-full h-3" style={{ background: `linear-gradient(90deg, ${COLORS.inkOrange}, ${COLORS.inkBlue})` }}></div>
               
@@ -1080,6 +940,8 @@ export default function App() {
                       <th className="p-5 font-black">NAME</th>
                       <th className="p-5 font-black text-center whitespace-nowrap">WINS</th>
                       <th className="p-5 font-black text-center whitespace-nowrap">POINTS</th>
+                      <th className="p-5 font-black text-center whitespace-nowrap">OPP WIN%</th>
+                      <th className="p-5 font-black text-center whitespace-nowrap">OPP² WIN%</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1091,11 +953,13 @@ export default function App() {
                         <td className="p-5 font-black text-white text-xl">
                           <div className="flex items-center gap-3">
                             <span style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : 'white' }}>{p.name} {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>}</span>
-                            {p.displayRank <= 2 && !p.isWithdrawn && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
+                            {!p.isWithdrawn && (p.needsTiebreaker || p.displayRank <= 2) && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>{p.needsTiebreaker ? '需加賽' : '晉級'}</span>}
                           </div>
                         </td>
                         <td className="p-5 text-center font-black text-2xl whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins}</td>
                         <td className="p-5 text-center font-black text-lg whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes}</td>
+                        <td className="p-5 text-center font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.isWithdrawn ? '—' : `${(p.opponentWinRate * 100).toFixed(1)}%`}</td>
+                        <td className="p-5 text-center font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.isWithdrawn ? '—' : `${(p.opponentsOpponentWinRate * 100).toFixed(1)}%`}</td>
                       </tr>
                     ))}
                   </tbody>
