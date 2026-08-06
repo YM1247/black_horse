@@ -1,70 +1,57 @@
-# Getting Started with Create React App
+# 黑馬記念｜瑞士制賽事系統
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+黑馬記念挑戰組使用的瑞士制配對與計分 Web App。目前完成 Phase 1：可建立單場三輪賽事、以三位或五位評審計分、抽選對戰、處理奇數參賽者的 MC 對戰、記錄棄賽、查看即時排名，並將進度與歷史存檔保存在瀏覽器。
 
-## Available Scripts
+## 已完成的功能
 
-In the project directory, you can run:
+- 以選手名稱建立名單，支援逐筆新增及單欄 CSV 匯入。
+- 建立賽事時選擇三位或五位評審；合法比分會依評審數自動產生。
+- 第一輪隨機配對，後續輪次依勝場分組配對。
+- 奇數選手時安排 MC 對戰，並允許正常輸入比分。
+- 對戰列表與賽況樹狀圖。
+- 即時排名、並列名次、棄賽與歷史賽果更正。
+- 自動保存目前進度，另可建立、重新命名、讀取與刪除歷史存檔。
+- 舊版資料自動遷移：讀取含 `school` 欄位的資料後轉為純名稱選手模型。
 
-### `npm start`
+## 本機開發
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+需求：Node.js 18 以上與 npm。
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+```bash
+npm install
+npm start
+```
 
-### `npm test`
+瀏覽器開啟 [http://localhost:3000](http://localhost:3000)。
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 驗證
 
-### `npm run build`
+```bash
+npm test -- --watchAll=false
+npm run build
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+測試涵蓋 Phase 1 的主要需求與舊資料遷移。正式建置輸出至 `build/`。
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## CSV 格式
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+只讀取第一欄作為選手名稱，可有或沒有標題列：
 
-### `npm run eject`
+```csv
+選手名稱
+Alice
+Bob
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+為相容舊檔案，多餘欄位會被忽略。
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## 資料保存
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+目前資料僅保存在瀏覽器 `localStorage`，清除網站資料會移除賽事。Phase 2 將改為前後端分離並由伺服器保存；尚未確認的設計決策列於 [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md)。
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## 文件
 
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- [Phase 1 實作說明](docs/PHASE1.md)
+- [系統架構與演進方向](docs/ARCHITECTURE.md)
+- [開發紀錄](docs/DEVELOPMENT_LOG.md)
+- [待確認問題](docs/OPEN_QUESTIONS.md)

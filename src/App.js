@@ -1,8 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Users, Swords, UserPlus, Play, CheckCircle, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
+import { Trophy, Users, Swords, UserPlus, Play, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
 
-const SCHOOLS = ['輔仁大學', '臺灣大學', '政治大學', '臺北城市科大'];
 const MAX_ROUNDS = 3;
+const SUPPORTED_JUDGE_COUNTS = [3, 5];
+const DEFAULT_JUDGE_COUNT = 5;
+const ACTIVE_STORAGE_KEYS = {
+  phase: 'swiss_tournament_phase',
+  players: 'swiss_tournament_players',
+  rounds: 'swiss_tournament_rounds',
+  currentRoundNum: 'swiss_tournament_currentRoundNum',
+  judgeCount: 'swiss_tournament_judgeCount'
+};
+const SAVES_STORAGE_KEY = 'swiss_tourney_saves_v4';
+const LEGACY_SAVES_STORAGE_KEY = 'swiss_tourney_saves_v3';
+
+const createId = () => {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
 // 主題色票 (對應黑馬記念圖片)
 const COLORS = {
@@ -28,6 +43,71 @@ const shuffle = (array) => {
   return array;
 };
 
+// Helper: 從 localStorage 安全地讀取並解析 JSON
+const getLocalStorageItem = (key, defaultValue) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch (error) {
+    console.error(`Error parsing localStorage key "${key}":`, error);
+    return defaultValue;
+  }
+};
+
+const normalizeJudgeCount = (value, fallback = DEFAULT_JUDGE_COUNT) =>
+  SUPPORTED_JUDGE_COUNTS.includes(Number(value)) ? Number(value) : fallback;
+
+const inferJudgeCount = (rounds, fallback = DEFAULT_JUDGE_COUNT) => {
+  const completedMatch = rounds
+    ?.flat()
+    .find(match => Number.isFinite(match?.p1Votes) && Number.isFinite(match?.p2Votes));
+  const scoreTotal = completedMatch ? completedMatch.p1Votes + completedMatch.p2Votes : fallback;
+  return normalizeJudgeCount(scoreTotal, fallback);
+};
+
+// Phase 1 資料遷移：保留賽事資料，但從選手模型移除舊版 school 欄位。
+const normalizePlayer = (player = {}) => ({
+  id: player.id || createId(),
+  name: String(player.name || '').trim(),
+  wins: Number(player.wins) || 0,
+  votes: Number(player.votes) || 0,
+  isWithdrawn: Boolean(player.isWithdrawn),
+  ...(player.isMC ? { isMC: true } : {})
+});
+
+const normalizeRounds = (rounds = []) => rounds.map(round => round.map(match => ({
+  ...match,
+  p1: normalizePlayer(match.p1),
+  p2: normalizePlayer(match.p2)
+})));
+
+const normalizeTournamentData = (data = {}) => {
+  const rounds = normalizeRounds(Array.isArray(data.rounds) ? data.rounds : []);
+  return {
+    phase: ['registration', 'playing', 'finished'].includes(data.phase) ? data.phase : 'registration',
+    players: (Array.isArray(data.players) ? data.players : []).map(normalizePlayer).filter(player => player.name),
+    rounds,
+    currentRoundNum: Math.max(1, Number(data.currentRoundNum) || 1),
+    judgeCount: normalizeJudgeCount(data.judgeCount, inferJudgeCount(rounds))
+  };
+};
+
+const loadActiveTournament = () => normalizeTournamentData({
+  phase: getLocalStorageItem(ACTIVE_STORAGE_KEYS.phase, 'registration'),
+  players: getLocalStorageItem(ACTIVE_STORAGE_KEYS.players, []),
+  rounds: getLocalStorageItem(ACTIVE_STORAGE_KEYS.rounds, []),
+  currentRoundNum: getLocalStorageItem(ACTIVE_STORAGE_KEYS.currentRoundNum, 1),
+  judgeCount: getLocalStorageItem(ACTIVE_STORAGE_KEYS.judgeCount, undefined)
+});
+
+const normalizeSave = (save = {}) => ({
+  ...save,
+  id: save.id || createId(),
+  name: String(save.name || '未命名賽事紀錄'),
+  date: save.date || new Date().toISOString(),
+  data: normalizeTournamentData(save.data)
+});
+
 // Helper: 根據字數動態調整字體大小
 const getDynamicFontSize = (name, isTreeMode = false) => {
   const len = name.length;
@@ -45,10 +125,12 @@ const getDynamicFontSize = (name, isTreeMode = false) => {
 };
 
 export default function App() {
-  const [phase, setPhase] = useState('registration'); // 'registration', 'playing', 'finished'
-  const [players, setPlayers] = useState([]);
-  const [rounds, setRounds] = useState([]);
-  const [currentRoundNum, setCurrentRoundNum] = useState(1);
+  const [initialTournament] = useState(loadActiveTournament);
+  const [phase, setPhase] = useState(initialTournament.phase); // 'registration', 'playing', 'finished'
+  const [players, setPlayers] = useState(initialTournament.players);
+  const [rounds, setRounds] = useState(initialTournament.rounds);
+  const [currentRoundNum, setCurrentRoundNum] = useState(initialTournament.currentRoundNum);
+  const [judgeCount, setJudgeCount] = useState(initialTournament.judgeCount);
   const [viewMode, setViewMode] = useState('tree'); // 預設改為樹狀圖
 
   // Modal 視窗狀態
@@ -59,8 +141,10 @@ export default function App() {
   const [saveNameInput, setSaveNameInput] = useState('');
   const [saves, setSaves] = useState(() => {
     try {
-      const local = localStorage.getItem('swiss_tourney_saves_v3');
-      return local ? JSON.parse(local) : [];
+      const current = localStorage.getItem(SAVES_STORAGE_KEY);
+      const legacy = localStorage.getItem(LEGACY_SAVES_STORAGE_KEY);
+      const parsed = JSON.parse(current || legacy || '[]');
+      return Array.isArray(parsed) ? parsed.map(normalizeSave) : [];
     } catch {
       return [];
     }
@@ -72,22 +156,38 @@ export default function App() {
 
   // 新增參賽者狀態
   const [newName, setNewName] = useState('');
-  const [newSchool, setNewSchool] = useState(SCHOOLS[0]);
-
   // 自動同步存檔到 LocalStorage
   useEffect(() => {
     try {
-      localStorage.setItem('swiss_tourney_saves_v3', JSON.stringify(saves));
+      localStorage.setItem(SAVES_STORAGE_KEY, JSON.stringify(saves));
     } catch (e) {
       console.error("存檔寫入失敗", e);
     }
   }, [saves]);
 
+  // 自動儲存當前賽事進度到 LocalStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACTIVE_STORAGE_KEYS.phase, JSON.stringify(phase));
+      localStorage.setItem(ACTIVE_STORAGE_KEYS.players, JSON.stringify(players));
+      localStorage.setItem(ACTIVE_STORAGE_KEYS.rounds, JSON.stringify(rounds));
+      localStorage.setItem(ACTIVE_STORAGE_KEYS.currentRoundNum, JSON.stringify(currentRoundNum));
+      localStorage.setItem(ACTIVE_STORAGE_KEYS.judgeCount, JSON.stringify(judgeCount));
+    } catch (error) {
+      console.error("Error saving current game state to localStorage:", error);
+    }
+  }, [phase, players, rounds, currentRoundNum, judgeCount]);
+
+  const scoreOptions = Array.from({ length: judgeCount + 1 }, (_, p2Votes) => ({
+    v1: judgeCount - p2Votes,
+    v2: p2Votes
+  }));
+
   const handleAddPlayer = (e) => {
     e.preventDefault();
     const trimmedName = newName.trim();
     if (!trimmedName || players.some(p => p.name === trimmedName)) return; // 避免重複名稱
-    const newPlayer = { id: crypto.randomUUID(), name: trimmedName, school: newSchool, wins: 0, votes: 0, isWithdrawn: false };
+    const newPlayer = { id: createId(), name: trimmedName, wins: 0, votes: 0, isWithdrawn: false };
     setPlayers(prev => [...prev, newPlayer]);
     setNewName('');
   };
@@ -112,11 +212,8 @@ export default function App() {
           if (index === 0 && (parts[0].toLowerCase().includes('name') || parts[0].includes('姓名') || parts[0].includes('名稱') || parts[0].includes('選手'))) return;
           
           const name = parts[0].trim();
-          // 如果 CSV 有提供學校就使用，沒有則預設帶入第一個預設學校
-          const school = parts.length > 1 && parts[1].trim() ? parts[1].trim() : SCHOOLS[0];
-          
           if (name && !players.some(p => p.name === name) && !newPlayers.some(p => p.name === name)) { // 避免重複名稱
-            newPlayers.push({ id: crypto.randomUUID(), name, school, wins: 0, votes: 0, isWithdrawn: false });
+            newPlayers.push({ id: createId(), name, wins: 0, votes: 0, isWithdrawn: false });
           }
         }
       });
@@ -131,14 +228,9 @@ export default function App() {
 
   const loadMockData = () => {
     const mockPlayers = [
-      { id: crypto.randomUUID(), name: 'player-001', school: '輔仁大學', wins: 0, votes: 0, isWithdrawn: false },
-      { id: crypto.randomUUID(), name: 'player-002', school: '輔仁大學', wins: 0, votes: 0, isWithdrawn: false },
-      { id: crypto.randomUUID(), name: 'player-003', school: '臺灣大學', wins: 0, votes: 0, isWithdrawn: false },
-      { id: crypto.randomUUID(), name: 'player-004', school: '臺灣大學', wins: 0, votes: 0, isWithdrawn: false },
-      { id: crypto.randomUUID(), name: 'player-005', school: '政治大學', wins: 0, votes: 0, isWithdrawn: false },
-      { id: crypto.randomUUID(), name: 'player-006', school: '政治大學', wins: 0, votes: 0, isWithdrawn: false },
-      { id: crypto.randomUUID(), name: 'player-007', school: '臺北城市科大', wins: 0, votes: 0, isWithdrawn: false },
-      { id: crypto.randomUUID(), name: 'player-008', school: '臺北城市科大', wins: 0, votes: 0, isWithdrawn: false },
+      ...Array.from({ length: 8 }, (_, index) => ({
+        id: createId(), name: `player-${String(index + 1).padStart(3, '0')}`, wins: 0, votes: 0, isWithdrawn: false
+      }))
     ];
     setPlayers(mockPlayers);
   };
@@ -148,7 +240,7 @@ export default function App() {
   // --- 存檔管理功能 ---
   const handleCreateSave = () => {
     const name = saveNameInput.trim() || `手動存檔 - ${new Date().toLocaleString()}`;
-    const newSave = { id: crypto.randomUUID(), name, date: new Date().toISOString(), isAuto: false, data: { phase, players, rounds, currentRoundNum } };
+    const newSave = { id: createId(), name, date: new Date().toISOString(), isAuto: false, data: { phase, players, rounds, currentRoundNum, judgeCount } };
     setSaves([newSave, ...saves]);
     setSaveNameInput('');
   };
@@ -156,10 +248,12 @@ export default function App() {
   const executeLoadSave = (saveId) => {
     const targetSave = saves.find(s => s.id === saveId);
     if (targetSave) {
-      setPhase(targetSave.data.phase);
-      setPlayers(targetSave.data.players);
-      setRounds(targetSave.data.rounds);
-      setCurrentRoundNum(targetSave.data.currentRoundNum);
+      const data = normalizeTournamentData(targetSave.data);
+      setPhase(data.phase);
+      setPlayers(data.players);
+      setRounds(data.rounds);
+      setCurrentRoundNum(data.currentRoundNum);
+      setJudgeCount(data.judgeCount);
       setIsSaveModalOpen(false);
       setConfirmAction(null);
     }
@@ -186,7 +280,7 @@ export default function App() {
     let newMatches = [];
     let pool = [...playersToPair];
     let mcMatch = null;
-    const MC_PLAYER = { id: 'MC', name: 'MC (主辦/魔王)', school: '-', wins: 0, votes: 0, isMC: true };
+    const MC_PLAYER = { id: 'MC', name: 'MC', wins: 0, votes: 0, isMC: true };
 
     if (pool.length % 2 !== 0) {
       let chosenIdx = 0;
@@ -200,32 +294,13 @@ export default function App() {
         chosenIdx = 0; // 取戰績最高者
       }
       let chosenPlayer = pool.splice(chosenIdx, 1)[0];
-      mcMatch = { id: crypto.randomUUID(), p1: chosenPlayer, p2: MC_PLAYER, p1Votes: null, p2Votes: null, isMCMatch: true, isDone: false };
+      mcMatch = { id: createId(), p1: chosenPlayer, p2: MC_PLAYER, p1Votes: null, p2Votes: null, isMCMatch: true, isDone: false };
     }
     
     if (roundNum === 1) {
-      let success = false;
-      let attempts = 0;
-      while (!success && attempts < 100) {
-        attempts++;
-        let tempPool = shuffle([...pool]);
-        let tempMatches = [];
-        let ok = true;
-        
-        while (tempPool.length >= 2) {
-          let p1 = tempPool.pop();
-          let p2Idx = tempPool.findIndex(p => p.school !== p1.school);
-          if (p2Idx === -1) { ok = false; break; }
-          let p2 = tempPool.splice(p2Idx, 1)[0];
-          tempMatches.push({ id: crypto.randomUUID(), p1, p2, p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
-        }
-        if (ok) { success = true; newMatches = tempMatches; }
-      }
-      if (!success) {
-        let tempPool = shuffle([...pool]);
-        while (tempPool.length >= 2) {
-          newMatches.push({ id: crypto.randomUUID(), p1: tempPool.pop(), p2: tempPool.pop(), p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
-        }
+      let tempPool = shuffle([...pool]);
+      while (tempPool.length >= 2) {
+        newMatches.push({ id: createId(), p1: tempPool.pop(), p2: tempPool.pop(), p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
       }
     } else {
       let groups = {};
@@ -251,13 +326,13 @@ export default function App() {
             let candsHigh = groups[nextS].filter(p => p.votes === maxVotes);
             let pHigh = candsHigh[Math.floor(Math.random() * candsHigh.length)];
             groups[nextS] = groups[nextS].filter(p => p.id !== pHigh.id); // 從池中移除
-            newMatches.push({ id: crypto.randomUUID(), p1: pLow, p2: pHigh, p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
+            newMatches.push({ id: createId(), p1: pLow, p2: pHigh, p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
           }
         }
         
         let remaining = shuffle(groups[s]);
         while (remaining.length >= 2) {
-          newMatches.push({ id: crypto.randomUUID(), p1: remaining.pop(), p2: remaining.pop(), p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
+          newMatches.push({ id: createId(), p1: remaining.pop(), p2: remaining.pop(), p1Votes: null, p2Votes: null, isMCMatch: false, isDone: false });
         }
       }
     }
@@ -306,14 +381,14 @@ export default function App() {
       setConfirmAction({ type: 'EDIT_HISTORY', roundIndex, matchId, p1Score, p2Score });
       return;
     }
-    const updatedRounds = [...rounds];
-    const currentRoundMatches = updatedRounds[currentRoundNum - 1];
+    const updatedRounds = rounds.map(round => round.map(match => ({ ...match })));
+    const currentRoundMatches = updatedRounds[roundIndex];
     const matchIndex = currentRoundMatches.findIndex(m => m.id === matchId);
     if (matchIndex === -1) return;
     const match = currentRoundMatches[matchIndex];
     if (match.p1Votes === p1Score && match.p2Votes === p2Score) return;
 
-    let updatedPlayers = [...players];
+    let updatedPlayers = players.map(player => ({ ...player }));
 
     if (match.p1Votes !== null && match.p2Votes !== null) {
       let p1 = updatedPlayers.find(p => p.id === match.p1.id); let p2 = updatedPlayers.find(p => p.id === match.p2.id);
@@ -337,12 +412,12 @@ export default function App() {
       generateRound(nextRoundNum, players);
     } else {
       setPhase('finished');
-      const newSave = { id: crypto.randomUUID(), name: `(自動紀錄) 完賽 - ${new Date().toLocaleString()}`, date: new Date().toISOString(), isAuto: true, data: { phase: 'finished', players, rounds, currentRoundNum } };
+      const newSave = { id: createId(), name: `(自動紀錄) 完賽 - ${new Date().toLocaleString()}`, date: new Date().toISOString(), isAuto: true, data: { phase: 'finished', players, rounds, currentRoundNum, judgeCount } };
       setSaves(prev => [newSave, ...prev]);
     }
   };
 
-  const confirmFullReset = () => { setPlayers([]); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setConfirmAction(null); };
+  const confirmFullReset = () => { setPlayers([]); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setJudgeCount(DEFAULT_JUDGE_COUNT); setConfirmAction(null); };
   const confirmRematch = () => {
     const resetPlayers = players.map(p => ({ ...p, wins: 0, votes: 0, isWithdrawn: false }));
     setPlayers(resetPlayers); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setConfirmAction(null);
@@ -382,7 +457,7 @@ export default function App() {
 
   // 並列計算功能
   const getRankedPlayersWithTies = () => {
-    const activePlayers = [...players].filter(p => !p.isWithdrawn && !p.isMC).sort((a, b) => { // 排除 MC 選手
+    const activePlayers = players.filter(p => !p.isWithdrawn && !p.isMC).map(p => ({ ...p })).sort((a, b) => { // 排除 MC 選手
       if (b.wins !== a.wins) return b.wins - a.wins; 
       return b.votes - a.votes; 
     });
@@ -506,9 +581,9 @@ export default function App() {
                               </div>
 
                               {/* 比分輸入按鈕區塊 (唯讀模式下不顯示) */}
-                              {!isReadOnly && !match.isMCMatch && ( // MC 對戰不顯示比分按鈕
-                                  <div className="grid grid-cols-6 gap-1 mt-3 border-t border-slate-800 pt-3">
-                                    {[ {v1: 5, v2: 0}, {v1: 4, v2: 1}, {v1: 3, v2: 2}, {v1: 2, v2: 3}, {v1: 1, v2: 4}, {v1: 0, v2: 5} ].map((score) => {
+                              {!isReadOnly && ( // 允許 MC 對戰手動輸入比分
+                                  <div className={`grid ${judgeCount === 3 ? 'grid-cols-4' : 'grid-cols-6'} gap-1 mt-3 border-t border-slate-800 pt-3`}>
+                                    {scoreOptions.map((score) => {
                                       const isSelected = match.p1Votes === score.v1 && match.p2Votes === score.v2;
                                       return (
                                         <button key={`${score.v1}-${score.v2}`} onClick={() => handleMatchResult(rIdx, match.id, score.v1, score.v2)}
@@ -526,9 +601,6 @@ export default function App() {
                                       )
                                     })}
                                   </div>
-                              )}
-                              {isReadOnly && match.isMCMatch && match.p1Votes !== null && match.p2Votes !== null && (
-                                <div className="mt-3 text-center text-xs font-bold text-purple-400 border-t border-slate-800 pt-2">MC 對戰結果：{match.p1Votes} - {match.p2Votes}</div>
                               )}
                             </div>
                           );
@@ -651,6 +723,7 @@ export default function App() {
                             <span className="flex items-center gap-1.5"><Clock size={14}/> {new Date(save.date).toLocaleString()}</span>
                             <span>狀態: {save.data.phase === 'finished' ? '已完賽' : `進行至第 ${save.data.currentRoundNum} 輪`}</span>
                             <span>參賽: {save.data.players.length} 人</span>
+                            <span>評審: {save.data.judgeCount} 位</span>
                           </div>
                         </div>
                         
@@ -691,7 +764,7 @@ export default function App() {
             {confirmAction.type === 'GO_HOME' ? (
               <div className="flex flex-col gap-3">
                 <button onClick={() => {
-                    const newSave = { id: crypto.randomUUID(), name: `(自動) 離開前存檔 - ${new Date().toLocaleString()}`, date: new Date().toISOString(), isAuto: true, data: { phase, players, rounds, currentRoundNum } };
+                    const newSave = { id: createId(), name: `(自動) 離開前存檔 - ${new Date().toLocaleString()}`, date: new Date().toISOString(), isAuto: true, data: { phase, players, rounds, currentRoundNum, judgeCount } };
                     setSaves(prev => [newSave, ...prev]);
                     confirmFullReset();
                   }} 
@@ -726,7 +799,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto relative z-10 ink-splash-bg pt-16 md:pt-0 min-h-[90vh]">
+      <div className="max-w-full mx-auto relative z-10 ink-splash-bg pt-16 md:pt-0 min-h-[90vh] px-4">
         
         {/* Header - 水墨黑馬記念風格 */}
         <header className="mb-12 text-center space-y-4 pt-4">
@@ -752,17 +825,32 @@ export default function App() {
                     <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
                       className="w-full px-4 py-3 rounded-lg border font-bold text-lg" placeholder="輸入名字..." />
                   </div>
-                  <div>
-                    <label className="block text-sm font-bold mb-2 tracking-widest" style={{ color: COLORS.textMuted }}>代表所屬 (CREW/SCHOOL)</label>
-                    <select value={newSchool} onChange={(e) => setNewSchool(e.target.value)} className="w-full px-4 py-3 rounded-lg border font-bold text-lg">
-                      {SCHOOLS.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
                   <button type="submit" className="w-full font-black py-4 rounded-xl transition-all text-lg tracking-widest mt-4 brush-border"
                     style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>
                     加入名單 ADD
                   </button>
                 </form>
+
+                <fieldset className="mt-8 pt-8 border-t border-dashed" style={{ borderColor: COLORS.cardBorder }}>
+                  <legend className="block text-sm font-bold px-2 tracking-widest" style={{ color: COLORS.textMuted }}>單場評審人數</legend>
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    {SUPPORTED_JUDGE_COUNTS.map(count => (
+                      <button key={count} type="button" onClick={() => setJudgeCount(count)}
+                        aria-pressed={judgeCount === count}
+                        className="py-3 rounded-xl border font-black tracking-widest transition-all"
+                        style={{
+                          backgroundColor: judgeCount === count ? COLORS.inkBlue : 'transparent',
+                          borderColor: judgeCount === count ? COLORS.inkBlue : COLORS.cardBorder,
+                          color: judgeCount === count ? COLORS.bg : COLORS.textMuted
+                        }}>
+                        {count} 位評審
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs font-bold leading-relaxed" style={{ color: COLORS.textMuted }}>
+                    每場比分合計固定為 {judgeCount} 票，賽事開始後不可變更。
+                  </p>
+                </fieldset>
 
                 <div className="mt-8 pt-8 border-t border-dashed flex flex-col gap-3" style={{ borderColor: COLORS.cardBorder }}>
                   <label className="w-full font-bold py-3 rounded-xl transition-colors text-sm tracking-widest border border-dashed flex items-center justify-center gap-2 cursor-pointer hover:bg-white/5"
@@ -808,21 +896,17 @@ export default function App() {
                       <tr className="text-xs uppercase tracking-widest border-b" style={{ backgroundColor: '#111318', color: COLORS.textMuted, borderColor: COLORS.cardBorder }}>
                         <th className="p-4 font-black">#</th>
                         <th className="p-4 font-black">選手名 NAME</th>
-                        <th className="p-4 font-black">所屬 CREW</th>
                         <th className="p-4 font-black text-right">操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {players.length === 0 ? (
-                        <tr><td colSpan="4" className="p-10 text-center font-bold tracking-widest" style={{ color: COLORS.textMuted }}>尚無參賽者，請從左側新增。</td></tr>
+                        <tr><td colSpan="3" className="p-10 text-center font-bold tracking-widest" style={{ color: COLORS.textMuted }}>尚無參賽者，請從左側新增。</td></tr>
                       ) : (
                         players.map((p, idx) => (
                           <tr key={p.id} className="border-b transition-colors hover:bg-white/5" style={{ borderColor: COLORS.cardBorder }}>
                             <td className="p-4 font-black" style={{ color: COLORS.textMuted }}>{idx + 1}</td>
                             <td className="p-4 font-black text-lg text-white">{p.name}</td>
-                            <td className="p-4 font-bold">
-                              <span className="px-3 py-1 rounded-md text-xs tracking-wider" style={{ backgroundColor: '#1a1f26', color: COLORS.inkBlue }}>{p.school}</span>
-                            </td>
                             <td className="p-4 text-right">
                               <button onClick={() => removePlayer(p.id)} className="text-red-400 hover:text-red-300 font-bold text-sm tracking-widest">移除</button>
                             </td>
@@ -841,20 +925,21 @@ export default function App() {
         {phase === 'playing' && (
           <div className="flex flex-col gap-8">
             <div className="flex justify-center">
-              <div className="inline-flex p-1.5 rounded-xl border border-dashed shadow-lg" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
+              <div className="inline-flex flex-wrap justify-center p-1.5 rounded-xl border border-dashed shadow-lg" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
                 <button onClick={() => setViewMode('list')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-black text-sm transition-all tracking-widest ${viewMode === 'list' ? 'bg-[#1e293b] text-white' : 'opacity-50 hover:opacity-100'}`}>
                   <LayoutList size={18} style={{ color: viewMode === 'list' ? COLORS.inkOrange : 'inherit' }} /> 對戰列表
                 </button>
                 <button onClick={() => setViewMode('tree')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-black text-sm transition-all tracking-widest ${viewMode === 'tree' ? 'bg-[#1e293b] text-white' : 'opacity-50 hover:opacity-100'}`}>
                   <Network size={18} style={{ color: viewMode === 'tree' ? COLORS.inkBlue : 'inherit' }} /> 賽況樹狀圖
                 </button>
+                <span className="flex items-center px-5 text-sm font-black tracking-widest" style={{ color: COLORS.inkOrange }}>{judgeCount} 位評審制</span>
               </div>
             </div>
 
             <div className="grid xl:grid-cols-4 gap-8">
               
               {/* 左側主要賽程區塊 */}
-              <div className="xl:col-span-3 space-y-8">
+              <div className="xl:col-span-3 space-y-8"> {/* 佔 3/5 寬度 */}
                 {viewMode === 'list' && rounds.map((roundMatches, rIdx) => {
                   const isCurrentRound = (rIdx + 1 === currentRoundNum);
                   return (
@@ -864,7 +949,7 @@ export default function App() {
                         <h2 className="text-2xl font-black flex items-center gap-3 tracking-widest uppercase" style={{ color: isCurrentRound ? COLORS.inkBlue : COLORS.textMuted }}>
                           <Swords size={28} />
                           Round {rIdx + 1}
-                          {rIdx === 0 && <span className="text-xs font-black px-3 py-1 rounded-md ml-3" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>同校迴避</span>}
+                          {rIdx === 0 && <span className="text-xs font-black px-3 py-1 rounded-md ml-3" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>隨機配對</span>}
                         </h2>
                       </div>
                       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -873,7 +958,7 @@ export default function App() {
                           return (
                             <div key={match.id} className={`rounded-xl p-5 flex flex-col justify-between relative transition-all border-2 brush-border shadow-md`}
                                  style={{ backgroundColor: COLORS.bg, borderColor: isFloat ? COLORS.inkOrange : COLORS.cardBorder }}>
-                              {match.isMCMatch && <div className="absolute top-0 right-0 text-[10px] font-black px-3 py-1 rounded-bl-lg z-10 bg-purple-500 text-white shadow-md border-l border-b border-purple-700">對戰魔王</div>}
+                              {/* {match.isMCMatch && <div className="absolute top-0 right-0 text-[10px] font-black px-3 py-1 rounded-bl-lg z-10 bg-purple-500 text-white shadow-md border-l border-b border-purple-700">對戰魔王</div>} */}
                               {isFloat && <div className="absolute top-0 left-0 w-full text-[10px] font-black py-1 text-center tracking-widest uppercase z-10" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>跨組對戰</div>}
                               
                               <div className={`flex justify-between items-center mb-4 ${isFloat ? 'mt-6' : ''}`}>
@@ -885,7 +970,6 @@ export default function App() {
                                   }}>
                                     {match.p1.name}
                                   </div>
-                                  <div className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>{match.p1.school}</div>
                                   {!match.p1.isMC && <div className="inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-black" style={{ backgroundColor: '#1e293b', color: COLORS.inkBlue }}>{match.p1WinsSnapshot}W {match.p1VotesSnapshot}票</div>}
                                 </div>
                                 <div className="px-2 font-black italic text-sm" style={{ color: isFloat ? COLORS.inkOrange : COLORS.inkBlue }}>VS</div>
@@ -897,13 +981,12 @@ export default function App() {
                                   }}>
                                     {match.p2.name}
                                   </div>
-                                  <div className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>{match.p2.school}</div>
                                   {!match.p2.isMC && <div className="inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-black" style={{ backgroundColor: '#1e293b', color: COLORS.inkBlue }}>{match.p2WinsSnapshot}W {match.p2VotesSnapshot}票</div>}
                                 </div>
                               </div>
 
-                                <div className="grid grid-cols-6 gap-1 mt-2">
-                                  {[ {v1: 5, v2: 0}, {v1: 4, v2: 1}, {v1: 3, v2: 2}, {v1: 2, v2: 3}, {v1: 1, v2: 4}, {v1: 0, v2: 5} ].map((score) => {
+                                <div className={`grid ${judgeCount === 3 ? 'grid-cols-4' : 'grid-cols-6'} gap-1 mt-2`}>
+                                  {scoreOptions.map((score) => {
                                     const isSelected = match.p1Votes === score.v1 && match.p2Votes === score.v2;
                                     return (
                                       <button key={`${score.v1}-${score.v2}`} onClick={() => handleMatchResult(rIdx, match.id, score.v1, score.v2)}
@@ -938,33 +1021,35 @@ export default function App() {
               </div>
 
               {/* 右側：即時戰績排名 */}
-              <div className="xl:col-span-1">
+              <div className="xl:col-span-1"> {/* 佔 1/4 寬度 */}
                 <div className="p-6 rounded-3xl shadow-xl sticky top-6 border brush-border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
                   <h3 className="text-xl font-black flex items-center gap-3 border-b pb-4 mb-4 tracking-widest" style={{ color: COLORS.inkOrange, borderColor: COLORS.cardBorder }}>
                     <Trophy size={24} /> 即時排名
                   </h3>
                   <div className="space-y-3">
-                    {getRankedPlayersWithTies().filter(p => p.displayRank !== '棄賽').map((p) => (
-                      <div key={p.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${p.displayRank <= 2 ? 'bg-[#1a1f26]' : 'hover:bg-white/5'}`}
-                           style={{ borderColor: p.displayRank <= 2 ? COLORS.inkOrange : COLORS.cardBorder }}>
+                    {getRankedPlayersWithTies().map((p) => (
+                      <div key={p.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${p.isWithdrawn ? 'opacity-40 bg-black/50' : (p.displayRank <= 2 ? 'bg-[#1a1f26]' : 'hover:bg-white/5')} gap-2`}
+                           style={{ borderColor: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.cardBorder }}>
                         <div className="flex items-center gap-4">
-                          <div className={`w-6 text-center font-black text-xl ${p.displayRank <= 2 ? '' : 'text-slate-600'}`}
-                               style={p.displayRank <= 2 ? { color: COLORS.inkOrange } : {}}>
-                            {p.displayRank}
+                          <div className={`w-6 text-center font-black text-xl ${p.displayRank <= 2 && !p.isWithdrawn ? '' : 'text-slate-600'} whitespace-nowrap`}
+                               style={p.displayRank <= 2 && !p.isWithdrawn ? { color: COLORS.inkOrange } : {}}>
+                            {p.isWithdrawn ? '棄賽' : p.displayRank}
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
-                              <div className="font-black text-white text-base flex items-center">{p.name}</div>
-                              {!p.isWithdrawn && <button onClick={() => setConfirmAction({ type: 'WITHDRAW', playerId: p.id, playerName: p.name })} className="ml-2 px-1.5 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/20 rounded border border-red-500/30 transition-colors">棄賽</button>}
-                              {p.displayRank <= 2 && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
+                            <div className="flex items-center gap-1">
+                              <div className="font-black text-white text-base flex items-center">
+                                {p.name}
+                                {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>}
+                              </div>
+                              {p.displayRank <= 2 && !p.isWithdrawn && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
                             </div>
-                            <div className="text-[10px] font-bold mt-0.5 tracking-wider" style={{ color: COLORS.textMuted }}>{p.school}</div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-black text-base" style={{ color: p.displayRank <= 2 ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins} W</div>
-                          <div className="text-xs font-bold" style={{ color: COLORS.textMuted }}>{p.votes} pt</div>
+                          <div className="font-black text-base whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins} W</div>
+                          <div className="text-xs font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes} pt</div>
                         </div>
+                        {!p.isWithdrawn && <button onClick={() => setConfirmAction({ type: 'WITHDRAW', playerId: p.id, playerName: p.name })} className="px-1.5 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/20 rounded border border-red-500/30 transition-colors shrink-0">棄賽</button>}
                       </div>
                     ))}
                   </div>
@@ -985,7 +1070,7 @@ export default function App() {
               
               <Medal size={64} className="mx-auto mb-6" style={{ color: COLORS.inkOrange }} />
               <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-[0.2em] text-white">賽事<span style={{color: COLORS.inkBlue}}>結果</span></h2>
-              <p className="font-bold tracking-widest mb-10 text-lg" style={{ color: COLORS.textMuted }}>挑戰組賽事・最終結果</p>
+              <p className="font-bold tracking-widest mb-10 text-lg" style={{ color: COLORS.textMuted }}>挑戰組賽事・{judgeCount} 位評審制・最終結果</p>
 
               <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: COLORS.cardBorder }}>
                 <table className="w-full text-left border-collapse bg-black/40">
@@ -993,9 +1078,8 @@ export default function App() {
                     <tr className="uppercase tracking-widest text-sm border-b" style={{ backgroundColor: '#111318', color: COLORS.textMuted, borderColor: COLORS.cardBorder }}>
                       <th className="p-5 font-black text-center">RANK</th>
                       <th className="p-5 font-black">NAME</th>
-                      <th className="p-5 font-black">CREW</th>
-                      <th className="p-5 font-black text-center">WINS</th>
-                      <th className="p-5 font-black text-center">POINTS</th>
+                      <th className="p-5 font-black text-center whitespace-nowrap">WINS</th>
+                      <th className="p-5 font-black text-center whitespace-nowrap">POINTS</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1006,13 +1090,12 @@ export default function App() {
                         </td>
                         <td className="p-5 font-black text-white text-xl">
                           <div className="flex items-center gap-3">
-                            <span style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : 'white' }}>{p.name} {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded">已棄賽</span>}</span>
-                            {p.displayRank <= 2 && !p.isWithdrawn && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
+                            <span style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : 'white' }}>{p.name} {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>}</span>
+                            {p.displayRank <= 2 && !p.isWithdrawn && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>晉級</span>}
                           </div>
                         </td>
-                        <td className="p-5 font-bold" style={{ color: COLORS.textMuted }}>{p.school}</td>
-                        <td className="p-5 text-center font-black text-2xl" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins}</td>
-                        <td className="p-5 text-center font-black text-lg" style={{ color: COLORS.textMuted }}>{p.votes}</td>
+                        <td className="p-5 text-center font-black text-2xl whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins}</td>
+                        <td className="p-5 text-center font-black text-lg whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes}</td>
                       </tr>
                     ))}
                   </tbody>
