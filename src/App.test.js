@@ -9,6 +9,7 @@ const addPlayer = (name) => {
 describe('Swiss tournament Phase 1', () => {
   beforeEach(() => {
     localStorage.clear();
+    window.history.replaceState({}, '', '/');
   });
 
   test('players are registered by name without a school field', () => {
@@ -51,5 +52,13 @@ describe('Swiss tournament Phase 1', () => {
       expect(storedPlayers[0]).not.toHaveProperty('school');
       expect(storedPlayers[0]).toMatchObject({ name: 'Legacy Player', wins: 1, votes: 5 });
     });
+  });
+
+  test('an event query opens the public tournament page', () => {
+    window.history.replaceState({}, '', '/?event=AB12');
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: '公開賽事查詢' })).toBeInTheDocument();
+    expect(screen.getByText(/尚未設定 Firebase/)).toBeInTheDocument();
   });
 });

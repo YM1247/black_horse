@@ -4,6 +4,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   writeBatch
 } from 'firebase/firestore';
@@ -73,21 +74,22 @@ export const createCloudTournament = async ({ eventCode, name, tournament }) => 
   const user = requireUser();
   const { db } = getFirebaseServices();
   const tournamentRef = doc(db, 'tournaments', code);
-  const batch = writeBatch(db);
   const now = new Date().toISOString();
-
-  batch.set(tournamentRef, {
-    ...cleanData(tournament),
-    eventCode: code,
-    name: name.trim() || code,
-    isPublic: false,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    clientUpdatedAt: now,
-    updatedBy: user.uid
+  await runTransaction(db, async transaction => {
+    const existing = await transaction.get(tournamentRef);
+    if (existing.exists()) throw new Error('此賽事代碼已存在，請更換代碼。');
+    transaction.set(tournamentRef, {
+      ...cleanData(tournament),
+      eventCode: code,
+      name: name.trim() || code,
+      isPublic: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      clientUpdatedAt: now,
+      updatedBy: user.uid
+    });
+    createAuditLog(transaction, tournamentRef, user, 'TOURNAMENT_CREATED', { name, eventCode: code });
   });
-  createAuditLog(batch, tournamentRef, user, 'TOURNAMENT_CREATED', { name, eventCode: code });
-  await batch.commit();
   return code;
 };
 
@@ -133,4 +135,3 @@ export const subscribeAdminTournaments = (onTournaments, onError) => {
     onTournaments(snapshot.docs.map(item => ({ id: item.id, ...item.data() })));
   }, onError);
 };
-
