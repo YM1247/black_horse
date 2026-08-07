@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Trophy, Users, Swords, UserPlus, Play, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
 import { pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 import PublicTournamentPage from './PublicTournamentPage';
+import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit';
 import { isFirebaseConfigured } from './firebase';
 import {
   createCloudTournament,
@@ -12,6 +13,7 @@ import {
   signOutAdmin,
   subscribeAdminTournaments,
   subscribeAuth,
+  subscribeTournamentAuditLogs,
   subscribeTournament,
   validateEventCode
 } from './services/tournamentRepository';
@@ -166,6 +168,7 @@ function TournamentAdminApp() {
   const [adminUser, setAdminUser] = useState(null);
   const [adminToken, setAdminToken] = useState('');
   const [cloudTournaments, setCloudTournaments] = useState([]);
+  const [cloudAuditLogs, setCloudAuditLogs] = useState([]);
   const [activeCloudCode, setActiveCloudCode] = useState('');
   const [activeCloudName, setActiveCloudName] = useState('');
   const [cloudIsPublic, setCloudIsPublic] = useState(false);
@@ -223,6 +226,18 @@ function TournamentAdminApp() {
       setCloudError(error.message);
       setCloudSyncStatus('error');
     });
+  }, [adminUser, activeCloudCode]);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured || !adminUser || !activeCloudCode) {
+      setCloudAuditLogs([]);
+      return undefined;
+    }
+    return subscribeTournamentAuditLogs(
+      activeCloudCode,
+      setCloudAuditLogs,
+      error => setCloudError(error.message)
+    );
   }, [adminUser, activeCloudCode]);
 
   useEffect(() => {
@@ -778,23 +793,47 @@ function TournamentAdminApp() {
                   </div>
 
                   {activeCloudCode && (
-                    <section className="p-5 rounded-xl border-2" style={{ backgroundColor: '#131e24', borderColor: COLORS.inkBlue }}>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                          <div className="text-xs font-black tracking-widest" style={{ color: COLORS.textMuted }}>目前雲端賽事</div>
-                          <h3 className="text-xl font-black mt-1">{activeCloudName || activeCloudCode} <span style={{ color: COLORS.inkOrange }}>#{activeCloudCode}</span></h3>
-                          <div className="text-xs font-bold mt-2" style={{ color: cloudSyncStatus === 'error' ? '#f87171' : COLORS.inkBlue }}>
-                            {{ loading: '讀取中', pending: '同步中', offline: '離線快取・等待網路', synced: '已與雲端同步', error: '同步失敗', local: '本機模式' }[cloudSyncStatus]}
+                    <>
+                      <section className="p-5 rounded-xl border-2" style={{ backgroundColor: '#131e24', borderColor: COLORS.inkBlue }}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div>
+                            <div className="text-xs font-black tracking-widest" style={{ color: COLORS.textMuted }}>目前雲端賽事</div>
+                            <h3 className="text-xl font-black mt-1">{activeCloudName || activeCloudCode} <span style={{ color: COLORS.inkOrange }}>#{activeCloudCode}</span></h3>
+                            <div className="text-xs font-bold mt-2" style={{ color: cloudSyncStatus === 'error' ? '#f87171' : COLORS.inkBlue }}>
+                              {{ loading: '讀取中', pending: '同步中', offline: '離線快取・等待網路', synced: '已與雲端同步', error: '同步失敗', local: '本機模式' }[cloudSyncStatus]}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button onClick={handleToggleCloudVisibility} className="px-4 py-2 rounded-lg font-black border" style={{ borderColor: cloudIsPublic ? '#4ade80' : COLORS.inkOrange, color: cloudIsPublic ? '#4ade80' : COLORS.inkOrange }}>
+                              {cloudIsPublic ? '已公開' : '未公開'}
+                            </button>
+                            <button onClick={() => openPublicTournament(activeCloudCode)} className="px-4 py-2 rounded-lg font-black" style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>查看公開頁</button>
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          <button onClick={handleToggleCloudVisibility} className="px-4 py-2 rounded-lg font-black border" style={{ borderColor: cloudIsPublic ? '#4ade80' : COLORS.inkOrange, color: cloudIsPublic ? '#4ade80' : COLORS.inkOrange }}>
-                            {cloudIsPublic ? '已公開' : '未公開'}
-                          </button>
-                          <button onClick={() => openPublicTournament(activeCloudCode)} className="px-4 py-2 rounded-lg font-black" style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>查看公開頁</button>
+                      </section>
+
+                      <section className="p-5 rounded-xl border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
+                        <div className="flex items-center justify-between gap-3 mb-4">
+                          <h3 className="font-black flex items-center gap-2"><Clock size={18} style={{ color: COLORS.inkOrange }} /> 最近操作紀錄</h3>
+                          <span className="text-xs font-bold" style={{ color: COLORS.textMuted }}>最多顯示 50 筆</span>
                         </div>
-                      </div>
-                    </section>
+                        <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                          {cloudAuditLogs.map(audit => {
+                            const description = describeAuditLog(audit);
+                            return (
+                              <div key={audit.id} className="p-3 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-2" style={{ backgroundColor: COLORS.bg, borderColor: COLORS.cardBorder }}>
+                                <div>
+                                  <div className="text-sm font-black text-white">{getAuditActionLabel(audit.action)}</div>
+                                  {description && <div className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>{description}</div>}
+                                </div>
+                                <time className="text-[11px] font-bold whitespace-nowrap" style={{ color: COLORS.inkBlue }}>{formatAuditTime(audit)}</time>
+                              </div>
+                            );
+                          })}
+                          {cloudAuditLogs.length === 0 && <div className="p-6 text-center text-sm font-bold border border-dashed rounded-lg" style={{ color: COLORS.textMuted, borderColor: COLORS.cardBorder }}>尚無操作紀錄</div>}
+                        </div>
+                      </section>
+                    </>
                   )}
 
                   <section className="p-5 rounded-xl border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>

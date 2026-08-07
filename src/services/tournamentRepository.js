@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDocFromServer,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -173,5 +174,19 @@ export const subscribeAdminTournaments = (onTournaments, onError) => {
   const tournamentsQuery = query(collection(db, 'tournaments'), orderBy('updatedAt', 'desc'));
   return onSnapshot(tournamentsQuery, { includeMetadataChanges: true }, snapshot => {
     onTournaments(snapshot.docs.map(item => ({ id: item.id, ...item.data() })));
+  }, onError);
+};
+
+export const subscribeTournamentAuditLogs = (eventCode, onLogs, onError, maximum = 50) => {
+  const code = normalizeEventCode(eventCode);
+  if (!validateEventCode(code)) throw new Error('賽事代碼格式錯誤。');
+  const { db } = getFirebaseServices();
+  const auditQuery = query(
+    collection(db, 'tournaments', code, 'auditLogs'),
+    orderBy('createdAt', 'desc'),
+    limit(maximum)
+  );
+  return onSnapshot(auditQuery, snapshot => {
+    onLogs(snapshot.docs.map(item => ({ id: item.id, ...item.data() })));
   }, onError);
 };

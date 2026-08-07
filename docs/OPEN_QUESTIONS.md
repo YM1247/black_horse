@@ -20,12 +20,12 @@
 8. 公開前台以賽事代碼查詢；賽事可永久保存，管理員可切換是否公開。
 9. 使用 Firestore 即時 listener 與瀏覽器持久快取。
 
-## Firebase 尚需人工完成
+## Firebase 正式環境狀態
 
-1. Firebase Authentication 啟用 Anonymous provider。
-2. 依 [FIREBASE_SETUP.md](FIREBASE_SETUP.md) 計算 tokenHash。
-3. Firestore Console 建立 `settings/admin` 文件及 `tokenHash` 欄位。
-4. 發布最新版 `firestore.rules`。
+1. Firebase 專案 `black-horse-7b932` 與 Web App 已建立。
+2. 最新版 `firestore.rules` 已於 2026-08-07 部署。
+3. 管理 token 仍依 [FIREBASE_SETUP.md](FIREBASE_SETUP.md) 在 Firestore Console 管理；token 本身不可提交至 Git。
+4. Anonymous provider 與 `settings/admin.tokenHash` 的實際設定需以正式站 token 登入測試確認。
 
 ## Phase 3：尚待確認
 
@@ -35,4 +35,3 @@
 4. Google Form 的實際欄位、試算表格式與存取方式為何？採定時同步、手動匯入，還是 Apps Script 主動通知？
 5. 重複報名、改名與資料衝突由系統自動合併，還是進入後台待人工確認？
 6. 賽事結果何時鎖定並累積積分？鎖定後更正結果是否需要重新計算整季排行榜與保留版本？
-

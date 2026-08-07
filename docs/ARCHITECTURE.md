@@ -32,7 +32,7 @@ GitHub Pages
 - Authentication：自動建立匿名 Firebase 使用者取得 UID，不要求 Email。token 在瀏覽器雜湊後由 Security Rules 驗證。
 - Firestore：保存賽事狀態，透過 `onSnapshot` 即時同步。Web 端啟用 IndexedDB 持久快取以支援離線操作。
 - 前台：以公開網址查看指定賽事的輪次、比分、戰績與狀態。
-- 稽核：比分與重要狀態變更另外建立 audit log；Security Rules 禁止更新或刪除既有紀錄。
+- 稽核：比分與重要狀態變更另外建立 audit log；Security Rules 禁止更新或刪除既有紀錄，後台即時顯示目前賽事最近 50 筆操作。
 
 為維持 Spark 免費方案，Phase 2 不依賴 Cloud Functions。重要原則是把配對、計分、排名等規則抽成可測試的領域層，前後台不可各自複製一份規則。賽事資料先保存為單一 Firestore document，以便離線與即時同步整體狀態；若未來規模接近 Firestore 單一文件限制，再將輪次與對戰拆成子集合。
 
@@ -53,7 +53,7 @@ Firebase Spark 目前提供 Firestore 每日免費讀寫額度，且一般 Email
 
 - [Firestore 即時更新](https://firebase.google.com/docs/firestore/query-data/listen)
 - [Firestore 離線資料](https://firebase.google.com/docs/firestore/manage-data/enable-offline)
-- [Email/Password Authentication](https://firebase.google.com/docs/auth/web/password-auth)
+- [Anonymous Authentication](https://firebase.google.com/docs/auth/web/anonymous-auth)
 - [Firebase Spark 方案](https://firebase.google.com/docs/projects/billing/firebase-pricing-plans)
 
 ## Phase 3 目標邊界
@@ -71,8 +71,9 @@ Firebase Spark 目前提供 Firestore 每日免費讀寫額度，且一般 Email
 1. 將現有配對、計分、排名與資料遷移從 `App.js` 抽成純函式並增加規則測試。
 2. 定義 Firestore schema、Security Rules 與賽事狀態機。
 3. 實作 Firebase 初始化、後台驗證與賽事 repository。
-5. 將目前操作畫面改接 API。
-6. 建立公開唯讀前台與即時更新。
+4. 將目前操作畫面改接 repository。
+5. 建立公開唯讀前台與即時更新。
+6. 加入後台操作稽核檢視與正式環境驗證。
 7. 再加入報名匯入、選手合併、系列積分與排行榜。
 
-正式連線仍需要 [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) 列出的 Firebase Web App 設定與管理員 UID。
+正式連線設定與尚待人工驗證項目記錄於 [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md)。

@@ -1,5 +1,19 @@
 # 開發紀錄
 
+## 2026-08-07｜Phase 2 稽核紀錄檢視
+
+### 修改內容
+
+- 雲端後台加入目前賽事最近 50 筆操作紀錄，資料由 Firestore 即時更新。
+- 稽核動作顯示中文名稱，並依操作呈現輪次、比分、選手、匯入人數或公開狀態等必要內容。
+- 時間優先使用 Firestore server timestamp；尚在同步時改用既有 client timestamp，避免顯示空白。
+- 新增稽核顯示工具測試，涵蓋比分、公開狀態、匯入人數與時間後備處理。
+
+### 正式環境
+
+- `firestore.rules` 已部署至 Firebase 專案 `black-horse-7b932` 並通過規則編譯。
+- GitHub Pages 正式站持續由 `gh-pages` 分支發布。
+
 ## 2026-08-06｜Token-only 管理驗證
 
 ### 修改內容
