@@ -1,4 +1,5 @@
 export const MC_ID = 'MC';
+export const DOUBLE_ELIMINATION_LOSS_LIMIT = 2;
 
 const createId = () => {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -15,6 +16,28 @@ const shuffle = (items, random) => {
 };
 
 const isCompleted = (match) => Number.isFinite(match?.p1Votes) && Number.isFinite(match?.p2Votes);
+
+export const calculatePlayerLosses = (rounds = []) => {
+  const losses = new Map();
+  rounds.flat().forEach(match => {
+    if (!isCompleted(match) || match.p1Votes === match.p2Votes) return;
+    const loserId = match.p1Votes < match.p2Votes ? match.p1.id : match.p2.id;
+    if (loserId !== MC_ID) losses.set(loserId, (losses.get(loserId) || 0) + 1);
+  });
+  return losses;
+};
+
+export const applyDoubleElimination = (players, rounds, enabled) => {
+  const losses = calculatePlayerLosses(rounds);
+  return players.map(player => {
+    const playerLosses = losses.get(player.id) || 0;
+    return {
+      ...player,
+      losses: playerLosses,
+      isEliminated: Boolean(enabled && !player.isMC && !player.isWithdrawn && playerLosses >= DOUBLE_ELIMINATION_LOSS_LIMIT)
+    };
+  });
+};
 
 export const buildOpponentHistory = (rounds = []) => {
   const opponents = new Map();
@@ -92,7 +115,9 @@ const chooseMcPlayer = (pool, roundNum, opponentHistory, random) => {
 
 export const pairSwissRound = ({ players, rounds = [], roundNum, random = Math.random }) => {
   const opponentHistory = buildOpponentHistory(rounds);
-  const pool = players.filter(player => !player.isWithdrawn && !player.isMC).map(player => ({ ...player }));
+  const pool = players
+    .filter(player => !player.isWithdrawn && !player.isEliminated && !player.isMC)
+    .map(player => ({ ...player }));
   const matches = [];
   let mcMatch = null;
 
@@ -141,7 +166,7 @@ export const updateMatchScore = (rounds, roundIndex, matchId, p1Votes, p2Votes) 
   ));
 
 export const recalculatePlayerRecords = (players, rounds) => {
-  const recalculated = players.map(player => ({ ...player, wins: 0, votes: 0 }));
+  const recalculated = players.map(player => ({ ...player, wins: 0, votes: 0, losses: 0 }));
   const byId = new Map(recalculated.map(player => [player.id, player]));
 
   rounds.flat().forEach(match => {
@@ -151,10 +176,12 @@ export const recalculatePlayerRecords = (players, rounds) => {
     if (p1 && !p1.isMC) {
       p1.votes += match.p1Votes;
       if (match.p1Votes > match.p2Votes) p1.wins += 1;
+      if (match.p1Votes < match.p2Votes) p1.losses += 1;
     }
     if (p2 && !p2.isMC) {
       p2.votes += match.p2Votes;
       if (match.p2Votes > match.p1Votes) p2.wins += 1;
+      if (match.p2Votes < match.p1Votes) p2.losses += 1;
     }
   });
 
@@ -169,6 +196,7 @@ export const rankPlayers = (players, rounds) => {
   const byId = new Map(allPlayers.map(player => [player.id, player]));
   const opponents = new Map(allPlayers.map(player => [player.id, []]));
   const completedMatches = new Map(allPlayers.map(player => [player.id, 0]));
+  const playerLosses = calculatePlayerLosses(rounds);
 
   rounds.flat().forEach(match => {
     if (!isCompleted(match)) return;
@@ -194,6 +222,7 @@ export const rankPlayers = (players, rounds) => {
   };
 
   activePlayers.forEach(player => {
+    player.losses = playerLosses.get(player.id) || 0;
     player.opponentWinRate = opponentWinRate(player.id);
     player.opponentsOpponentWinRate = opponentsOpponentWinRate(player.id);
   });
@@ -225,4 +254,3 @@ export const rankPlayers = (players, rounds) => {
     .map(player => ({ ...player, displayRank: '棄賽', needsTiebreaker: false, opponentWinRate: 0, opponentsOpponentWinRate: 0 }));
   return [...activePlayers, ...withdrawn];
 };
-

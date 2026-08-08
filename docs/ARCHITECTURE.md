@@ -19,8 +19,8 @@ Phase 2 應拆成三個明確責任：
 
 ```text
 GitHub Pages
-  ├── 後台管理介面 ── Firebase Anonymous Authentication
-  └── 公開查詢前台 ──┐
+  ├── ?admin=1 後台 ── token gate ── Firebase Anonymous Authentication
+  └── ?event={code} 公開前台 ──┐
                      └── Cloud Firestore
                           ├── tournaments/{eventCode}
                           ├── tournaments/{eventCode}/auditLogs/{logId}
@@ -28,13 +28,20 @@ GitHub Pages
                           └── adminSessions/{uid}
 ```
 
-- 後台：只輸入單一共用 token，建立賽事、管理名單、產生輪次、輸入或更正比分、處理棄賽與結束賽事。
+- 後台：位於獨立 `?admin=1` 入口，只輸入單一共用 token；驗證前不載入賽事管理畫面。登入後可建立賽事、管理名單、產生輪次、輸入或更正比分、處理棄賽與結束賽事。
 - Authentication：自動建立匿名 Firebase 使用者取得 UID，不要求 Email。token 在瀏覽器雜湊後由 Security Rules 驗證。
 - Firestore：保存賽事狀態，透過 `onSnapshot` 即時同步。Web 端啟用 IndexedDB 持久快取以支援離線操作。
-- 前台：以公開網址查看指定賽事的輪次、比分、戰績與狀態。
+- 前台：網站根目錄為純查詢入口；`?event={code}` 直接查看指定賽事的輪次、比分、戰績與狀態。後台在瀏覽器內產生對應 QR Code，不使用第三方 QR 服務。
 - 稽核：比分與重要狀態變更另外建立 audit log；Security Rules 禁止更新或刪除既有紀錄，後台即時顯示目前賽事最近 50 筆操作。
 
 為維持 Spark 免費方案，Phase 2 不依賴 Cloud Functions。重要原則是把配對、計分、排名等規則抽成可測試的領域層，前後台不可各自複製一份規則。賽事資料先保存為單一 Firestore document，以便離線與即時同步整體狀態；若未來規模接近 Firestore 單一文件限制，再將輪次與對戰拆成子集合。
+
+## 兩敗淘汰規則
+
+- `doubleElimination` 是賽事層級布林設定；舊資料缺少此欄位時視為 `false`。
+- 每次比分更新都由完整有效賽程重新計算勝、敗與票數，避免歷史比分更正留下過期淘汰狀態。
+- 啟用後，`losses >= 2` 的選手標記 `isEliminated`；排名與過往成績保留，但下一輪配對會排除該選手。
+- `isWithdrawn` 與 `isEliminated` 分開保存，避免把規則淘汰誤當成選手主動棄賽。
 
 ## 安全模型
 

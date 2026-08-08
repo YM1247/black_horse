@@ -1,4 +1,4 @@
-import { pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
+import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 
 const player = (id, wins = 0, votes = 0) => ({ id, name: id, wins, votes, isWithdrawn: false });
 const completedMatch = (id, p1, p2, p1Votes = 3, p2Votes = 0) => ({
@@ -68,3 +68,38 @@ test('players tied on all automatic criteria are marked for a playoff', () => {
   expect(ranked.every(item => item.needsTiebreaker)).toBe(true);
 });
 
+test('a player is eliminated after a second loss when double elimination is enabled', () => {
+  const players = [player('A'), player('B'), player('C')];
+  const rounds = [
+    [completedMatch('ab', players[0], players[1], 0, 3)],
+    [completedMatch('ac', players[0], players[2], 1, 2)]
+  ];
+
+  const updated = applyDoubleElimination(recalculatePlayerRecords(players, rounds), rounds, true);
+  expect(updated.find(item => item.id === 'A')).toMatchObject({ losses: 2, isEliminated: true });
+  expect(updated.find(item => item.id === 'B')).toMatchObject({ losses: 0, isEliminated: false });
+});
+
+test('eliminated players are excluded from following Swiss pairings', () => {
+  const players = [
+    { ...player('A'), isEliminated: true },
+    player('B'),
+    player('C'),
+    player('D'),
+    player('E')
+  ];
+
+  const matches = pairSwissRound({ players, rounds: [], roundNum: 1, random: () => 0 });
+  expect(matches.flatMap(match => [match.p1.id, match.p2.id])).not.toContain('A');
+});
+
+test('standard Swiss mode records losses without eliminating players', () => {
+  const players = [player('A'), player('B')];
+  const rounds = [
+    [completedMatch('one', players[0], players[1], 0, 3)],
+    [completedMatch('two', players[0], players[1], 1, 2)]
+  ];
+
+  const updated = applyDoubleElimination(recalculatePlayerRecords(players, rounds), rounds, false);
+  expect(updated.find(item => item.id === 'A')).toMatchObject({ losses: 2, isEliminated: false });
+});

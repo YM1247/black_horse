@@ -17,6 +17,12 @@ export default function PublicTournamentPage({ initialCode = '' }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    document.title = tournament?.name
+      ? `${tournament.name}｜即時賽況`
+      : '黑馬記念｜公開賽事';
+  }, [tournament?.name]);
+
+  useEffect(() => {
     if (!isFirebaseConfigured || !eventCode) return undefined;
     setStatus('loading');
     setError('');
@@ -62,9 +68,9 @@ export default function PublicTournamentPage({ initialCode = '' }) {
       <div className="max-w-7xl mx-auto">
         <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 border-b border-slate-800 pb-8">
           <div>
-            <a href={window.location.pathname} className="text-sm font-bold text-slate-500 hover:text-slate-200">← 返回首頁</a>
-            <h1 className="text-4xl font-black mt-3">{tournament?.name || '公開賽事查詢'}</h1>
-            {tournament && <p className="mt-2 text-slate-400 font-bold">代碼 {eventCode}・{PHASE_LABELS[tournament.phase] || tournament.phase}・{tournament.judgeCount} 位評審</p>}
+            {eventCode && <a href={window.location.pathname} className="text-sm font-bold text-slate-500 hover:text-slate-200">← 查詢其他賽事</a>}
+            <h1 className="text-4xl font-black mt-3">{tournament?.name || '觀眾即時賽況'}</h1>
+            {tournament && <p className="mt-2 text-slate-400 font-bold">代碼 {eventCode}・{PHASE_LABELS[tournament.phase] || tournament.phase}・{tournament.judgeCount} 位評審・{tournament.doubleElimination ? '兩敗淘汰' : '不淘汰'}</p>}
           </div>
           <form onSubmit={handleLookup} className="flex gap-2">
             <label className="sr-only" htmlFor="public-event-code">賽事代碼</label>
@@ -110,13 +116,15 @@ export default function PublicTournamentPage({ initialCode = '' }) {
                 <h2 className="text-xl font-black text-[#f1c6a6] mb-5">即時排名</h2>
                 <div className="space-y-3">
                   {rankedPlayers.map(player => (
-                    <div key={player.id} className="border border-slate-800 rounded-lg p-4">
+                    <div key={player.id} className={`border border-slate-800 rounded-lg p-4 ${player.isWithdrawn || player.isEliminated ? 'opacity-60' : ''}`}>
                       <div className="flex justify-between gap-3">
                         <span className="font-black">{player.displayRank}. {player.name}</span>
-                        <span className="font-black text-[#b6d2d4]">{player.wins}W / {player.votes}pt</span>
+                        <span className="font-black text-[#b6d2d4]">{player.wins}W{tournament.doubleElimination ? ` / ${player.losses || 0}L` : ''} / {player.votes}pt</span>
                       </div>
                       {!player.isWithdrawn && <div className="text-[11px] mt-2 text-slate-500">對手勝率 {(player.opponentWinRate * 100).toFixed(1)}%・次級 {(player.opponentsOpponentWinRate * 100).toFixed(1)}%</div>}
-                      {player.needsTiebreaker && <div className="text-xs text-[#f1c6a6] font-black mt-2">需加賽</div>}
+                      {player.isEliminated && <div className="text-xs text-amber-300 font-black mt-2">兩敗淘汰</div>}
+                      {player.isWithdrawn && <div className="text-xs text-red-300 font-black mt-2">已棄賽</div>}
+                      {!player.isEliminated && player.needsTiebreaker && <div className="text-xs text-[#f1c6a6] font-black mt-2">需加賽</div>}
                     </div>
                   ))}
                 </div>
@@ -128,4 +136,3 @@ export default function PublicTournamentPage({ initialCode = '' }) {
     </main>
   );
 }
-

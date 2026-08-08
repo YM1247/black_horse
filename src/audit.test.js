@@ -17,6 +17,11 @@ test('audit descriptions retain useful management context', () => {
     action: 'PLAYERS_IMPORTED',
     details: { count: 8 }
   })).toBe('8 位選手');
+  expect(getAuditActionLabel('DOUBLE_ELIMINATION_CHANGED')).toBe('變更淘汰規則');
+  expect(describeAuditLog({
+    action: 'DOUBLE_ELIMINATION_CHANGED',
+    details: { before: false, after: true }
+  })).toBe('啟用兩敗淘汰');
 });
 
 test('audit timestamps use the client fallback while the server timestamp is pending', () => {

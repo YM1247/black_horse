@@ -10,6 +10,7 @@ const AUDIT_ACTION_LABELS = {
   TEST_PLAYERS_LOADED: '載入測試名單',
   PLAYER_WITHDRAWN: '選手棄賽',
   JUDGE_COUNT_CHANGED: '變更評審人數',
+  DOUBLE_ELIMINATION_CHANGED: '變更淘汰規則',
   SCORE_UPDATED: '更新比分',
   HISTORICAL_SCORE_UPDATED: '更正歷史比分',
   ROUND_ADVANCED: '進入下一輪',
@@ -35,15 +36,17 @@ export const describeAuditLog = (audit = {}) => {
       return `${Number(details.count) || 0} 位選手`;
     case 'JUDGE_COUNT_CHANGED':
       return `${details.before ?? '—'} 位 → ${details.after ?? '—'} 位`;
+    case 'DOUBLE_ELIMINATION_CHANGED':
+      return details.after ? '啟用兩敗淘汰' : '關閉兩敗淘汰';
     case 'SCORE_UPDATED':
     case 'HISTORICAL_SCORE_UPDATED':
       return `第 ${details.round || '—'} 輪・${details.after?.p1Votes ?? '—'}:${details.after?.p2Votes ?? '—'}`;
     case 'ROUND_ADVANCED':
-      return `第 ${details.from || '—'} 輪 → 第 ${details.to || '—'} 輪`;
+      return `第 ${details.from || '—'} 輪 → 第 ${details.to || '—'} 輪${details.eliminated?.length ? `・淘汰 ${details.eliminated.join('、')}` : ''}`;
     case 'TOURNAMENT_FINISHED':
       return `完成第 ${details.round || '—'} 輪`;
     case 'TOURNAMENT_STARTED':
-      return `${Number(details.playerCount) || 0} 位選手・${details.judgeCount || '—'} 位評審`;
+      return `${Number(details.playerCount) || 0} 位選手・${details.judgeCount || '—'} 位評審・${details.doubleElimination ? '兩敗淘汰' : '不淘汰'}`;
     case 'PUBLIC_VISIBILITY_CHANGED':
       return details.after ? '設為公開' : '設為不公開';
     case 'LOCAL_SAVE_LOADED':

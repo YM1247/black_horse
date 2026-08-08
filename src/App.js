@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import QRCode from 'qrcode';
 import { Trophy, Users, Swords, UserPlus, Play, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
-import { pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
+import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 import PublicTournamentPage from './PublicTournamentPage';
 import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit';
 import { isFirebaseConfigured } from './firebase';
@@ -26,7 +27,8 @@ const ACTIVE_STORAGE_KEYS = {
   players: 'swiss_tournament_players',
   rounds: 'swiss_tournament_rounds',
   currentRoundNum: 'swiss_tournament_currentRoundNum',
-  judgeCount: 'swiss_tournament_judgeCount'
+  judgeCount: 'swiss_tournament_judgeCount',
+  doubleElimination: 'swiss_tournament_doubleElimination'
 };
 const SAVES_STORAGE_KEY = 'swiss_tourney_saves_v4';
 const LEGACY_SAVES_STORAGE_KEY = 'swiss_tourney_saves_v3';
@@ -77,7 +79,9 @@ const normalizePlayer = (player = {}) => ({
   name: String(player.name || '').trim(),
   wins: Number(player.wins) || 0,
   votes: Number(player.votes) || 0,
+  losses: Number(player.losses) || 0,
   isWithdrawn: Boolean(player.isWithdrawn),
+  isEliminated: Boolean(player.isEliminated),
   ...(player.isMC ? { isMC: true } : {})
 });
 
@@ -89,12 +93,17 @@ const normalizeRounds = (rounds = []) => rounds.map(round => round.map(match => 
 
 const normalizeTournamentData = (data = {}) => {
   const rounds = normalizeRounds(Array.isArray(data.rounds) ? data.rounds : []);
+  const doubleElimination = Boolean(data.doubleElimination);
+  const normalizedPlayers = (Array.isArray(data.players) ? data.players : [])
+    .map(normalizePlayer)
+    .filter(player => player.name);
   return {
     phase: ['registration', 'playing', 'finished'].includes(data.phase) ? data.phase : 'registration',
-    players: (Array.isArray(data.players) ? data.players : []).map(normalizePlayer).filter(player => player.name),
+    players: applyDoubleElimination(normalizedPlayers, rounds, doubleElimination),
     rounds,
     currentRoundNum: Math.max(1, Number(data.currentRoundNum) || 1),
-    judgeCount: normalizeJudgeCount(data.judgeCount, inferJudgeCount(rounds))
+    judgeCount: normalizeJudgeCount(data.judgeCount, inferJudgeCount(rounds)),
+    doubleElimination
   };
 };
 
@@ -103,7 +112,8 @@ const loadActiveTournament = () => normalizeTournamentData({
   players: getLocalStorageItem(ACTIVE_STORAGE_KEYS.players, []),
   rounds: getLocalStorageItem(ACTIVE_STORAGE_KEYS.rounds, []),
   currentRoundNum: getLocalStorageItem(ACTIVE_STORAGE_KEYS.currentRoundNum, 1),
-  judgeCount: getLocalStorageItem(ACTIVE_STORAGE_KEYS.judgeCount, undefined)
+  judgeCount: getLocalStorageItem(ACTIVE_STORAGE_KEYS.judgeCount, undefined),
+  doubleElimination: getLocalStorageItem(ACTIVE_STORAGE_KEYS.doubleElimination, false)
 });
 
 const normalizeSave = (save = {}) => ({
@@ -130,13 +140,14 @@ const getDynamicFontSize = (name, isTreeMode = false) => {
   }
 };
 
-function TournamentAdminApp() {
+export function TournamentAdminApp({ authenticatedUser = null }) {
   const [initialTournament] = useState(loadActiveTournament);
   const [phase, setPhase] = useState(initialTournament.phase); // 'registration', 'playing', 'finished'
   const [players, setPlayers] = useState(initialTournament.players);
   const [rounds, setRounds] = useState(initialTournament.rounds);
   const [currentRoundNum, setCurrentRoundNum] = useState(initialTournament.currentRoundNum);
   const [judgeCount, setJudgeCount] = useState(initialTournament.judgeCount);
+  const [doubleElimination, setDoubleElimination] = useState(initialTournament.doubleElimination);
   const [viewMode, setViewMode] = useState('tree'); // 預設改為樹狀圖
 
   // Modal 視窗狀態
@@ -165,7 +176,7 @@ function TournamentAdminApp() {
 
   // Firebase 雲端後台狀態
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
-  const [adminUser, setAdminUser] = useState(null);
+  const [adminUser, setAdminUser] = useState(authenticatedUser);
   const [adminToken, setAdminToken] = useState('');
   const [cloudTournaments, setCloudTournaments] = useState([]);
   const [cloudAuditLogs, setCloudAuditLogs] = useState([]);
@@ -176,8 +187,7 @@ function TournamentAdminApp() {
   const [cloudError, setCloudError] = useState('');
   const [newCloudName, setNewCloudName] = useState('');
   const [newCloudCode, setNewCloudCode] = useState(() => generateEventCode());
-  const [publicLookupCode, setPublicLookupCode] = useState('');
-  const [isPublicLookupOpen, setIsPublicLookupOpen] = useState(false);
+  const [publicQrCode, setPublicQrCode] = useState('');
   const cloudReadyRef = useRef(false);
   const lastCloudStateRef = useRef(null);
   const pendingAuditRef = useRef(null);
@@ -218,6 +228,7 @@ function TournamentAdminApp() {
       setRounds(normalized.rounds);
       setCurrentRoundNum(normalized.currentRoundNum);
       setJudgeCount(normalized.judgeCount);
+      setDoubleElimination(normalized.doubleElimination);
       setActiveCloudName(data.name || activeCloudCode);
       setCloudIsPublic(Boolean(data.isPublic));
       setCloudSyncStatus(data.sync?.hasPendingWrites ? 'pending' : data.sync?.fromCache ? 'offline' : 'synced');
@@ -242,7 +253,7 @@ function TournamentAdminApp() {
 
   useEffect(() => {
     if (!adminUser || !activeCloudCode || !cloudReadyRef.current) return undefined;
-    const cloudState = { phase, players, rounds, currentRoundNum, judgeCount };
+    const cloudState = { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination };
     const serialized = JSON.stringify(cloudState);
     if (serialized === lastCloudStateRef.current) return undefined;
 
@@ -263,7 +274,23 @@ function TournamentAdminApp() {
       }
     }, 400);
     return () => window.clearTimeout(timeout);
-  }, [adminUser, activeCloudCode, phase, players, rounds, currentRoundNum, judgeCount]);
+  }, [adminUser, activeCloudCode, phase, players, rounds, currentRoundNum, judgeCount, doubleElimination]);
+
+  const publicTournamentUrl = activeCloudCode
+    ? `${window.location.origin}${window.location.pathname}?event=${activeCloudCode}`
+    : '';
+
+  useEffect(() => {
+    if (!publicTournamentUrl) {
+      setPublicQrCode('');
+      return undefined;
+    }
+    let active = true;
+    QRCode.toDataURL(publicTournamentUrl, { width: 240, margin: 2, errorCorrectionLevel: 'M' })
+      .then(dataUrl => { if (active) setPublicQrCode(dataUrl); })
+      .catch(error => setCloudError(`QR Code 產生失敗：${error.message}`));
+    return () => { active = false; };
+  }, [publicTournamentUrl]);
 
   // 自動同步存檔到 LocalStorage
   useEffect(() => {
@@ -282,10 +309,11 @@ function TournamentAdminApp() {
       localStorage.setItem(ACTIVE_STORAGE_KEYS.rounds, JSON.stringify(rounds));
       localStorage.setItem(ACTIVE_STORAGE_KEYS.currentRoundNum, JSON.stringify(currentRoundNum));
       localStorage.setItem(ACTIVE_STORAGE_KEYS.judgeCount, JSON.stringify(judgeCount));
+      localStorage.setItem(ACTIVE_STORAGE_KEYS.doubleElimination, JSON.stringify(doubleElimination));
     } catch (error) {
       console.error("Error saving current game state to localStorage:", error);
     }
-  }, [phase, players, rounds, currentRoundNum, judgeCount]);
+  }, [phase, players, rounds, currentRoundNum, judgeCount, doubleElimination]);
 
   const scoreOptions = Array.from({ length: judgeCount + 1 }, (_, p2Votes) => ({
     v1: judgeCount - p2Votes,
@@ -310,7 +338,7 @@ function TournamentAdminApp() {
       const code = await createCloudTournament({
         eventCode: newCloudCode,
         name: newCloudName,
-        tournament: { phase, players, rounds, currentRoundNum, judgeCount }
+        tournament: { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination }
       });
       cloudReadyRef.current = false;
       lastCloudStateRef.current = null;
@@ -349,7 +377,7 @@ function TournamentAdminApp() {
     e.preventDefault();
     const trimmedName = newName.trim();
     if (!trimmedName || players.some(p => p.name === trimmedName)) return; // 避免重複名稱
-    const newPlayer = { id: createId(), name: trimmedName, wins: 0, votes: 0, isWithdrawn: false };
+    const newPlayer = { id: createId(), name: trimmedName, wins: 0, votes: 0, losses: 0, isWithdrawn: false, isEliminated: false };
     markCloudAudit('PLAYER_ADDED', { playerId: newPlayer.id, name: newPlayer.name });
     setPlayers(prev => [...prev, newPlayer]);
     setNewName('');
@@ -376,7 +404,7 @@ function TournamentAdminApp() {
           
           const name = parts[0].trim();
           if (name && !players.some(p => p.name === name) && !newPlayers.some(p => p.name === name)) { // 避免重複名稱
-            newPlayers.push({ id: createId(), name, wins: 0, votes: 0, isWithdrawn: false });
+            newPlayers.push({ id: createId(), name, wins: 0, votes: 0, losses: 0, isWithdrawn: false, isEliminated: false });
           }
         }
       });
@@ -393,7 +421,7 @@ function TournamentAdminApp() {
   const loadMockData = () => {
     const mockPlayers = [
       ...Array.from({ length: 8 }, (_, index) => ({
-        id: createId(), name: `player-${String(index + 1).padStart(3, '0')}`, wins: 0, votes: 0, isWithdrawn: false
+        id: createId(), name: `player-${String(index + 1).padStart(3, '0')}`, wins: 0, votes: 0, losses: 0, isWithdrawn: false, isEliminated: false
       }))
     ];
     markCloudAudit('TEST_PLAYERS_LOADED', { count: mockPlayers.length });
@@ -409,7 +437,7 @@ function TournamentAdminApp() {
   // --- 存檔管理功能 ---
   const handleCreateSave = () => {
     const name = saveNameInput.trim() || `手動存檔 - ${new Date().toLocaleString()}`;
-    const newSave = { id: createId(), name, date: new Date().toISOString(), isAuto: false, data: { phase, players, rounds, currentRoundNum, judgeCount } };
+    const newSave = { id: createId(), name, date: new Date().toISOString(), isAuto: false, data: { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination } };
     setSaves([newSave, ...saves]);
     setSaveNameInput('');
   };
@@ -424,6 +452,7 @@ function TournamentAdminApp() {
       setRounds(data.rounds);
       setCurrentRoundNum(data.currentRoundNum);
       setJudgeCount(data.judgeCount);
+      setDoubleElimination(data.doubleElimination);
       setIsSaveModalOpen(false);
       setConfirmAction(null);
     }
@@ -441,7 +470,7 @@ function TournamentAdminApp() {
 
   // --- 賽事核心邏輯 ---
   const startTournament = () => {
-    markCloudAudit('TOURNAMENT_STARTED', { playerCount: players.filter(player => !player.isWithdrawn).length, judgeCount });
+    markCloudAudit('TOURNAMENT_STARTED', { playerCount: players.filter(player => !player.isWithdrawn).length, judgeCount, doubleElimination });
     setPhase('playing');
     generateRound(1, players.filter(p => !p.isWithdrawn)); // 第一輪只配對未棄賽選手
   };
@@ -462,7 +491,7 @@ function TournamentAdminApp() {
     });
     const truncatedRounds = rounds.slice(0, roundIndex + 1);
     const newRounds = updateMatchScore(truncatedRounds, roundIndex, matchId, p1Score, p2Score);
-    const updatedPlayers = recalculatePlayerRecords(players, newRounds);
+    const updatedPlayers = applyDoubleElimination(recalculatePlayerRecords(players, newRounds), newRounds, doubleElimination);
 
     setRounds(newRounds); setPlayers(updatedPlayers); setCurrentRoundNum(roundIndex + 1);
     setPhase('playing'); setConfirmAction(null);
@@ -484,28 +513,32 @@ function TournamentAdminApp() {
       after: { p1Votes: p1Score, p2Votes: p2Score }
     });
     const updatedRounds = updateMatchScore(rounds, roundIndex, matchId, p1Score, p2Score);
-    const updatedPlayers = recalculatePlayerRecords(players, updatedRounds);
+    const updatedPlayers = applyDoubleElimination(recalculatePlayerRecords(players, updatedRounds), updatedRounds, doubleElimination);
     setRounds(updatedRounds); setPlayers(updatedPlayers);
   };
 
   const advanceToNextRound = () => {
     if (currentRoundNum < MAX_ROUNDS) {
       const nextRoundNum = currentRoundNum + 1;
-      markCloudAudit('ROUND_ADVANCED', { from: currentRoundNum, to: nextRoundNum });
+      const updatedPlayers = applyDoubleElimination(players, rounds, doubleElimination);
+      const newlyEliminated = updatedPlayers.filter(player =>
+        player.isEliminated && !players.find(previous => previous.id === player.id)?.isEliminated
+      );
+      markCloudAudit('ROUND_ADVANCED', { from: currentRoundNum, to: nextRoundNum, eliminated: newlyEliminated.map(player => player.name) });
       setCurrentRoundNum(nextRoundNum);
-      generateRound(nextRoundNum, players);
+      generateRound(nextRoundNum, updatedPlayers);
     } else {
       markCloudAudit('TOURNAMENT_FINISHED', { round: currentRoundNum });
       setPhase('finished');
-      const newSave = { id: createId(), name: `(自動紀錄) 完賽 - ${new Date().toLocaleString()}`, date: new Date().toISOString(), isAuto: true, data: { phase: 'finished', players, rounds, currentRoundNum, judgeCount } };
+      const newSave = { id: createId(), name: `(自動紀錄) 完賽 - ${new Date().toLocaleString()}`, date: new Date().toISOString(), isAuto: true, data: { phase: 'finished', players, rounds, currentRoundNum, judgeCount, doubleElimination } };
       setSaves(prev => [newSave, ...prev]);
     }
   };
 
-  const confirmFullReset = () => { markCloudAudit('TOURNAMENT_RESET', { keptPlayers: false }); setPlayers([]); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setJudgeCount(DEFAULT_JUDGE_COUNT); setConfirmAction(null); };
+  const confirmFullReset = () => { markCloudAudit('TOURNAMENT_RESET', { keptPlayers: false }); setPlayers([]); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setJudgeCount(DEFAULT_JUDGE_COUNT); setDoubleElimination(false); setConfirmAction(null); };
   const confirmRematch = () => {
     markCloudAudit('TOURNAMENT_RESET', { keptPlayers: true });
-    const resetPlayers = players.map(p => ({ ...p, wins: 0, votes: 0, isWithdrawn: false }));
+    const resetPlayers = players.map(p => ({ ...p, wins: 0, votes: 0, losses: 0, isWithdrawn: false, isEliminated: false }));
     setPlayers(resetPlayers); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setConfirmAction(null);
   };
 
@@ -523,7 +556,7 @@ function TournamentAdminApp() {
       const p1Score = unplayedMatch.p1.id === playerId ? 0 : judgeCount;
       const p2Score = unplayedMatch.p2.id === playerId ? 0 : judgeCount;
       updatedRounds = updateMatchScore(rounds, roundIndex, unplayedMatch.id, p1Score, p2Score);
-      updatedPlayers = recalculatePlayerRecords(updatedPlayers, updatedRounds);
+      updatedPlayers = applyDoubleElimination(recalculatePlayerRecords(updatedPlayers, updatedRounds), updatedRounds, doubleElimination);
     }
     setPlayers(updatedPlayers);
     setRounds(updatedRounds);
@@ -729,15 +762,18 @@ function TournamentAdminApp() {
       </div>
 
       <div className="absolute top-4 right-4 md:top-8 md:right-8 flex flex-wrap justify-end gap-2 z-30 max-w-[75%]">
-        <button onClick={() => setIsPublicLookupOpen(true)}
+        <a href={window.location.pathname}
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm font-black tracking-widest brush-border border"
           style={{ backgroundColor: COLORS.card, color: COLORS.inkOrange, borderColor: COLORS.inkOrange }}>
-          <Network size={18} /> 公開查詢
-        </button>
+          <Network size={18} /> 公開前台
+        </a>
         {isFirebaseConfigured && <button onClick={() => setIsCloudModalOpen(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm font-black tracking-widest brush-border border"
           style={{ backgroundColor: activeCloudCode ? COLORS.inkOrange : COLORS.card, color: activeCloudCode ? COLORS.bg : COLORS.inkBlue, borderColor: COLORS.inkBlue }}>
           <Archive size={18} /> {activeCloudCode || '雲端後台'}
+        </button>}
+        {adminUser && <button onClick={() => signOutAdmin()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm font-black tracking-widest brush-border border border-red-500/40 text-red-300">
+          登出
         </button>}
         <button onClick={() => setIsSaveModalOpen(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm font-black tracking-widest uppercase brush-border"
@@ -745,23 +781,6 @@ function TournamentAdminApp() {
           <Archive size={18} /> 賽事檔案庫
         </button>
       </div>
-
-      {/* Public lookup modal */}
-      {isPublicLookupOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="rounded-2xl w-full max-w-md p-7 border-2 brush-border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-black text-white">公開賽事查詢</h2>
-              <button onClick={() => setIsPublicLookupOpen(false)} aria-label="關閉公開查詢"><X size={24} /></button>
-            </div>
-            <label htmlFor="lookup-code" className="block text-sm font-bold mb-2" style={{ color: COLORS.textMuted }}>賽事代碼</label>
-            <input id="lookup-code" value={publicLookupCode} onChange={event => setPublicLookupCode(event.target.value.toUpperCase())}
-              placeholder="例如 BH2026" className="w-full px-4 py-3 rounded-lg border font-black uppercase" />
-            <button onClick={() => openPublicTournament(publicLookupCode)} className="w-full mt-4 py-3 rounded-lg font-black" style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>開啟公開頁面</button>
-            {!isFirebaseConfigured && <p className="mt-4 text-xs font-bold text-amber-300">目前部署尚未設定 Firebase，公開頁會顯示設定提示。</p>}
-          </div>
-        </div>
-      )}
 
       {/* Cloud admin modal */}
       {isCloudModalOpen && isFirebaseConfigured && (
@@ -809,6 +828,22 @@ function TournamentAdminApp() {
                             </button>
                             <button onClick={() => openPublicTournament(activeCloudCode)} className="px-4 py-2 rounded-lg font-black" style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>查看公開頁</button>
                           </div>
+                        </div>
+                      </section>
+
+                      <section className="p-5 rounded-xl border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
+                        <div className="grid sm:grid-cols-[1fr_auto] gap-5 items-center">
+                          <div className="min-w-0">
+                            <h3 className="font-black mb-2">觀眾即時賽況網址</h3>
+                            <a href={publicTournamentUrl} target="_blank" rel="noreferrer" className="block text-sm font-bold break-all hover:underline" style={{ color: COLORS.inkBlue }}>{publicTournamentUrl}</a>
+                            <p className="text-xs mt-3 leading-relaxed" style={{ color: COLORS.textMuted }}>QR Code 已包含賽事代碼；將賽事設為公開後，現場觀眾掃描即可直接進入。</p>
+                          </div>
+                          {publicQrCode && (
+                            <a href={publicQrCode} download={`${activeCloudCode}-qrcode.png`} className="justify-self-center text-center">
+                              <img src={publicQrCode} alt={`賽事 ${activeCloudCode} 公開網址 QR Code`} className="w-36 h-36 rounded-lg bg-white p-1" />
+                              <span className="block text-xs font-black mt-2" style={{ color: COLORS.inkOrange }}>下載 QR Code</span>
+                            </a>
+                          )}
                         </div>
                       </section>
 
@@ -924,6 +959,7 @@ function TournamentAdminApp() {
                             <span>狀態: {save.data.phase === 'finished' ? '已完賽' : `進行至第 ${save.data.currentRoundNum} 輪`}</span>
                             <span>參賽: {save.data.players.length} 人</span>
                             <span>評審: {save.data.judgeCount} 位</span>
+                            <span>{save.data.doubleElimination ? '兩敗淘汰' : '不淘汰'}</span>
                           </div>
                         </div>
                         
@@ -964,7 +1000,7 @@ function TournamentAdminApp() {
             {confirmAction.type === 'GO_HOME' ? (
               <div className="flex flex-col gap-3">
                 <button onClick={() => {
-                    const newSave = { id: createId(), name: `(自動) 離開前存檔 - ${new Date().toLocaleString()}`, date: new Date().toISOString(), isAuto: true, data: { phase, players, rounds, currentRoundNum, judgeCount } };
+                    const newSave = { id: createId(), name: `(自動) 離開前存檔 - ${new Date().toLocaleString()}`, date: new Date().toISOString(), isAuto: true, data: { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination } };
                     setSaves(prev => [newSave, ...prev]);
                     confirmFullReset();
                   }} 
@@ -1058,6 +1094,31 @@ function TournamentAdminApp() {
                   </p>
                 </fieldset>
 
+                <fieldset className="mt-8 pt-8 border-t border-dashed" style={{ borderColor: COLORS.cardBorder }}>
+                  <legend className="block text-sm font-bold px-2 tracking-widest" style={{ color: COLORS.textMuted }}>淘汰規則</legend>
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    {[false, true].map(enabled => (
+                      <button key={String(enabled)} type="button" onClick={() => {
+                        markCloudAudit('DOUBLE_ELIMINATION_CHANGED', { before: doubleElimination, after: enabled });
+                        setDoubleElimination(enabled);
+                        setPlayers(current => applyDoubleElimination(current, rounds, enabled));
+                      }}
+                        aria-pressed={doubleElimination === enabled}
+                        className="py-3 rounded-xl border font-black tracking-widest transition-all"
+                        style={{
+                          backgroundColor: doubleElimination === enabled ? COLORS.inkOrange : 'transparent',
+                          borderColor: doubleElimination === enabled ? COLORS.inkOrange : COLORS.cardBorder,
+                          color: doubleElimination === enabled ? COLORS.bg : COLORS.textMuted
+                        }}>
+                        {enabled ? '兩敗淘汰' : '不淘汰'}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs font-bold leading-relaxed" style={{ color: COLORS.textMuted }}>
+                    {doubleElimination ? '選手累積第 2 敗後會自動淘汰，不參與後續輪次。' : '所有未棄賽選手都會參與三輪賽事。'}
+                  </p>
+                </fieldset>
+
                 <div className="mt-8 pt-8 border-t border-dashed flex flex-col gap-3" style={{ borderColor: COLORS.cardBorder }}>
                   <label className="w-full font-bold py-3 rounded-xl transition-colors text-sm tracking-widest border border-dashed flex items-center justify-center gap-2 cursor-pointer hover:bg-white/5"
                     style={{ backgroundColor: 'transparent', color: COLORS.inkOrange, borderColor: COLORS.inkOrange }}>
@@ -1138,7 +1199,7 @@ function TournamentAdminApp() {
                 <button onClick={() => setViewMode('tree')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-black text-sm transition-all tracking-widest ${viewMode === 'tree' ? 'bg-[#1e293b] text-white' : 'opacity-50 hover:opacity-100'}`}>
                   <Network size={18} style={{ color: viewMode === 'tree' ? COLORS.inkBlue : 'inherit' }} /> 賽況樹狀圖
                 </button>
-                <span className="flex items-center px-5 text-sm font-black tracking-widest" style={{ color: COLORS.inkOrange }}>{judgeCount} 位評審制</span>
+                <span className="flex items-center px-5 text-sm font-black tracking-widest" style={{ color: COLORS.inkOrange }}>{judgeCount} 位評審制・{doubleElimination ? '兩敗淘汰' : '不淘汰'}</span>
               </div>
             </div>
 
@@ -1246,11 +1307,12 @@ function TournamentAdminApp() {
                               <div className="font-black text-white text-base flex items-center">
                                 {p.name}
                                 {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>}
+                                {p.isEliminated && <span className="text-sm text-amber-300 ml-2 border border-amber-500/30 px-1 rounded whitespace-nowrap">兩敗淘汰</span>}
                               </div>
-                              {!p.isWithdrawn && (p.needsTiebreaker || p.displayRank <= 2) && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>{p.needsTiebreaker ? '需加賽' : '晉級'}</span>}
+                              {!p.isWithdrawn && !p.isEliminated && (p.needsTiebreaker || p.displayRank <= 2) && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>{p.needsTiebreaker ? '需加賽' : '晉級'}</span>}
                             </div>
                             {!p.isWithdrawn && <div className="text-[10px] font-bold mt-1 whitespace-nowrap" style={{ color: COLORS.textMuted }}>
-                              對手勝率 {(p.opponentWinRate * 100).toFixed(1)}% · 次級 {(p.opponentsOpponentWinRate * 100).toFixed(1)}%
+                              {doubleElimination && `${p.losses || 0} 敗 · `}對手勝率 {(p.opponentWinRate * 100).toFixed(1)}% · 次級 {(p.opponentsOpponentWinRate * 100).toFixed(1)}%
                             </div>}
                           </div>
                         </div>
@@ -1258,7 +1320,7 @@ function TournamentAdminApp() {
                           <div className="font-black text-base whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins} W</div>
                           <div className="text-xs font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes} pt</div>
                         </div>
-                        {!p.isWithdrawn && <button onClick={() => setConfirmAction({ type: 'WITHDRAW', playerId: p.id, playerName: p.name })} className="px-1.5 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/20 rounded border border-red-500/30 transition-colors shrink-0">棄賽</button>}
+                        {!p.isWithdrawn && !p.isEliminated && <button onClick={() => setConfirmAction({ type: 'WITHDRAW', playerId: p.id, playerName: p.name })} className="px-1.5 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/20 rounded border border-red-500/30 transition-colors shrink-0">棄賽</button>}
                       </div>
                     ))}
                   </div>
@@ -1279,7 +1341,7 @@ function TournamentAdminApp() {
               
               <Medal size={64} className="mx-auto mb-6" style={{ color: COLORS.inkOrange }} />
               <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-[0.2em] text-white">賽事<span style={{color: COLORS.inkBlue}}>結果</span></h2>
-              <p className="font-bold tracking-widest mb-10 text-lg" style={{ color: COLORS.textMuted }}>挑戰組賽事・{judgeCount} 位評審制・最終結果</p>
+              <p className="font-bold tracking-widest mb-10 text-lg" style={{ color: COLORS.textMuted }}>挑戰組賽事・{judgeCount} 位評審制・{doubleElimination ? '兩敗淘汰' : '不淘汰'}・最終結果</p>
 
               <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: COLORS.cardBorder }}>
                 <table className="w-full text-left border-collapse bg-black/40">
@@ -1288,6 +1350,7 @@ function TournamentAdminApp() {
                       <th className="p-5 font-black text-center">RANK</th>
                       <th className="p-5 font-black">NAME</th>
                       <th className="p-5 font-black text-center whitespace-nowrap">WINS</th>
+                      {doubleElimination && <th className="p-5 font-black text-center whitespace-nowrap">LOSSES</th>}
                       <th className="p-5 font-black text-center whitespace-nowrap">POINTS</th>
                       <th className="p-5 font-black text-center whitespace-nowrap">OPP WIN%</th>
                       <th className="p-5 font-black text-center whitespace-nowrap">OPP² WIN%</th>
@@ -1301,11 +1364,12 @@ function TournamentAdminApp() {
                         </td>
                         <td className="p-5 font-black text-white text-xl">
                           <div className="flex items-center gap-3">
-                            <span style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : 'white' }}>{p.name} {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>}</span>
-                            {!p.isWithdrawn && (p.needsTiebreaker || p.displayRank <= 2) && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>{p.needsTiebreaker ? '需加賽' : '晉級'}</span>}
+                            <span style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : 'white' }}>{p.name} {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>} {p.isEliminated && <span className="text-sm text-amber-300 ml-2 border border-amber-500/30 px-1 rounded whitespace-nowrap">兩敗淘汰</span>}</span>
+                            {!p.isWithdrawn && !p.isEliminated && (p.needsTiebreaker || p.displayRank <= 2) && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>{p.needsTiebreaker ? '需加賽' : '晉級'}</span>}
                           </div>
                         </td>
                         <td className="p-5 text-center font-black text-2xl whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins}</td>
+                        {doubleElimination && <td className="p-5 text-center font-black text-xl whitespace-nowrap" style={{ color: p.isEliminated ? COLORS.inkOrange : COLORS.textMuted }}>{p.losses || 0}</td>}
                         <td className="p-5 text-center font-black text-lg whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes}</td>
                         <td className="p-5 text-center font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.isWithdrawn ? '—' : `${(p.opponentWinRate * 100).toFixed(1)}%`}</td>
                         <td className="p-5 text-center font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.isWithdrawn ? '—' : `${(p.opponentsOpponentWinRate * 100).toFixed(1)}%`}</td>
@@ -1349,9 +1413,64 @@ function TournamentAdminApp() {
   );
 }
 
+function AdminPortal() {
+  const [adminUser, setAdminUser] = useState(undefined);
+  const [token, setToken] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    document.title = '黑馬記念｜賽事管理後台';
+  }, []);
+
+  useEffect(() => subscribeAuth(setAdminUser), []);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const user = await signInAdminWithToken(token);
+      setAdminUser(user);
+      setToken('');
+    } catch {
+      setError('登入失敗，請確認管理 token 與 Firebase 設定。');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (adminUser === undefined) {
+    return <main className="min-h-screen bg-[#0d0f12] text-slate-400 flex items-center justify-center font-bold">正在確認管理權限…</main>;
+  }
+
+  if (adminUser) return <TournamentAdminApp authenticatedUser={adminUser} />;
+
+  return (
+    <main className="min-h-screen bg-[#0d0f12] text-slate-100 flex items-center justify-center p-6">
+      <section className="w-full max-w-md bg-[#161920] border-2 border-[#2a303c] rounded-2xl p-8 shadow-2xl">
+        <a href={window.location.pathname} className="text-sm font-bold text-slate-500 hover:text-slate-200">← 返回公開前台</a>
+        <h1 className="text-3xl font-black mt-6">賽事管理後台</h1>
+        <p className="text-sm text-slate-400 mt-2 leading-relaxed">輸入管理 token 後才能建立或操作賽事。</p>
+        {!isFirebaseConfigured && <div role="alert" className="mt-5 p-3 rounded-lg border border-amber-500/40 bg-amber-950/30 text-amber-200 text-sm font-bold">此環境尚未設定 Firebase。</div>}
+        {error && <div role="alert" className="mt-5 p-3 rounded-lg border border-red-500/40 bg-red-950/30 text-red-300 text-sm font-bold">{error}</div>}
+        <form onSubmit={handleSubmit} className="mt-7">
+          <label htmlFor="portal-admin-token" className="block font-black mb-2">管理 token</label>
+          <input id="portal-admin-token" type="password" value={token} onChange={event => setToken(event.target.value)}
+            autoComplete="current-password" placeholder="輸入共用管理 token"
+            className="w-full px-4 py-3 rounded-lg border border-slate-700 bg-[#0d0f12]" />
+          <button type="submit" disabled={isSubmitting || !token.trim()} className="w-full mt-4 py-3 rounded-lg bg-[#b6d2d4] text-[#0d0f12] font-black disabled:opacity-40">
+            {isSubmitting ? '驗證中…' : '登入管理後台'}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
   const params = new URLSearchParams(window.location.search);
+  if (params.has('admin')) return <AdminPortal />;
   const publicEventCode = params.get('event');
-  if (publicEventCode) return <PublicTournamentPage initialCode={publicEventCode} />;
-  return <TournamentAdminApp />;
+  return <PublicTournamentPage initialCode={publicEventCode || ''} />;
 }
