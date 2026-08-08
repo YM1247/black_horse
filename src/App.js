@@ -8,6 +8,7 @@ import { isFirebaseConfigured } from './firebase';
 import {
   createCloudTournament,
   generateEventCode,
+  getAdminLoginErrorMessage,
   normalizeEventCode,
   saveCloudTournament,
   signInAdminWithToken,
@@ -327,8 +328,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       const user = await signInAdminWithToken(adminToken);
       setAdminUser(user);
       setAdminToken('');
-    } catch {
-      setCloudError('登入失敗，請確認管理 token 與 Firebase 設定。');
+    } catch (error) {
+      setCloudError(getAdminLoginErrorMessage(error));
     }
   };
 
@@ -1433,8 +1434,8 @@ function AdminPortal() {
       const user = await signInAdminWithToken(token);
       setAdminUser(user);
       setToken('');
-    } catch {
-      setError('登入失敗，請確認管理 token 與 Firebase 設定。');
+    } catch (loginError) {
+      setError(getAdminLoginErrorMessage(loginError));
     } finally {
       setIsSubmitting(false);
     }
@@ -1452,6 +1453,9 @@ function AdminPortal() {
         <a href={window.location.pathname} className="text-sm font-bold text-slate-500 hover:text-slate-200">← 返回公開前台</a>
         <h1 className="text-3xl font-black mt-6">賽事管理後台</h1>
         <p className="text-sm text-slate-400 mt-2 leading-relaxed">輸入管理 token 後才能建立或操作賽事。</p>
+        <div className="mt-5 p-4 rounded-lg border border-slate-700 bg-[#0d0f12] text-xs text-slate-400 leading-relaxed">
+          登入欄位請輸入原始 token；Firestore 的 <code className="text-[#b6d2d4]">settings/admin.tokenHash</code> 必須保存該 token 的 64 字元 SHA-256，不能保存原始 token。
+        </div>
         {!isFirebaseConfigured && <div role="alert" className="mt-5 p-3 rounded-lg border border-amber-500/40 bg-amber-950/30 text-amber-200 text-sm font-bold">此環境尚未設定 Firebase。</div>}
         {error && <div role="alert" className="mt-5 p-3 rounded-lg border border-red-500/40 bg-red-950/30 text-red-300 text-sm font-bold">{error}</div>}
         <form onSubmit={handleSubmit} className="mt-7">

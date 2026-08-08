@@ -36,6 +36,16 @@ unset ADMIN_TOKEN
 
 不要在資料庫或 Git 中保存明文 token。前端沒有讀取 `settings/admin` 的權限；Security Rules 只會在建立匿名管理 session 時比較雜湊。
 
+注意：後台登入欄位輸入的是「原始 token」，Firestore `tokenHash` 欄位放的是上述指令產生的「64 字元 SHA-256」。如果把原始 token 直接放入 `tokenHash`，或登入時貼上 SHA-256，都會驗證失敗。
+
+### 登入失敗檢查
+
+1. Authentication → Sign-in method 已啟用 Anonymous。
+2. Firestore 路徑必須是 collection `settings`、document `admin`。
+3. 欄位名稱必須是 `tokenHash`，型別為字串。
+4. `tokenHash` 必須恰好 64 字元，且為原始 token 去除前後空白後的 SHA-256。
+5. 登入頁輸入原始 token，不要輸入雜湊值。
+
 更換 token 時重新計算並覆蓋 `settings/admin.tokenHash`。所有舊 session 會因雜湊不符而失去管理權限。
 
 ## 3. 本機環境變數

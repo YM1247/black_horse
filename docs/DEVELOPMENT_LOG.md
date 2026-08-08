@@ -1,5 +1,12 @@
 # 開發紀錄
 
+## 2026-08-08｜管理 token 登入診斷
+
+- 將 Anonymous Auth 未啟用、網路失敗、請求限制與 Firestore tokenHash 驗證失敗分成不同錯誤訊息。
+- token 被 Security Rules 拒絕時，明確提示 `settings/admin.tokenHash` 必須是原始 token 的 64 字元 SHA-256。
+- 後台登入頁直接顯示「登入輸入原始 token、資料庫保存雜湊」的設定差異。
+- Firebase 設定文件加入逐項登入失敗檢查表與自動化錯誤訊息測試。
+
 ## 2026-08-08｜兩敗淘汰與前後台入口分流
 
 ### 修改內容

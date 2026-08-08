@@ -43,6 +43,24 @@ export const hashAdminToken = async (token) => {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 };
 
+export const getAdminLoginErrorMessage = (error = {}) => {
+  switch (error.code) {
+    case 'auth/operation-not-allowed':
+    case 'auth/admin-restricted-operation':
+      return 'Firebase Authentication 尚未啟用「匿名」登入方式，請先在 Firebase Console 啟用 Anonymous provider。';
+    case 'auth/network-request-failed':
+    case 'unavailable':
+      return '目前無法連線 Firebase，請確認網路後再試。';
+    case 'auth/too-many-requests':
+      return '登入嘗試次數過多，Firebase 已暫時限制請求，請稍後再試。';
+    case 'admin/token-rejected':
+    case 'permission-denied':
+      return '管理 token 驗證失敗。請確認 Firestore 的 settings/admin.tokenHash 是原始 token 的 64 字元 SHA-256，而不是原始 token。';
+    default:
+      return error.message || '登入失敗，請確認管理 token 與 Firebase 設定。';
+  }
+};
+
 const requireUser = () => {
   const { auth } = getFirebaseServices();
   if (!auth.currentUser) throw new Error('管理員尚未登入。');
@@ -70,8 +88,17 @@ export const signInAdminWithToken = async (token) => {
       user = (await signInAnonymously(auth)).user;
     }
     const sessionRef = doc(db, 'adminSessions', user.uid);
-    await setDoc(sessionRef, { tokenHash, createdAt: serverTimestamp() });
-    await getDocFromServer(sessionRef);
+    try {
+      await setDoc(sessionRef, { tokenHash, createdAt: serverTimestamp() });
+      await getDocFromServer(sessionRef);
+    } catch (error) {
+      if (error.code === 'permission-denied') {
+        const tokenError = new Error('管理 token 或 Firestore 管理設定不正確。');
+        tokenError.code = 'admin/token-rejected';
+        throw tokenError;
+      }
+      throw error;
+    }
     return user;
   } catch (error) {
     // 保留匿名 UID，讓後續重試不會反覆建立匿名帳號消耗配額。
