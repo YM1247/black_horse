@@ -95,3 +95,5 @@ npm run deploy
 ## 離線與同步
 
 Firestore 在支援的 Chrome、Safari、Firefox 啟用多分頁 IndexedDB 持久快取。離線時的寫入會先顯示在本機並排入佇列，恢復連線後同步；同一文件發生衝突時採 Firestore 的 last-write-wins 行為，因此稽核紀錄會另外保存每次操作。
+
+Firestore 是現行版本唯一的正式賽事資料來源。後台不再讀寫瀏覽器 `localStorage` 賽事進度或歷史檔案庫；IndexedDB 僅由 Firebase SDK 用來維持離線快取與待同步寫入，不能視為另一份可手動載入的存檔。

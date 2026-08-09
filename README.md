@@ -12,9 +12,9 @@
 - 對戰列表與賽況樹狀圖。
 - 即時排名依勝場、總票數、對手勝率、對手的對手勝率排序；完全同分者標示需要加賽。
 - 棄賽保留已完成成績，當輪未完成對戰直接判敗。
-- 自動保存目前進度，另可建立、重新命名、讀取與刪除歷史存檔。
-- 舊版資料自動遷移：讀取含 `school` 欄位的資料後轉為純名稱選手模型。
+- 後台登入後必須建立或選擇雲端賽事；建立當下即寫入 Firestore，後續操作自動同步。
 - 不需 Email 的 Firebase 管理 token 登入、雲端賽事建立、公開狀態切換、離線快取及操作稽核。
+- 切換賽事、返回雲端列表或登出前會先補送最後狀態；不再提供瀏覽器本機檔案庫。
 - 雲端後台即時查看目前賽事最近 50 筆操作紀錄。
 - 觀眾以 `?event=賽事代碼` 開啟公開頁，即時查看輪次、比分與排名。
 - 後台為獨立 `?admin=1` 入口，未通過管理 token 前不載入任何賽事操作介面。
@@ -44,7 +44,7 @@ npm test -- --watchAll=false
 npm run build
 ```
 
-測試涵蓋 Phase 1 的主要需求與舊資料遷移。正式建置輸出至 `build/`。
+測試涵蓋 Phase 1 的主要規則、雲端賽事初始設定與前後台入口。正式建置輸出至 `build/`。
 
 ## CSV 格式
 
@@ -60,7 +60,7 @@ Bob
 
 ## 資料保存
 
-未設定 Firebase 時，資料保存在瀏覽器 `localStorage`。Phase 2 的 Firebase 資料層、即時 listener、離線快取、管理員驗證與 Security Rules 已建立；正式啟用方式見 [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)。
+賽事只保存於 Cloud Firestore，不再讀寫瀏覽器 `localStorage` 賽事進度或歷史存檔。Firestore 的 IndexedDB 持久快取仍負責短暫離線佇列，恢復連線後自動同步，但它不是可由使用者管理的另一套存檔。正式設定方式見 [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md)。
 
 ## 文件
 

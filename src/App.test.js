@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import App, { TournamentAdminApp } from './App';
+import { fireEvent, render, screen } from '@testing-library/react';
+import App, { createEmptyTournament, TournamentAdminApp } from './App';
 
 const addPlayer = (name) => {
   fireEvent.change(screen.getByPlaceholderText('輸入名字...'), { target: { value: name } });
@@ -38,19 +38,27 @@ describe('Swiss tournament Phase 1', () => {
     expect(screen.queryByRole('button', { name: '5:0' })).not.toBeInTheDocument();
   });
 
-  test('legacy local data is migrated without losing the tournament', async () => {
+  test('legacy browser saves are ignored after switching to cloud-only storage', () => {
     localStorage.setItem('swiss_tournament_players', JSON.stringify([
       { id: 'legacy-player', name: 'Legacy Player', school: 'Legacy School', wins: 1, votes: 5, isWithdrawn: false }
     ]));
 
     render(<TournamentAdminApp />);
 
-    expect(screen.getByText('Legacy Player')).toBeInTheDocument();
+    expect(screen.queryByText('Legacy Player')).not.toBeInTheDocument();
     expect(screen.queryByText('Legacy School')).not.toBeInTheDocument();
-    await waitFor(() => {
-      const storedPlayers = JSON.parse(localStorage.getItem('swiss_tournament_players'));
-      expect(storedPlayers[0]).not.toHaveProperty('school');
-      expect(storedPlayers[0]).toMatchObject({ name: 'Legacy Player', wins: 1, votes: 5 });
+    expect(screen.getByText('參賽陣容 (0)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '賽事檔案庫' })).not.toBeInTheDocument();
+  });
+
+  test('a new cloud tournament starts from its selected rules', () => {
+    expect(createEmptyTournament({ judgeCount: 3, doubleElimination: true })).toMatchObject({
+      phase: 'registration',
+      players: [],
+      rounds: [],
+      currentRoundNum: 1,
+      judgeCount: 3,
+      doubleElimination: true
     });
   });
 

@@ -3,7 +3,9 @@ const AUDIT_ACTION_LABELS = {
   TOURNAMENT_STARTED: '開始賽事',
   TOURNAMENT_FINISHED: '結算賽事',
   TOURNAMENT_RESET: '重設賽事',
+  TOURNAMENT_CLOSED: '離開賽事管理',
   TOURNAMENT_STATE_UPDATED: '更新賽事狀態',
+  ADMIN_SIGNED_OUT: '管理員登出',
   PLAYER_ADDED: '新增選手',
   PLAYER_REMOVED: '移除選手',
   PLAYERS_IMPORTED: '匯入選手',
@@ -14,7 +16,6 @@ const AUDIT_ACTION_LABELS = {
   SCORE_UPDATED: '更新比分',
   HISTORICAL_SCORE_UPDATED: '更正歷史比分',
   ROUND_ADVANCED: '進入下一輪',
-  LOCAL_SAVE_LOADED: '載入本機存檔',
   PUBLIC_VISIBILITY_CHANGED: '變更公開狀態'
 };
 
@@ -49,8 +50,8 @@ export const describeAuditLog = (audit = {}) => {
       return `${Number(details.playerCount) || 0} 位選手・${details.judgeCount || '—'} 位評審・${details.doubleElimination ? '兩敗淘汰' : '不淘汰'}`;
     case 'PUBLIC_VISIBILITY_CHANGED':
       return details.after ? '設為公開' : '設為不公開';
-    case 'LOCAL_SAVE_LOADED':
-      return details.saveName || '未命名存檔';
+    case 'TOURNAMENT_CLOSED':
+    case 'ADMIN_SIGNED_OUT':
     case 'TOURNAMENT_STATE_UPDATED':
       return `第 ${details.currentRoundNum || '—'} 輪`;
     default:

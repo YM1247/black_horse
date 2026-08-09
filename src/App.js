@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
-import { Trophy, Users, Swords, UserPlus, Play, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, Save, X, Clock, Home, Edit3, Check, Upload } from 'lucide-react';
+import { Trophy, Users, Swords, UserPlus, Play, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, X, Clock, Home, Upload } from 'lucide-react';
 import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 import PublicTournamentPage from './PublicTournamentPage';
 import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit';
@@ -23,17 +23,6 @@ import {
 const MAX_ROUNDS = 3;
 const SUPPORTED_JUDGE_COUNTS = [3, 5];
 const DEFAULT_JUDGE_COUNT = 5;
-const ACTIVE_STORAGE_KEYS = {
-  phase: 'swiss_tournament_phase',
-  players: 'swiss_tournament_players',
-  rounds: 'swiss_tournament_rounds',
-  currentRoundNum: 'swiss_tournament_currentRoundNum',
-  judgeCount: 'swiss_tournament_judgeCount',
-  doubleElimination: 'swiss_tournament_doubleElimination'
-};
-const SAVES_STORAGE_KEY = 'swiss_tourney_saves_v4';
-const LEGACY_SAVES_STORAGE_KEY = 'swiss_tourney_saves_v3';
-
 const createId = () => {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -50,17 +39,6 @@ const COLORS = {
   inkOrangeDark: '#d4a17a',
   textMain: '#e2e8f0',
   textMuted: '#64748b'
-};
-
-// Helper: 從 localStorage 安全地讀取並解析 JSON
-const getLocalStorageItem = (key, defaultValue) => {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch (error) {
-    console.error(`Error parsing localStorage key "${key}":`, error);
-    return defaultValue;
-  }
 };
 
 const normalizeJudgeCount = (value, fallback = DEFAULT_JUDGE_COUNT) =>
@@ -108,21 +86,16 @@ const normalizeTournamentData = (data = {}) => {
   };
 };
 
-const loadActiveTournament = () => normalizeTournamentData({
-  phase: getLocalStorageItem(ACTIVE_STORAGE_KEYS.phase, 'registration'),
-  players: getLocalStorageItem(ACTIVE_STORAGE_KEYS.players, []),
-  rounds: getLocalStorageItem(ACTIVE_STORAGE_KEYS.rounds, []),
-  currentRoundNum: getLocalStorageItem(ACTIVE_STORAGE_KEYS.currentRoundNum, 1),
-  judgeCount: getLocalStorageItem(ACTIVE_STORAGE_KEYS.judgeCount, undefined),
-  doubleElimination: getLocalStorageItem(ACTIVE_STORAGE_KEYS.doubleElimination, false)
-});
-
-const normalizeSave = (save = {}) => ({
-  ...save,
-  id: save.id || createId(),
-  name: String(save.name || '未命名賽事紀錄'),
-  date: save.date || new Date().toISOString(),
-  data: normalizeTournamentData(save.data)
+export const createEmptyTournament = ({
+  judgeCount = DEFAULT_JUDGE_COUNT,
+  doubleElimination = false
+} = {}) => normalizeTournamentData({
+  phase: 'registration',
+  players: [],
+  rounds: [],
+  currentRoundNum: 1,
+  judgeCount,
+  doubleElimination
 });
 
 // Helper: 根據字數動態調整字體大小
@@ -142,7 +115,7 @@ const getDynamicFontSize = (name, isTreeMode = false) => {
 };
 
 export function TournamentAdminApp({ authenticatedUser = null }) {
-  const [initialTournament] = useState(loadActiveTournament);
+  const [initialTournament] = useState(createEmptyTournament);
   const [phase, setPhase] = useState(initialTournament.phase); // 'registration', 'playing', 'finished'
   const [players, setPlayers] = useState(initialTournament.players);
   const [rounds, setRounds] = useState(initialTournament.rounds);
@@ -154,29 +127,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   // Modal 視窗狀態
   const [confirmAction, setConfirmAction] = useState(null);
 
-  // 存檔管理狀態
-  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
-  const [saveNameInput, setSaveNameInput] = useState('');
-  const [saves, setSaves] = useState(() => {
-    try {
-      const current = localStorage.getItem(SAVES_STORAGE_KEY);
-      const legacy = localStorage.getItem(LEGACY_SAVES_STORAGE_KEY);
-      const parsed = JSON.parse(current || legacy || '[]');
-      return Array.isArray(parsed) ? parsed.map(normalizeSave) : [];
-    } catch {
-      return [];
-    }
-  });
-  
-  // 編輯存檔名稱狀態
-  const [editingSaveId, setEditingSaveId] = useState(null);
-  const [editingSaveName, setEditingSaveName] = useState('');
-
   // 新增參賽者狀態
   const [newName, setNewName] = useState('');
 
   // Firebase 雲端後台狀態
-  const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState(isFirebaseConfigured);
   const [adminUser, setAdminUser] = useState(authenticatedUser);
   const [adminToken, setAdminToken] = useState('');
   const [cloudTournaments, setCloudTournaments] = useState([]);
@@ -188,16 +143,26 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [cloudError, setCloudError] = useState('');
   const [newCloudName, setNewCloudName] = useState('');
   const [newCloudCode, setNewCloudCode] = useState(() => generateEventCode());
+  const [newCloudJudgeCount, setNewCloudJudgeCount] = useState(DEFAULT_JUDGE_COUNT);
+  const [newCloudDoubleElimination, setNewCloudDoubleElimination] = useState(false);
   const [publicQrCode, setPublicQrCode] = useState('');
   const cloudReadyRef = useRef(false);
   const lastCloudStateRef = useRef(null);
   const pendingAuditRef = useRef(null);
+  const cloudSyncTimeoutRef = useRef(null);
+  const closeCloudModalAfterLoadRef = useRef(false);
 
   const markCloudAudit = (action, details = {}) => {
     pendingAuditRef.current = { action, details };
   };
 
   useEffect(() => subscribeAuth(setAdminUser), []);
+
+  useEffect(() => {
+    if (isFirebaseConfigured && adminUser && !activeCloudCode) {
+      setIsCloudModalOpen(true);
+    }
+  }, [adminUser, activeCloudCode]);
 
   useEffect(() => {
     if (!isFirebaseConfigured || !adminUser) {
@@ -234,7 +199,12 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCloudIsPublic(Boolean(data.isPublic));
       setCloudSyncStatus(data.sync?.hasPendingWrites ? 'pending' : data.sync?.fromCache ? 'offline' : 'synced');
       setCloudError('');
+      if (closeCloudModalAfterLoadRef.current) {
+        closeCloudModalAfterLoadRef.current = false;
+        setIsCloudModalOpen(false);
+      }
     }, error => {
+      closeCloudModalAfterLoadRef.current = false;
       setCloudError(error.message);
       setCloudSyncStatus('error');
     });
@@ -259,7 +229,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     if (serialized === lastCloudStateRef.current) return undefined;
 
     setCloudSyncStatus('pending');
-    const timeout = window.setTimeout(async () => {
+    cloudSyncTimeoutRef.current = window.setTimeout(async () => {
       const audit = pendingAuditRef.current || {
         action: 'TOURNAMENT_STATE_UPDATED',
         details: { phase, currentRoundNum }
@@ -274,7 +244,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         setCloudSyncStatus('error');
       }
     }, 400);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      if (cloudSyncTimeoutRef.current) window.clearTimeout(cloudSyncTimeoutRef.current);
+      cloudSyncTimeoutRef.current = null;
+    };
   }, [adminUser, activeCloudCode, phase, players, rounds, currentRoundNum, judgeCount, doubleElimination]);
 
   const publicTournamentUrl = activeCloudCode
@@ -293,29 +266,6 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     return () => { active = false; };
   }, [publicTournamentUrl]);
 
-  // 自動同步存檔到 LocalStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(SAVES_STORAGE_KEY, JSON.stringify(saves));
-    } catch (e) {
-      console.error("存檔寫入失敗", e);
-    }
-  }, [saves]);
-
-  // 自動儲存當前賽事進度到 LocalStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(ACTIVE_STORAGE_KEYS.phase, JSON.stringify(phase));
-      localStorage.setItem(ACTIVE_STORAGE_KEYS.players, JSON.stringify(players));
-      localStorage.setItem(ACTIVE_STORAGE_KEYS.rounds, JSON.stringify(rounds));
-      localStorage.setItem(ACTIVE_STORAGE_KEYS.currentRoundNum, JSON.stringify(currentRoundNum));
-      localStorage.setItem(ACTIVE_STORAGE_KEYS.judgeCount, JSON.stringify(judgeCount));
-      localStorage.setItem(ACTIVE_STORAGE_KEYS.doubleElimination, JSON.stringify(doubleElimination));
-    } catch (error) {
-      console.error("Error saving current game state to localStorage:", error);
-    }
-  }, [phase, players, rounds, currentRoundNum, judgeCount, doubleElimination]);
-
   const scoreOptions = Array.from({ length: judgeCount + 1 }, (_, p2Votes) => ({
     v1: judgeCount - p2Votes,
     v2: p2Votes
@@ -333,20 +283,99 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     }
   };
 
+  const persistCurrentCloudState = async (audit = null) => {
+    if (!adminUser || !activeCloudCode || !cloudReadyRef.current) return true;
+    if (cloudSyncTimeoutRef.current) {
+      window.clearTimeout(cloudSyncTimeoutRef.current);
+      cloudSyncTimeoutRef.current = null;
+    }
+    const cloudState = { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination };
+    const serialized = JSON.stringify(cloudState);
+    setCloudSyncStatus('pending');
+    try {
+      await saveCloudTournament(activeCloudCode, cloudState, audit || pendingAuditRef.current || {
+        action: 'TOURNAMENT_STATE_UPDATED',
+        details: { phase, currentRoundNum }
+      });
+      pendingAuditRef.current = null;
+      lastCloudStateRef.current = serialized;
+      setCloudSyncStatus('synced');
+      return true;
+    } catch (error) {
+      lastCloudStateRef.current = null;
+      setCloudError(error.message);
+      setCloudSyncStatus('error');
+      return false;
+    }
+  };
+
+  const handleLeaveCloudTournament = async () => {
+    const persisted = await persistCurrentCloudState({
+      action: 'TOURNAMENT_CLOSED',
+      details: { phase, currentRoundNum }
+    });
+    if (!persisted) return;
+    cloudReadyRef.current = false;
+    closeCloudModalAfterLoadRef.current = false;
+    lastCloudStateRef.current = null;
+    setActiveCloudCode('');
+    setActiveCloudName('');
+    setCloudSyncStatus('local');
+    setIsCloudModalOpen(true);
+  };
+
+  const handleSelectCloudTournament = async (code) => {
+    if (code === activeCloudCode) {
+      setIsCloudModalOpen(false);
+      return;
+    }
+    if (activeCloudCode && !await persistCurrentCloudState()) return;
+    cloudReadyRef.current = false;
+    closeCloudModalAfterLoadRef.current = true;
+    lastCloudStateRef.current = null;
+    setActiveCloudCode(code);
+  };
+
+  const handleCloudSignOut = async () => {
+    if (activeCloudCode && !await persistCurrentCloudState({
+      action: 'ADMIN_SIGNED_OUT',
+      details: { phase, currentRoundNum }
+    })) return;
+    cloudReadyRef.current = false;
+    closeCloudModalAfterLoadRef.current = false;
+    setActiveCloudCode('');
+    await signOutAdmin();
+  };
+
   const handleCreateCloudTournament = async () => {
     setCloudError('');
     try {
+      if (activeCloudCode && !await persistCurrentCloudState()) return;
+      const tournament = createEmptyTournament({
+        judgeCount: newCloudJudgeCount,
+        doubleElimination: newCloudDoubleElimination
+      });
       const code = await createCloudTournament({
         eventCode: newCloudCode,
         name: newCloudName,
-        tournament: { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination }
+        tournament
       });
       cloudReadyRef.current = false;
+      closeCloudModalAfterLoadRef.current = true;
       lastCloudStateRef.current = null;
+      setPhase(tournament.phase);
+      setPlayers(tournament.players);
+      setRounds(tournament.rounds);
+      setCurrentRoundNum(tournament.currentRoundNum);
+      setJudgeCount(tournament.judgeCount);
+      setDoubleElimination(tournament.doubleElimination);
       setActiveCloudCode(code);
       setNewCloudCode(generateEventCode());
       setNewCloudName('');
+      setNewCloudJudgeCount(DEFAULT_JUDGE_COUNT);
+      setNewCloudDoubleElimination(false);
     } catch (error) {
+      closeCloudModalAfterLoadRef.current = false;
       setCloudError(error.message);
     }
   };
@@ -435,40 +464,6 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     setPlayers(players.filter(p => p.id !== id));
   };
 
-  // --- 存檔管理功能 ---
-  const handleCreateSave = () => {
-    const name = saveNameInput.trim() || `手動存檔 - ${new Date().toLocaleString()}`;
-    const newSave = { id: createId(), name, date: new Date().toISOString(), isAuto: false, data: { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination } };
-    setSaves([newSave, ...saves]);
-    setSaveNameInput('');
-  };
-
-  const executeLoadSave = (saveId) => {
-    const targetSave = saves.find(s => s.id === saveId);
-    if (targetSave) {
-      const data = normalizeTournamentData(targetSave.data);
-      markCloudAudit('LOCAL_SAVE_LOADED', { saveId, saveName: targetSave.name });
-      setPhase(data.phase);
-      setPlayers(data.players);
-      setRounds(data.rounds);
-      setCurrentRoundNum(data.currentRoundNum);
-      setJudgeCount(data.judgeCount);
-      setDoubleElimination(data.doubleElimination);
-      setIsSaveModalOpen(false);
-      setConfirmAction(null);
-    }
-  };
-
-  const executeDeleteSave = (saveId) => {
-    setSaves(saves.filter(s => s.id !== saveId));
-    setConfirmAction(null);
-  };
-
-  const saveRename = (id) => {
-    setSaves(saves.map(s => s.id === id ? { ...s, name: editingSaveName } : s));
-    setEditingSaveId(null);
-  };
-
   // --- 賽事核心邏輯 ---
   const startTournament = () => {
     markCloudAudit('TOURNAMENT_STARTED', { playerCount: players.filter(player => !player.isWithdrawn).length, judgeCount, doubleElimination });
@@ -531,8 +526,6 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     } else {
       markCloudAudit('TOURNAMENT_FINISHED', { round: currentRoundNum });
       setPhase('finished');
-      const newSave = { id: createId(), name: `(自動紀錄) 完賽 - ${new Date().toLocaleString()}`, date: new Date().toISOString(), isAuto: true, data: { phase: 'finished', players, rounds, currentRoundNum, judgeCount, doubleElimination } };
-      setSaves(prev => [newSave, ...prev]);
     }
   };
 
@@ -744,26 +737,15 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
       {/* 頂部 工具列 */}
       <div className="absolute top-4 left-4 md:top-8 md:left-8 z-30">
-        <button onClick={() => {
-          if (activeCloudCode) {
-            cloudReadyRef.current = false;
-            lastCloudStateRef.current = null;
-            setActiveCloudCode('');
-            setActiveCloudName('');
-            setCloudSyncStatus('local');
-            return;
-          }
-          if (phase === 'registration' && players.length === 0) return;
-          setConfirmAction({ type: 'GO_HOME' });
-        }}
+        <button onClick={activeCloudCode ? handleLeaveCloudTournament : () => setIsCloudModalOpen(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-bold brush-border border"
           style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, color: COLORS.textMain }}>
-          <Home size={18} style={{color: COLORS.inkOrange}} /> {activeCloudCode ? '離開雲端賽事' : '回首頁'}
+          <Home size={18} style={{color: COLORS.inkOrange}} /> {activeCloudCode ? '返回雲端賽事列表' : '選擇雲端賽事'}
         </button>
       </div>
 
       <div className="absolute top-4 right-4 md:top-8 md:right-8 flex flex-wrap justify-end gap-2 z-30 max-w-[75%]">
-        <a href={window.location.pathname}
+        <a href={window.location.pathname} target="_blank" rel="noreferrer"
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm font-black tracking-widest brush-border border"
           style={{ backgroundColor: COLORS.card, color: COLORS.inkOrange, borderColor: COLORS.inkOrange }}>
           <Network size={18} /> 公開前台
@@ -773,14 +755,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
           style={{ backgroundColor: activeCloudCode ? COLORS.inkOrange : COLORS.card, color: activeCloudCode ? COLORS.bg : COLORS.inkBlue, borderColor: COLORS.inkBlue }}>
           <Archive size={18} /> {activeCloudCode || '雲端後台'}
         </button>}
-        {adminUser && <button onClick={() => signOutAdmin()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm font-black tracking-widest brush-border border border-red-500/40 text-red-300">
+        {adminUser && <button onClick={handleCloudSignOut} className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm font-black tracking-widest brush-border border border-red-500/40 text-red-300">
           登出
         </button>}
-        <button onClick={() => setIsSaveModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm font-black tracking-widest uppercase brush-border"
-          style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>
-          <Archive size={18} /> 賽事檔案庫
-        </button>
       </div>
 
       {/* Cloud admin modal */}
@@ -789,10 +766,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
           <div className="rounded-2xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[88vh] border-2 brush-border" style={{ backgroundColor: COLORS.bg, borderColor: COLORS.cardBorder }}>
             <div className="flex justify-between items-center p-5 border-b" style={{ borderColor: COLORS.cardBorder, backgroundColor: COLORS.card }}>
               <div>
-                <h2 className="text-xl font-black text-white">Firebase 雲端後台</h2>
-                <p className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>即時同步・離線快取・操作稽核</p>
+                <h2 className="text-xl font-black text-white">雲端賽事管理</h2>
+                <p className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>建立或選擇賽事後，所有進度都會自動保存至雲端</p>
               </div>
-              <button onClick={() => setIsCloudModalOpen(false)} aria-label="關閉雲端後台"><X size={28} /></button>
+              {activeCloudCode && <button onClick={() => setIsCloudModalOpen(false)} aria-label="關閉雲端後台"><X size={28} /></button>}
             </div>
 
             <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
@@ -809,7 +786,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
                     <div className="font-bold text-sm">管理員已登入</div>
-                    <button onClick={async () => { await signOutAdmin(); setActiveCloudCode(''); cloudReadyRef.current = false; }} className="px-4 py-2 rounded-lg text-sm font-black text-red-300 border border-red-500/40">登出</button>
+                    <button onClick={handleCloudSignOut} className="px-4 py-2 rounded-lg text-sm font-black text-red-300 border border-red-500/40">登出</button>
                   </div>
 
                   {activeCloudCode && (
@@ -820,7 +797,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                             <div className="text-xs font-black tracking-widest" style={{ color: COLORS.textMuted }}>目前雲端賽事</div>
                             <h3 className="text-xl font-black mt-1">{activeCloudName || activeCloudCode} <span style={{ color: COLORS.inkOrange }}>#{activeCloudCode}</span></h3>
                             <div className="text-xs font-bold mt-2" style={{ color: cloudSyncStatus === 'error' ? '#f87171' : COLORS.inkBlue }}>
-                              {{ loading: '讀取中', pending: '同步中', offline: '離線快取・等待網路', synced: '已與雲端同步', error: '同步失敗', local: '本機模式' }[cloudSyncStatus]}
+                              {{ loading: '讀取中', pending: '同步中', offline: '離線快取・等待網路', synced: '已與雲端同步', error: '同步失敗', local: '尚未選擇賽事' }[cloudSyncStatus]}
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -873,20 +850,49 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                   )}
 
                   <section className="p-5 rounded-xl border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
-                    <h3 className="font-black mb-4">將目前進度建立為雲端賽事</h3>
+                    <h3 className="font-black mb-2">建立新的雲端賽事</h3>
+                    <p className="text-xs mb-4 leading-relaxed" style={{ color: COLORS.textMuted }}>建立完成時就會立即保存至 Firestore，之後每次操作都會自動同步，不需要另外存檔。</p>
                     <div className="grid sm:grid-cols-[1fr_10rem_auto] gap-3">
                       <input value={newCloudName} onChange={event => setNewCloudName(event.target.value)} placeholder="賽事名稱" className="px-4 py-3 rounded-lg border" />
                       <input value={newCloudCode} onChange={event => setNewCloudCode(normalizeEventCode(event.target.value))} aria-label="新賽事代碼" className="px-4 py-3 rounded-lg border font-black uppercase" />
-                      <button onClick={handleCreateCloudTournament} className="px-5 py-3 rounded-lg font-black" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>建立</button>
+                      <button onClick={handleCreateCloudTournament} className="px-5 py-3 rounded-lg font-black" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>建立並進入</button>
                     </div>
-                    <p className="text-xs mt-3" style={{ color: COLORS.textMuted }}>建立需要連線以確認代碼唯一；建立後的賽事預設不公開。</p>
+                    <div className="grid sm:grid-cols-2 gap-4 mt-4">
+                      <fieldset>
+                        <legend className="text-xs font-black mb-2" style={{ color: COLORS.textMuted }}>單場評審人數</legend>
+                        <div className="grid grid-cols-2 gap-2">
+                          {SUPPORTED_JUDGE_COUNTS.map(count => (
+                            <button key={count} type="button" onClick={() => setNewCloudJudgeCount(count)}
+                              aria-label={`新賽事 ${count} 位評審`} aria-pressed={newCloudJudgeCount === count}
+                              className="py-2.5 rounded-lg border font-black text-sm"
+                              style={{ backgroundColor: newCloudJudgeCount === count ? COLORS.inkBlue : 'transparent', borderColor: newCloudJudgeCount === count ? COLORS.inkBlue : COLORS.cardBorder, color: newCloudJudgeCount === count ? COLORS.bg : COLORS.textMuted }}>
+                              {count} 位評審
+                            </button>
+                          ))}
+                        </div>
+                      </fieldset>
+                      <fieldset>
+                        <legend className="text-xs font-black mb-2" style={{ color: COLORS.textMuted }}>淘汰規則</legend>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[false, true].map(enabled => (
+                            <button key={String(enabled)} type="button" onClick={() => setNewCloudDoubleElimination(enabled)}
+                              aria-label={`新賽事${enabled ? '兩敗淘汰' : '不淘汰'}`} aria-pressed={newCloudDoubleElimination === enabled}
+                              className="py-2.5 rounded-lg border font-black text-sm"
+                              style={{ backgroundColor: newCloudDoubleElimination === enabled ? COLORS.inkOrange : 'transparent', borderColor: newCloudDoubleElimination === enabled ? COLORS.inkOrange : COLORS.cardBorder, color: newCloudDoubleElimination === enabled ? COLORS.bg : COLORS.textMuted }}>
+                              {enabled ? '兩敗淘汰' : '不淘汰'}
+                            </button>
+                          ))}
+                        </div>
+                      </fieldset>
+                    </div>
+                    <p className="text-xs mt-3" style={{ color: COLORS.textMuted }}>建立需要連線以確認代碼唯一；新賽事預設不公開。</p>
                   </section>
 
                   <section>
                     <h3 className="font-black mb-3">既有雲端賽事 ({cloudTournaments.length})</h3>
                     <div className="space-y-3">
                       {cloudTournaments.map(tournament => (
-                        <button key={tournament.id} onClick={() => { cloudReadyRef.current = false; lastCloudStateRef.current = null; setActiveCloudCode(tournament.id); }} className="w-full p-4 rounded-xl border text-left flex items-center justify-between gap-4 hover:bg-white/5" style={{ borderColor: tournament.id === activeCloudCode ? COLORS.inkBlue : COLORS.cardBorder }}>
+                        <button key={tournament.id} onClick={() => handleSelectCloudTournament(tournament.id)} className="w-full p-4 rounded-xl border text-left flex items-center justify-between gap-4 hover:bg-white/5" style={{ borderColor: tournament.id === activeCloudCode ? COLORS.inkBlue : COLORS.cardBorder }}>
                           <div>
                             <div className="font-black text-white">{tournament.name || tournament.id}</div>
                             <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>#{tournament.id}・{tournament.phase === 'finished' ? '已完賽' : `第 ${tournament.currentRoundNum || 1} 輪`}</div>
@@ -904,86 +910,6 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         </div>
       )}
 
-      {/* Save Manager Modal */}
-      {isSaveModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] border-2 brush-border" style={{ backgroundColor: COLORS.bg, borderColor: COLORS.cardBorder }}>
-            <div className="flex justify-between items-center p-5 border-b" style={{ borderColor: COLORS.cardBorder, backgroundColor: COLORS.card }}>
-              <h2 className="text-xl font-black flex items-center gap-3 tracking-widest" style={{ color: COLORS.textMain }}>
-                <Archive style={{ color: COLORS.inkBlue }} /> 賽事紀錄與存檔中心
-              </h2>
-              <button onClick={() => setIsSaveModalOpen(false)} className="opacity-70 hover:opacity-100 transition-opacity">
-                <X size={28} style={{ color: COLORS.textMuted }} />
-              </button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto flex-1 space-y-6 custom-scrollbar">
-              <div className="p-5 rounded-xl border flex flex-col sm:flex-row gap-4 brush-border" style={{ backgroundColor: '#131e24', borderColor: '#1d323b' }}>
-                <input type="text" value={saveNameInput} onChange={(e) => setSaveNameInput(e.target.value)}
-                  placeholder="為當前進度命名 (例如: 決賽Day1進度)..."
-                  className="flex-1 px-4 py-3 rounded-lg border outline-none text-base" />
-                <button onClick={handleCreateSave} className="px-6 py-3 rounded-lg font-black transition-colors flex items-center justify-center gap-2 brush-border"
-                  style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>
-                  <Save size={20} /> 儲存當前進度
-                </button>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-black uppercase tracking-widest mb-4" style={{ color: COLORS.textMuted }}>已儲存的紀錄 ({saves.length})</h3>
-                {saves.length === 0 ? (
-                  <div className="text-center py-12 rounded-xl border border-dashed font-bold tracking-widest" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, color: COLORS.textMuted }}>
-                    尚無任何存檔紀錄
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {saves.map(save => (
-                      <div key={save.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 rounded-xl border transition-colors gap-4 brush-border"
-                           style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
-                        
-                        <div className="flex-1 min-w-0 w-full">
-                          {editingSaveId === save.id ? (
-                            <div className="flex items-center gap-2 mb-2 w-full">
-                              <input autoFocus type="text" value={editingSaveName} onChange={(e) => setEditingSaveName(e.target.value)} 
-                                     className="flex-1 px-3 py-1.5 rounded-md text-sm border font-bold" />
-                              <button onClick={() => saveRename(save.id)} className="p-1.5 rounded-md bg-green-500/20 text-green-400 hover:bg-green-500/30"><Check size={18}/></button>
-                              <button onClick={() => setEditingSaveId(null)} className="p-1.5 rounded-md bg-red-500/20 text-red-400 hover:bg-red-500/30"><X size={18}/></button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-3 mb-2">
-                              {save.isAuto && <span className="text-[10px] font-black px-2 py-0.5 rounded-sm uppercase tracking-wider" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>Auto</span>}
-                              <h4 className="font-bold truncate text-lg text-white flex-1">{save.name}</h4>
-                              <button onClick={() => {setEditingSaveId(save.id); setEditingSaveName(save.name);}} className="opacity-50 hover:opacity-100"><Edit3 size={16} style={{color: COLORS.inkBlue}}/></button>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-4 text-xs font-bold" style={{ color: COLORS.textMuted }}>
-                            <span className="flex items-center gap-1.5"><Clock size={14}/> {new Date(save.date).toLocaleString()}</span>
-                            <span>狀態: {save.data.phase === 'finished' ? '已完賽' : `進行至第 ${save.data.currentRoundNum} 輪`}</span>
-                            <span>參賽: {save.data.players.length} 人</span>
-                            <span>評審: {save.data.judgeCount} 位</span>
-                            <span>{save.data.doubleElimination ? '兩敗淘汰' : '不淘汰'}</span>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0">
-                          <button onClick={() => setConfirmAction({ type: 'LOAD_SAVE', saveId: save.id })} 
-                            className="flex-1 sm:flex-none px-6 py-2.5 font-black rounded-lg transition-colors tracking-widest uppercase brush-border"
-                            style={{ backgroundColor: '#1e293b', color: COLORS.inkBlue, border: `1px solid ${COLORS.inkBlue}` }}>
-                            讀取
-                          </button>
-                          <button onClick={() => setConfirmAction({ type: 'DELETE_SAVE', saveId: save.id })} className="p-2.5 rounded-lg transition-colors bg-red-900/20 text-red-400 hover:bg-red-900/40">
-                            <Trash2 size={20} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 全局確認視窗 Modal (Highest Z-index) */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
@@ -991,47 +917,28 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
             <div className="flex items-center gap-4 mb-6">
               <AlertTriangle size={32} style={{ color: COLORS.inkOrange }} />
               <h3 className="text-2xl font-black tracking-widest text-white">
-                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'REMATCH' ? '保留選手重賽' : confirmAction.type === 'FULL_RESET' ? '完全重設賽事' : confirmAction.type === 'LOAD_SAVE' ? '讀取賽事紀錄' : confirmAction.type === 'DELETE_SAVE' ? '刪除賽事紀錄' : confirmAction.type === 'GO_HOME' ? '回到首頁' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : confirmAction.type === 'WITHDRAW' ? `確定要讓 ${confirmAction.playerName} 棄賽嗎？` : ''}
+                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'REMATCH' ? '保留選手重賽' : confirmAction.type === 'FULL_RESET' ? '完全重設賽事' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : confirmAction.type === 'WITHDRAW' ? `確定要讓 ${confirmAction.playerName} 棄賽嗎？` : ''}
               </h3>
             </div>
             <p className="mb-8 font-bold leading-relaxed text-base" style={{ color: COLORS.textMuted }}>
-              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'REMATCH' ? '確定要保留現有的選手名單，清空所有戰績並重新開始報名階段嗎？' : confirmAction.type === 'FULL_RESET' ? '此動作將會清除所有選手名單與賽程資料，確定要返回初始狀態嗎？' : confirmAction.type === 'LOAD_SAVE' ? '確定要讀取這筆紀錄嗎？當前未儲存的進度將會完全遺失。' : confirmAction.type === 'DELETE_SAVE' ? '確定要永久刪除這筆存檔嗎？此動作無法復原。' : confirmAction.type === 'GO_HOME' ? '確定要回到首頁嗎？如果直接離開，當前未儲存的賽程將會遺失。' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? `棄賽前已完成的成績會保留；本輪未完成的對戰將直接判為 0:${judgeCount} 敗，且退出後續輪次。` : ''}
+              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'REMATCH' ? '確定要保留現有的選手名單，清空所有戰績並重新開始報名階段嗎？' : confirmAction.type === 'FULL_RESET' ? '此動作將會清除所有選手名單與賽程資料，確定要返回初始狀態嗎？' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? `棄賽前已完成的成績會保留；本輪未完成的對戰將直接判為 0:${judgeCount} 敗，且退出後續輪次。` : ''}
             </p>
-            
-            {confirmAction.type === 'GO_HOME' ? (
-              <div className="flex flex-col gap-3">
-                <button onClick={() => {
-                    const newSave = { id: createId(), name: `(自動) 離開前存檔 - ${new Date().toLocaleString()}`, date: new Date().toISOString(), isAuto: true, data: { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination } };
-                    setSaves(prev => [newSave, ...prev]);
-                    confirmFullReset();
-                  }} 
-                  className="w-full py-3 rounded-lg font-black tracking-widest text-lg brush-border transition-all hover:scale-[1.02]" style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>
-                  儲存並離開
-                </button>
-                <div className="flex justify-between gap-3 mt-2">
-                  <button onClick={() => setConfirmAction(null)} className="flex-1 py-3 rounded-lg font-bold" style={{ backgroundColor: '#1e293b', color: COLORS.textMain }}>取消</button>
-                  <button onClick={confirmFullReset} className="flex-1 py-3 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded-lg font-bold">放棄並離開</button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-end gap-4">
-                <button onClick={() => setConfirmAction(null)} className="px-6 py-2.5 rounded-lg font-bold" style={{ backgroundColor: '#1e293b', color: COLORS.textMain }}>取消</button>
-                <button
-                  onClick={() => {
-                    if (confirmAction.type === 'EDIT_HISTORY') applyHistoricalEdit(confirmAction.roundIndex, confirmAction.matchId, confirmAction.p1Score, confirmAction.p2Score);
-                    else if (confirmAction.type === 'REMATCH') confirmRematch();
-                    else if (confirmAction.type === 'FULL_RESET') confirmFullReset();
-                    else if (confirmAction.type === 'LOAD_SAVE') executeLoadSave(confirmAction.saveId);
-                    else if (confirmAction.type === 'DELETE_SAVE') executeDeleteSave(confirmAction.saveId);
-                    else if (confirmAction.type === 'CLEAR_PLAYERS') { setPlayers([]); setConfirmAction(null); }
-                    else if (confirmAction.type === 'WITHDRAW') confirmWithdraw(confirmAction.playerId);
-                  }}
-                  className="px-6 py-2.5 rounded-lg font-black tracking-widest brush-border"
-                  style={{ backgroundColor: (confirmAction.type === 'DELETE_SAVE' || confirmAction.type === 'CLEAR_PLAYERS' || confirmAction.type === 'WITHDRAW') ? '#ef4444' : COLORS.inkOrange, color: COLORS.bg }}>
-                  確定執行
-                </button>
-              </div>
-            )}
+
+            <div className="flex justify-end gap-4">
+              <button onClick={() => setConfirmAction(null)} className="px-6 py-2.5 rounded-lg font-bold" style={{ backgroundColor: '#1e293b', color: COLORS.textMain }}>取消</button>
+              <button
+                onClick={() => {
+                  if (confirmAction.type === 'EDIT_HISTORY') applyHistoricalEdit(confirmAction.roundIndex, confirmAction.matchId, confirmAction.p1Score, confirmAction.p2Score);
+                  else if (confirmAction.type === 'REMATCH') confirmRematch();
+                  else if (confirmAction.type === 'FULL_RESET') confirmFullReset();
+                  else if (confirmAction.type === 'CLEAR_PLAYERS') { setPlayers([]); setConfirmAction(null); }
+                  else if (confirmAction.type === 'WITHDRAW') confirmWithdraw(confirmAction.playerId);
+                }}
+                className="px-6 py-2.5 rounded-lg font-black tracking-widest brush-border"
+                style={{ backgroundColor: (confirmAction.type === 'CLEAR_PLAYERS' || confirmAction.type === 'WITHDRAW') ? '#ef4444' : COLORS.inkOrange, color: COLORS.bg }}>
+                確定執行
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1049,7 +956,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
           {activeCloudCode && <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full border text-xs font-black tracking-widest" style={{ backgroundColor: COLORS.card, borderColor: COLORS.inkBlue, color: COLORS.inkBlue }}>
             雲端賽事 #{activeCloudCode}
             <span style={{ color: cloudSyncStatus === 'error' ? '#f87171' : cloudSyncStatus === 'offline' ? COLORS.inkOrange : '#4ade80' }}>
-              {{ loading: '讀取中', pending: '同步中', offline: '離線', synced: '已同步', error: '同步失敗', local: '本機' }[cloudSyncStatus]}
+              {{ loading: '讀取中', pending: '同步中', offline: '離線', synced: '已同步', error: '同步失敗', local: '未選擇' }[cloudSyncStatus]}
             </span>
           </div>}
         </header>

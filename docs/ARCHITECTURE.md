@@ -1,6 +1,6 @@
 # 系統架構與演進方向
 
-## 現行架構（Phase 1）
+## Phase 1 歷史架構
 
 目前是 Create React App 建立的單頁前端應用：
 
@@ -11,7 +11,7 @@ React UI / 賽事規則
 瀏覽器 localStorage
 ```
 
-`src/App.js` 同時負責畫面、瑞士制配對、比分計算、排名與本地保存。這適合單機操作，但無法讓前台觀眾即時查詢，也缺乏伺服器端的一致性、權限控管與永久保存。
+這是 Phase 1 曾使用的單機架構；目前正式系統已停用 `localStorage` 賽事進度與檔案庫，由下方 Phase 2 雲端架構完全取代。
 
 ## Phase 2 技術架構
 
@@ -31,6 +31,7 @@ GitHub Pages
 - 後台：位於獨立 `?admin=1` 入口，只輸入單一共用 token；驗證前不載入賽事管理畫面。登入後可建立賽事、管理名單、產生輪次、輸入或更正比分、處理棄賽與結束賽事。
 - Authentication：自動建立匿名 Firebase 使用者取得 UID，不要求 Email。token 在瀏覽器雜湊後由 Security Rules 驗證。
 - Firestore：保存賽事狀態，透過 `onSnapshot` 即時同步。Web 端啟用 IndexedDB 持久快取以支援離線操作。
+- 雲端唯一資料源：後台通過 token 後必須先建立或選擇 Firestore 賽事，才能操作管理畫面。建立賽事時直接保存空白報名狀態、評審人數與淘汰規則；不再讀取或建立瀏覽器本機存檔。
 - 前台：網站根目錄為純查詢入口；`?event={code}` 直接查看指定賽事的輪次、比分、戰績與狀態。後台在瀏覽器內產生對應 QR Code，不使用第三方 QR 服務。
 - 稽核：比分與重要狀態變更另外建立 audit log；Security Rules 禁止更新或刪除既有紀錄，後台即時顯示目前賽事最近 50 筆操作。
 
@@ -50,6 +51,7 @@ GitHub Pages
 - `settings/admin` 不允許任何前端讀寫，需由 Firebase Console 建立。
 - 管理 session 只能由本人建立或刪除，不能更新；token 變更後舊 session 立即無效。
 - audit log 僅允許管理員新增，所有前端使用者都不可修改或刪除。
+- 切換賽事、返回列表與登出會先送出最後一次雲端狀態；一般操作仍以短暫 debounce 合併寫入。
 - Firebase Web 設定本身不是秘密；管理 token、Firebase CLI 登入資訊與本機 `.env` 不可提交。
 
 ## 免費方案考量
