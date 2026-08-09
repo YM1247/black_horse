@@ -1,5 +1,21 @@
 # 開發紀錄
 
+## 2026-08-10｜修正雲端賽程同步與預設公開
+
+### 問題原因
+
+- 應用程式的 `rounds` 是 `Match[][]`，但 Cloud Firestore 不允許陣列直接包含另一層陣列，因此第一輪配對產生後會在 `WriteBatch.set()` 回報 `Nested arrays are not supported`。
+
+### 修改內容
+
+- repository 寫入前將輪次轉為以輪次編號為 key 的 map，讀取 Firestore snapshot 時再還原為賽事核心使用的陣列格式。
+- 讀取流程相容既有賽事的空 `rounds: []`，不需要人工遷移尚未開始的雲端賽事。
+- 新建立的雲端賽事將 `isPublic` 預設設為 `true`，建立後即可由公開網址與 QR Code 查看。
+
+### 驗證範圍
+
+- repository 測試涵蓋兩輪賽程的寫入編碼、讀取還原、舊空陣列相容性與新賽事預設公開設定。
+
 ## 2026-08-09｜雲端唯一存檔流程
 
 ### 修改內容

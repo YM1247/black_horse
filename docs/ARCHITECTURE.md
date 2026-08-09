@@ -32,6 +32,7 @@ GitHub Pages
 - Authentication：自動建立匿名 Firebase 使用者取得 UID，不要求 Email。token 在瀏覽器雜湊後由 Security Rules 驗證。
 - Firestore：保存賽事狀態，透過 `onSnapshot` 即時同步。Web 端啟用 IndexedDB 持久快取以支援離線操作。
 - 雲端唯一資料源：後台通過 token 後必須先建立或選擇 Firestore 賽事，才能操作管理畫面。建立賽事時直接保存空白報名狀態、評審人數與淘汰規則；不再讀取或建立瀏覽器本機存檔。
+- 賽程序列化：領域層維持 `Match[][]`，寫入 Firestore 前將 `rounds` 轉為 `{ "1": Match[], "2": Match[] }`，讀取時再還原，避免 Firestore 禁止的直接巢狀陣列。
 - 前台：網站根目錄為純查詢入口；`?event={code}` 直接查看指定賽事的輪次、比分、戰績與狀態。後台在瀏覽器內產生對應 QR Code，不使用第三方 QR 服務。
 - 稽核：比分與重要狀態變更另外建立 audit log；Security Rules 禁止更新或刪除既有紀錄，後台即時顯示目前賽事最近 50 筆操作。
 

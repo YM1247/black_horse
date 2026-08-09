@@ -885,7 +885,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                         </div>
                       </fieldset>
                     </div>
-                    <p className="text-xs mt-3" style={{ color: COLORS.textMuted }}>建立需要連線以確認代碼唯一；新賽事預設不公開。</p>
+                    <p className="text-xs mt-3" style={{ color: COLORS.textMuted }}>建立需要連線以確認代碼唯一；新賽事建立後預設公開，觀眾可立即使用賽事代碼查看。</p>
                   </section>
 
                   <section>

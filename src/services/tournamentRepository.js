@@ -24,8 +24,36 @@ import {
 
 const EVENT_CODE_PATTERN = /^[A-Z0-9]{4,10}$/;
 const EVENT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export const DEFAULT_CLOUD_TOURNAMENT_VISIBILITY = true;
 
 const cleanData = (value) => JSON.parse(JSON.stringify(value));
+
+// Firestore 不允許 rounds: Match[][] 這種直接巢狀陣列，因此以輪次編號 map 保存。
+export const encodeTournamentForFirestore = (tournament = {}) => {
+  const encoded = cleanData(tournament);
+  if (Array.isArray(encoded.rounds)) {
+    encoded.rounds = Object.fromEntries(
+      encoded.rounds.map((matches, index) => [String(index + 1), Array.isArray(matches) ? matches : []])
+    );
+  }
+  return encoded;
+};
+
+export const decodeTournamentFromFirestore = (tournament = {}) => {
+  if (!Object.prototype.hasOwnProperty.call(tournament, 'rounds')) return tournament;
+
+  let rounds = [];
+  if (Array.isArray(tournament.rounds)) {
+    // 相容早期空陣列，以及曾經使用 { matches } 包裝的開發資料。
+    rounds = tournament.rounds.map(round => Array.isArray(round) ? round : (Array.isArray(round?.matches) ? round.matches : []));
+  } else if (tournament.rounds && typeof tournament.rounds === 'object') {
+    rounds = Object.entries(tournament.rounds)
+      .sort(([first], [second]) => Number(first) - Number(second))
+      .map(([, matches]) => Array.isArray(matches) ? matches : []);
+  }
+
+  return { ...tournament, rounds };
+};
 
 export const normalizeEventCode = (value = '') => value.trim().toUpperCase();
 
@@ -147,10 +175,10 @@ export const createCloudTournament = async ({ eventCode, name, tournament }) => 
     const existing = await transaction.get(tournamentRef);
     if (existing.exists()) throw new Error('此賽事代碼已存在，請更換代碼。');
     transaction.set(tournamentRef, {
-      ...cleanData(tournament),
+      ...encodeTournamentForFirestore(tournament),
       eventCode: code,
       name: name.trim() || code,
-      isPublic: false,
+      isPublic: DEFAULT_CLOUD_TOURNAMENT_VISIBILITY,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       clientUpdatedAt: now,
@@ -170,7 +198,7 @@ export const saveCloudTournament = async (eventCode, tournament, audit) => {
   const batch = writeBatch(db);
 
   batch.set(tournamentRef, {
-    ...cleanData(tournament),
+    ...encodeTournamentForFirestore(tournament),
     eventCode: code,
     updatedAt: serverTimestamp(),
     clientUpdatedAt: new Date().toISOString(),
@@ -185,14 +213,14 @@ export const subscribeTournament = (eventCode, onTournament, onError) => {
   if (!validateEventCode(code)) throw new Error('賽事代碼格式錯誤。');
   const { db } = getFirebaseServices();
   return onSnapshot(doc(db, 'tournaments', code), { includeMetadataChanges: true }, snapshot => {
-    onTournament(snapshot.exists() ? {
+    onTournament(snapshot.exists() ? decodeTournamentFromFirestore({
       id: snapshot.id,
       ...snapshot.data(),
       sync: {
         fromCache: snapshot.metadata.fromCache,
         hasPendingWrites: snapshot.metadata.hasPendingWrites
       }
-    } : null);
+    }) : null);
   }, onError);
 };
 
@@ -200,7 +228,7 @@ export const subscribeAdminTournaments = (onTournaments, onError) => {
   const { db } = getFirebaseServices();
   const tournamentsQuery = query(collection(db, 'tournaments'), orderBy('updatedAt', 'desc'));
   return onSnapshot(tournamentsQuery, { includeMetadataChanges: true }, snapshot => {
-    onTournaments(snapshot.docs.map(item => ({ id: item.id, ...item.data() })));
+    onTournaments(snapshot.docs.map(item => decodeTournamentFromFirestore({ id: item.id, ...item.data() })));
   }, onError);
 };
 
