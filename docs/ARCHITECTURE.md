@@ -76,7 +76,18 @@ Firebase Spark 目前提供 Firestore 每日免費讀寫額度，且一般 Email
 - 單站結果轉換為系列積分的規則與可稽核明細。
 - 系列排行榜公開查詢。
 
-單場名次積分已先依 [POINTS_RULES.md](POINTS_RULES.md) 實作為可測試的純函式，完賽時由既有 `displayRank` 即時計算；跨場彙總仍待系列賽資料模型完成後接入。
+單場名次積分已依 [POINTS_RULES.md](POINTS_RULES.md) 實作為可測試的純函式，完賽時由既有 `displayRank` 即時計算。第一個固定系列「模擬賽」也已接上跨場彙總；它由程式內的系列設定關聯三份既有 `tournaments/{eventCode}` 文件，不新增另一份可過期的排名資料。正式系列所需的可編輯系列資料、跨系列選手識別與公開排行榜仍屬後續範圍。
+
+### 模擬賽系列資料流
+
+```text
+series.js 固定設定
+  ├── MOCK819（8/19）─┐
+  ├── MOCK821（8/21）─┼── 完賽名次積分 ── 依精確選手名稱彙總 ── 後台系列排名
+  └── MOCK826（8/26）─┘
+```
+
+三場各自擁有報名名單及完整賽事狀態，均固定為三位評審、兩敗淘汰。新建文件會包含 `seriesId` 與 `seriesEventId`；固定代碼仍作為相容既有文件的主關聯鍵。詳細行為見 [SIMULATION_SERIES.md](SIMULATION_SERIES.md)。
 
 ## 建議的實作順序
 

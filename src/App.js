@@ -5,6 +5,8 @@ import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerR
 import PublicTournamentPage from './PublicTournamentPage';
 import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit';
 import { isFirebaseConfigured } from './firebase';
+import { buildSeriesStandings, SERIES } from './series';
+import SeriesAdminDashboard from './SeriesAdminDashboard';
 import {
   createCloudTournament,
   generateEventCode,
@@ -147,6 +149,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [newCloudCode, setNewCloudCode] = useState(() => generateEventCode());
   const [newCloudJudgeCount, setNewCloudJudgeCount] = useState(DEFAULT_JUDGE_COUNT);
   const [newCloudDoubleElimination, setNewCloudDoubleElimination] = useState(false);
+  const [selectedSeriesId, setSelectedSeriesId] = useState('');
+  const [activeSeriesId, setActiveSeriesId] = useState('');
+  const [creatingSeriesEventCode, setCreatingSeriesEventCode] = useState('');
   const [publicQrCode, setPublicQrCode] = useState('');
   const cloudReadyRef = useRef(false);
   const lastCloudStateRef = useRef(null);
@@ -272,6 +277,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     v1: judgeCount - p2Votes,
     v2: p2Votes
   }));
+  const selectedSeries = SERIES.find(series => series.id === selectedSeriesId) || null;
+  const activeSeries = SERIES.find(series => series.id === activeSeriesId) || null;
+  const seriesEventCodes = new Set(SERIES.flatMap(series => series.events.map(event => event.eventCode)));
+  const standaloneTournaments = cloudTournaments.filter(tournament => !seriesEventCodes.has(tournament.id));
+  const selectedSeriesStandings = selectedSeries ? buildSeriesStandings(selectedSeries, cloudTournaments) : [];
 
   const handleCloudLogin = async (event) => {
     event.preventDefault();
@@ -323,11 +333,14 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     setActiveCloudCode('');
     setActiveCloudName('');
     setCloudSyncStatus('local');
+    setSelectedSeriesId(activeSeriesId);
     setIsCloudModalOpen(true);
   };
 
-  const handleSelectCloudTournament = async (code) => {
+  const handleSelectCloudTournament = async (code, seriesId = '') => {
     if (code === activeCloudCode) {
+      setActiveSeriesId(seriesId);
+      setSelectedSeriesId('');
       setIsCloudModalOpen(false);
       return;
     }
@@ -335,6 +348,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     cloudReadyRef.current = false;
     closeCloudModalAfterLoadRef.current = true;
     lastCloudStateRef.current = null;
+    setActiveSeriesId(seriesId);
+    setSelectedSeriesId('');
     setActiveCloudCode(code);
   };
 
@@ -345,6 +360,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     })) return;
     cloudReadyRef.current = false;
     closeCloudModalAfterLoadRef.current = false;
+    setSelectedSeriesId('');
+    setActiveSeriesId('');
     setActiveCloudCode('');
     await signOutAdmin();
   };
@@ -371,6 +388,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCurrentRoundNum(tournament.currentRoundNum);
       setJudgeCount(tournament.judgeCount);
       setDoubleElimination(tournament.doubleElimination);
+      setSelectedSeriesId('');
+      setActiveSeriesId('');
       setActiveCloudCode(code);
       setNewCloudCode(generateEventCode());
       setNewCloudName('');
@@ -379,6 +398,49 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     } catch (error) {
       closeCloudModalAfterLoadRef.current = false;
       setCloudError(error.message);
+    }
+  };
+
+  const handleCreateSeriesTournament = async (series, eventDefinition) => {
+    const existing = cloudTournaments.find(tournament => tournament.id === eventDefinition.eventCode);
+    if (existing) {
+      await handleSelectCloudTournament(existing.id, series.id);
+      return;
+    }
+
+    setCloudError('');
+    setCreatingSeriesEventCode(eventDefinition.eventCode);
+    try {
+      const tournament = createEmptyTournament({
+        judgeCount: eventDefinition.judgeCount,
+        doubleElimination: eventDefinition.doubleElimination
+      });
+      const code = await createCloudTournament({
+        eventCode: eventDefinition.eventCode,
+        name: eventDefinition.name,
+        tournament: {
+          ...tournament,
+          seriesId: series.id,
+          seriesEventId: eventDefinition.id
+        }
+      });
+      cloudReadyRef.current = false;
+      closeCloudModalAfterLoadRef.current = true;
+      lastCloudStateRef.current = null;
+      setPhase(tournament.phase);
+      setPlayers(tournament.players);
+      setRounds(tournament.rounds);
+      setCurrentRoundNum(tournament.currentRoundNum);
+      setJudgeCount(tournament.judgeCount);
+      setDoubleElimination(tournament.doubleElimination);
+      setActiveSeriesId(series.id);
+      setSelectedSeriesId('');
+      setActiveCloudCode(code);
+    } catch (error) {
+      closeCloudModalAfterLoadRef.current = false;
+      setCloudError(error.message);
+    } finally {
+      setCreatingSeriesEventCode('');
     }
   };
 
@@ -751,7 +813,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         <button onClick={activeCloudCode ? handleLeaveCloudTournament : () => setIsCloudModalOpen(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-bold brush-border border"
           style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, color: COLORS.textMain }}>
-          <Home size={18} style={{color: COLORS.inkOrange}} /> {activeCloudCode ? '返回雲端賽事列表' : '選擇雲端賽事'}
+          <Home size={18} style={{color: COLORS.inkOrange}} /> {activeCloudCode ? `返回${activeSeries ? `${activeSeries.name}系列賽` : '雲端賽事列表'}` : '選擇雲端賽事'}
         </button>
       </div>
 
@@ -761,7 +823,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
           style={{ backgroundColor: COLORS.card, color: COLORS.inkOrange, borderColor: COLORS.inkOrange }}>
           <Network size={18} /> 公開前台
         </a>
-        {isFirebaseConfigured && <button onClick={() => setIsCloudModalOpen(true)}
+        {isFirebaseConfigured && <button onClick={() => { setSelectedSeriesId(''); setIsCloudModalOpen(true); }}
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm font-black tracking-widest brush-border border"
           style={{ backgroundColor: activeCloudCode ? COLORS.inkOrange : COLORS.card, color: activeCloudCode ? COLORS.bg : COLORS.inkBlue, borderColor: COLORS.inkBlue }}>
           <Archive size={18} /> {activeCloudCode || '雲端後台'}
@@ -774,11 +836,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       {/* Cloud admin modal */}
       {isCloudModalOpen && isFirebaseConfigured && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="rounded-2xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[88vh] border-2 brush-border" style={{ backgroundColor: COLORS.bg, borderColor: COLORS.cardBorder }}>
+          <div className="rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[88vh] border-2 brush-border" style={{ backgroundColor: COLORS.bg, borderColor: COLORS.cardBorder }}>
             <div className="flex justify-between items-center p-5 border-b" style={{ borderColor: COLORS.cardBorder, backgroundColor: COLORS.card }}>
               <div>
-                <h2 className="text-xl font-black text-white">雲端賽事管理</h2>
-                <p className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>建立或選擇賽事後，所有進度都會自動保存至雲端</p>
+                <h2 className="text-xl font-black text-white">{selectedSeries ? `${selectedSeries.name}系列賽` : '雲端賽事管理'}</h2>
+                <p className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>{selectedSeries ? '分場管理與系列積分排名' : '建立或選擇賽事後，所有進度都會自動保存至雲端'}</p>
               </div>
               {activeCloudCode && <button onClick={() => setIsCloudModalOpen(false)} aria-label="關閉雲端後台"><X size={28} /></button>}
             </div>
@@ -800,6 +862,18 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                     <button onClick={handleCloudSignOut} className="px-4 py-2 rounded-lg text-sm font-black text-red-300 border border-red-500/40">登出</button>
                   </div>
 
+                  {selectedSeries ? (
+                    <SeriesAdminDashboard
+                      series={selectedSeries}
+                      tournaments={cloudTournaments}
+                      standings={selectedSeriesStandings}
+                      creatingEventCode={creatingSeriesEventCode}
+                      onBack={() => setSelectedSeriesId('')}
+                      onOpenEvent={(series, eventDefinition, tournament) => handleSelectCloudTournament(tournament.id, series.id)}
+                      onCreateEvent={handleCreateSeriesTournament}
+                    />
+                  ) : (
+                    <>
                   {activeCloudCode && (
                     <>
                       <section className="p-5 rounded-xl border-2" style={{ backgroundColor: '#131e24', borderColor: COLORS.inkBlue }}>
@@ -860,6 +934,24 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                     </>
                   )}
 
+                  {!activeCloudCode && <section className="p-5 rounded-xl border-2" style={{ backgroundColor: '#131e24', borderColor: COLORS.inkOrange }}>
+                    <h3 className="font-black text-lg mb-2">系列賽</h3>
+                    <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>進入系列賽後可分別管理各場報名與賽程，並查看跨場積分。</p>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {SERIES.map(series => (
+                        <button key={series.id} type="button" onClick={() => { setCloudError(''); setSelectedSeriesId(series.id); }}
+                          className="p-5 rounded-xl border text-left hover:bg-white/5 flex items-center justify-between gap-4"
+                          style={{ borderColor: COLORS.inkOrange }}>
+                          <div>
+                            <div className="text-xl font-black text-white">{series.name}</div>
+                            <div className="text-xs font-bold mt-2" style={{ color: COLORS.textMuted }}>{series.events.map(event => event.name).join('・')}・3 位評審・兩敗淘汰</div>
+                          </div>
+                          <span className="text-sm font-black whitespace-nowrap" style={{ color: COLORS.inkOrange }}>進入管理 →</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>}
+
                   <section className="p-5 rounded-xl border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
                     <h3 className="font-black mb-2">建立新的雲端賽事</h3>
                     <p className="text-xs mb-4 leading-relaxed" style={{ color: COLORS.textMuted }}>建立完成時就會立即保存至 Firestore，之後每次操作都會自動同步，不需要另外存檔。</p>
@@ -900,9 +992,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                   </section>
 
                   <section>
-                    <h3 className="font-black mb-3">既有雲端賽事 ({cloudTournaments.length})</h3>
+                    <h3 className="font-black mb-3">既有單場賽事 ({standaloneTournaments.length})</h3>
                     <div className="space-y-3">
-                      {cloudTournaments.map(tournament => (
+                      {standaloneTournaments.map(tournament => (
                         <button key={tournament.id} onClick={() => handleSelectCloudTournament(tournament.id)} className="w-full p-4 rounded-xl border text-left flex items-center justify-between gap-4 hover:bg-white/5" style={{ borderColor: tournament.id === activeCloudCode ? COLORS.inkBlue : COLORS.cardBorder }}>
                           <div>
                             <div className="font-black text-white">{tournament.name || tournament.id}</div>
@@ -911,9 +1003,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                           <span className="text-xs font-black" style={{ color: tournament.isPublic ? '#4ade80' : COLORS.textMuted }}>{tournament.isPublic ? '公開' : '關閉'}</span>
                         </button>
                       ))}
-                      {cloudTournaments.length === 0 && <div className="p-8 text-center border border-dashed rounded-xl" style={{ borderColor: COLORS.cardBorder, color: COLORS.textMuted }}>尚無雲端賽事</div>}
+                      {standaloneTournaments.length === 0 && <div className="p-8 text-center border border-dashed rounded-xl" style={{ borderColor: COLORS.cardBorder, color: COLORS.textMuted }}>尚無獨立單場賽事</div>}
                     </div>
                   </section>
+                    </>
+                  )}
                 </>
               )}
             </div>
