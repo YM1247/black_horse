@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
-import { Trophy, Users, Swords, UserPlus, Play, RotateCcw, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, X, Clock, Home, Upload } from 'lucide-react';
+import { Trophy, Users, Swords, UserPlus, Play, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, X, Clock, Home, Upload } from 'lucide-react';
 import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 import PublicTournamentPage from './PublicTournamentPage';
 import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit';
 import { isFirebaseConfigured } from './firebase';
+import { shouldApplyCloudSnapshot } from './cloudSync';
+import FullScreenCloudManager from './FullScreenCloudManager';
 import { buildSeriesStandings, SERIES } from './series';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
 import {
@@ -25,7 +27,8 @@ import {
 const MAX_ROUNDS = 3;
 export const MAX_PLAYERS = 32;
 const SUPPORTED_JUDGE_COUNTS = [3, 5];
-const DEFAULT_JUDGE_COUNT = 5;
+const DEFAULT_JUDGE_COUNT = 3;
+const DEFAULT_DOUBLE_ELIMINATION = true;
 const createId = () => {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -91,7 +94,7 @@ const normalizeTournamentData = (data = {}) => {
 
 export const createEmptyTournament = ({
   judgeCount = DEFAULT_JUDGE_COUNT,
-  doubleElimination = false
+  doubleElimination = DEFAULT_DOUBLE_ELIMINATION
 } = {}) => normalizeTournamentData({
   phase: 'registration',
   players: [],
@@ -148,16 +151,19 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [newCloudName, setNewCloudName] = useState('');
   const [newCloudCode, setNewCloudCode] = useState(() => generateEventCode());
   const [newCloudJudgeCount, setNewCloudJudgeCount] = useState(DEFAULT_JUDGE_COUNT);
-  const [newCloudDoubleElimination, setNewCloudDoubleElimination] = useState(false);
+  const [newCloudDoubleElimination, setNewCloudDoubleElimination] = useState(DEFAULT_DOUBLE_ELIMINATION);
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
   const [activeSeriesId, setActiveSeriesId] = useState('');
   const [creatingSeriesEventCode, setCreatingSeriesEventCode] = useState('');
   const [publicQrCode, setPublicQrCode] = useState('');
   const cloudReadyRef = useRef(false);
   const lastCloudStateRef = useRef(null);
+  const pendingCloudStateRef = useRef(null);
+  const currentCloudStateRef = useRef(null);
   const pendingAuditRef = useRef(null);
   const cloudSyncTimeoutRef = useRef(null);
   const closeCloudModalAfterLoadRef = useRef(false);
+  currentCloudStateRef.current = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination });
 
   const markCloudAudit = (action, details = {}) => {
     pendingAuditRef.current = { action, details };
@@ -194,7 +200,22 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         return;
       }
       const normalized = normalizeTournamentData(data);
-      lastCloudStateRef.current = JSON.stringify(normalized);
+      const serialized = JSON.stringify(normalized);
+      const pendingLocalState = pendingCloudStateRef.current || (
+        cloudReadyRef.current && currentCloudStateRef.current !== lastCloudStateRef.current
+          ? currentCloudStateRef.current
+          : null
+      );
+      if (!shouldApplyCloudSnapshot({
+        cloudReady: cloudReadyRef.current,
+        pendingLocalState,
+        snapshotState: serialized
+      })) {
+        setCloudSyncStatus('pending');
+        return;
+      }
+      lastCloudStateRef.current = serialized;
+      if (pendingCloudStateRef.current === serialized) pendingCloudStateRef.current = null;
       cloudReadyRef.current = true;
       setPhase(normalized.phase);
       setPlayers(normalized.players);
@@ -235,6 +256,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     const serialized = JSON.stringify(cloudState);
     if (serialized === lastCloudStateRef.current) return undefined;
 
+    pendingCloudStateRef.current = serialized;
     setCloudSyncStatus('pending');
     cloudSyncTimeoutRef.current = window.setTimeout(async () => {
       const audit = pendingAuditRef.current || {
@@ -242,9 +264,12 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         details: { phase, currentRoundNum }
       };
       pendingAuditRef.current = null;
-      lastCloudStateRef.current = serialized;
       try {
         await saveCloudTournament(activeCloudCode, cloudState, audit);
+        if (!pendingCloudStateRef.current || pendingCloudStateRef.current === serialized) {
+          lastCloudStateRef.current = serialized;
+          pendingCloudStateRef.current = null;
+        }
       } catch (error) {
         lastCloudStateRef.current = null;
         setCloudError(error.message);
@@ -303,6 +328,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     }
     const cloudState = { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination };
     const serialized = JSON.stringify(cloudState);
+    pendingCloudStateRef.current = serialized;
     setCloudSyncStatus('pending');
     try {
       await saveCloudTournament(activeCloudCode, cloudState, audit || pendingAuditRef.current || {
@@ -311,6 +337,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       });
       pendingAuditRef.current = null;
       lastCloudStateRef.current = serialized;
+      pendingCloudStateRef.current = null;
       setCloudSyncStatus('synced');
       return true;
     } catch (error) {
@@ -328,6 +355,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     });
     if (!persisted) return;
     cloudReadyRef.current = false;
+    pendingCloudStateRef.current = null;
     closeCloudModalAfterLoadRef.current = false;
     lastCloudStateRef.current = null;
     setActiveCloudCode('');
@@ -346,6 +374,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     }
     if (activeCloudCode && !await persistCurrentCloudState()) return;
     cloudReadyRef.current = false;
+    pendingCloudStateRef.current = null;
     closeCloudModalAfterLoadRef.current = true;
     lastCloudStateRef.current = null;
     setActiveSeriesId(seriesId);
@@ -359,6 +388,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       details: { phase, currentRoundNum }
     })) return;
     cloudReadyRef.current = false;
+    pendingCloudStateRef.current = null;
     closeCloudModalAfterLoadRef.current = false;
     setSelectedSeriesId('');
     setActiveSeriesId('');
@@ -380,6 +410,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         tournament
       });
       cloudReadyRef.current = false;
+      pendingCloudStateRef.current = null;
       closeCloudModalAfterLoadRef.current = true;
       lastCloudStateRef.current = null;
       setPhase(tournament.phase);
@@ -394,7 +425,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setNewCloudCode(generateEventCode());
       setNewCloudName('');
       setNewCloudJudgeCount(DEFAULT_JUDGE_COUNT);
-      setNewCloudDoubleElimination(false);
+      setNewCloudDoubleElimination(DEFAULT_DOUBLE_ELIMINATION);
     } catch (error) {
       closeCloudModalAfterLoadRef.current = false;
       setCloudError(error.message);
@@ -425,6 +456,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         }
       });
       cloudReadyRef.current = false;
+      pendingCloudStateRef.current = null;
       closeCloudModalAfterLoadRef.current = true;
       lastCloudStateRef.current = null;
       setPhase(tournament.phase);
@@ -600,13 +632,6 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       markCloudAudit('TOURNAMENT_FINISHED', { round: currentRoundNum });
       setPhase('finished');
     }
-  };
-
-  const confirmFullReset = () => { markCloudAudit('TOURNAMENT_RESET', { keptPlayers: false }); setPlayers([]); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setJudgeCount(DEFAULT_JUDGE_COUNT); setDoubleElimination(false); setConfirmAction(null); };
-  const confirmRematch = () => {
-    markCloudAudit('TOURNAMENT_RESET', { keptPlayers: true });
-    const resetPlayers = players.map(p => ({ ...p, wins: 0, votes: 0, losses: 0, isWithdrawn: false, isEliminated: false }));
-    setPlayers(resetPlayers); setRounds([]); setCurrentRoundNum(1); setPhase('registration'); setConfirmAction(null);
   };
 
   const confirmWithdraw = (playerId) => {
@@ -835,8 +860,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
       {/* Cloud admin modal */}
       {isCloudModalOpen && isFirebaseConfigured && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[88vh] border-2 brush-border" style={{ backgroundColor: COLORS.bg, borderColor: COLORS.cardBorder }}>
+        <FullScreenCloudManager>
             <div className="flex justify-between items-center p-5 border-b" style={{ borderColor: COLORS.cardBorder, backgroundColor: COLORS.card }}>
               <div>
                 <h2 className="text-xl font-black text-white">{selectedSeries ? `${selectedSeries.name}系列賽` : '雲端賽事管理'}</h2>
@@ -845,7 +869,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
               {activeCloudCode && <button onClick={() => setIsCloudModalOpen(false)} aria-label="關閉雲端後台"><X size={28} /></button>}
             </div>
 
-            <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
+            <div className="flex-1 min-h-0 p-4 md:p-6 overflow-y-auto custom-scrollbar space-y-6">
               {cloudError && <div role="alert" className="p-3 rounded-lg border border-red-500/40 bg-red-950/30 text-red-300 font-bold text-sm">{cloudError}</div>}
 
               {!adminUser ? (
@@ -1011,8 +1035,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                 </>
               )}
             </div>
-          </div>
-        </div>
+        </FullScreenCloudManager>
       )}
 
       {/* 全局確認視窗 Modal (Highest Z-index) */}
@@ -1022,11 +1045,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
             <div className="flex items-center gap-4 mb-6">
               <AlertTriangle size={32} style={{ color: COLORS.inkOrange }} />
               <h3 className="text-2xl font-black tracking-widest text-white">
-                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'REMATCH' ? '保留選手重賽' : confirmAction.type === 'FULL_RESET' ? '完全重設賽事' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : confirmAction.type === 'WITHDRAW' ? `確定要讓 ${confirmAction.playerName} 棄賽嗎？` : ''}
+                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : confirmAction.type === 'WITHDRAW' ? `確定要讓 ${confirmAction.playerName} 棄賽嗎？` : ''}
               </h3>
             </div>
             <p className="mb-8 font-bold leading-relaxed text-base" style={{ color: COLORS.textMuted }}>
-              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'REMATCH' ? '確定要保留現有的選手名單，清空所有戰績並重新開始報名階段嗎？' : confirmAction.type === 'FULL_RESET' ? '此動作將會清除所有選手名單與賽程資料，確定要返回初始狀態嗎？' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? `棄賽前已完成的成績會保留；本輪未完成的對戰將直接判為 0:${judgeCount} 敗，且退出後續輪次。` : ''}
+              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? `棄賽前已完成的成績會保留；本輪未完成的對戰將直接判為 0:${judgeCount} 敗，且退出後續輪次。` : ''}
             </p>
 
             <div className="flex justify-end gap-4">
@@ -1034,8 +1057,6 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
               <button
                 onClick={() => {
                   if (confirmAction.type === 'EDIT_HISTORY') applyHistoricalEdit(confirmAction.roundIndex, confirmAction.matchId, confirmAction.p1Score, confirmAction.p2Score);
-                  else if (confirmAction.type === 'REMATCH') confirmRematch();
-                  else if (confirmAction.type === 'FULL_RESET') confirmFullReset();
                   else if (confirmAction.type === 'CLEAR_PLAYERS') { setPlayers([]); setRosterError(''); setConfirmAction(null); }
                   else if (confirmAction.type === 'WITHDRAW') confirmWithdraw(confirmAction.playerId);
                 }}
@@ -1323,7 +1344,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                                 {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>}
                                 {p.isEliminated && <span className="text-sm text-amber-300 ml-2 border border-amber-500/30 px-1 rounded whitespace-nowrap">兩敗淘汰</span>}
                               </div>
-                              {!p.isWithdrawn && !p.isEliminated && (p.needsTiebreaker || p.displayRank <= 2) && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>{p.needsTiebreaker ? '需加賽' : '晉級'}</span>}
+                              {!p.isWithdrawn && !p.isEliminated && p.needsTiebreaker && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>需加賽</span>}
                             </div>
                             {!p.isWithdrawn && <div className="text-[10px] font-bold mt-1 whitespace-nowrap" style={{ color: COLORS.textMuted }}>
                               {doubleElimination && `${p.losses || 0} 敗 · `}對手勝率 {(p.opponentWinRate * 100).toFixed(1)}% · 次級 {(p.opponentsOpponentWinRate * 100).toFixed(1)}%
@@ -1381,7 +1402,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                         <td className="p-5 font-black text-white text-xl">
                           <div className="flex items-center gap-3">
                             <span style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : 'white' }}>{p.name} {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>} {p.isEliminated && <span className="text-sm text-amber-300 ml-2 border border-amber-500/30 px-1 rounded whitespace-nowrap">兩敗淘汰</span>}</span>
-                            {!p.isWithdrawn && !p.isEliminated && (p.needsTiebreaker || p.displayRank <= 2) && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>{p.needsTiebreaker ? '需加賽' : '晉級'}</span>}
+                            {!p.isWithdrawn && !p.isEliminated && p.needsTiebreaker && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>需加賽</span>}
                           </div>
                         </td>
                         <td className="p-5 text-center font-black text-2xl whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins}</td>
@@ -1396,16 +1417,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                 </table>
               </div>
 
-              <div className="mt-12 flex flex-col sm:flex-row justify-center gap-6">
-                 <button onClick={() => setConfirmAction({ type: 'REMATCH' })}
+              <div className="mt-12 flex justify-center">
+                <button onClick={handleLeaveCloudTournament}
                   className="flex items-center justify-center gap-3 px-8 py-4 rounded-xl font-black text-lg tracking-widest transition-all brush-border border-2"
-                  style={{ backgroundColor: 'transparent', color: COLORS.inkOrange, borderColor: COLORS.inkOrange }}>
-                  <RotateCcw size={22} /> 保留名單重賽
-                </button>
-                <button onClick={() => setConfirmAction({ type: 'FULL_RESET' })}
-                  className="flex items-center justify-center gap-3 px-8 py-4 rounded-xl font-black text-lg tracking-widest transition-all brush-border border"
-                  style={{ backgroundColor: COLORS.bg, color: COLORS.textMuted, borderColor: COLORS.cardBorder }}>
-                  <Users size={22} /> 全新開賽
+                  style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg, borderColor: COLORS.inkOrange }}>
+                  <Home size={22} /> {activeSeries ? `回到${activeSeries.name}系列賽首頁` : '回到賽事管理首頁'}
                 </button>
               </div>
             </div>

@@ -30,7 +30,7 @@ describe('Swiss tournament Phase 1', () => {
     addPlayer('Bob');
     fireEvent.click(screen.getByRole('button', { name: '開始抽籤' }));
 
-    expect(screen.getByText('3 位評審制・不淘汰')).toBeInTheDocument();
+    expect(screen.getByText('3 位評審制・兩敗淘汰')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '3:0' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '2:1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '1:2' })).toBeInTheDocument();
@@ -62,6 +62,16 @@ describe('Swiss tournament Phase 1', () => {
     });
   });
 
+  test('new tournaments default to three judges and double elimination', () => {
+    expect(createEmptyTournament()).toMatchObject({
+      judgeCount: 3,
+      doubleElimination: true
+    });
+    render(<TournamentAdminApp />);
+    expect(screen.getByRole('button', { name: '3 位評審' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '兩敗淘汰' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('an event query opens the public tournament page', () => {
     window.history.replaceState({}, '', '/?event=AB12');
     render(<App />);
@@ -86,12 +96,30 @@ describe('Swiss tournament Phase 1', () => {
     expect(screen.queryByPlaceholderText('輸入名字...')).not.toBeInTheDocument();
   });
 
-  test('registration can enable double elimination', () => {
+  test('registration uses double elimination by default', () => {
     render(<TournamentAdminApp />);
 
-    fireEvent.click(screen.getByRole('button', { name: '兩敗淘汰' }));
     expect(screen.getByRole('button', { name: '兩敗淘汰' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('選手累積第 2 敗後會自動淘汰，不參與後續輪次。')).toBeInTheDocument();
+  });
+
+  test('finished view has no advancement or reset controls and returns to management', () => {
+    render(<TournamentAdminApp />);
+    addPlayer('Alice');
+    addPlayer('Bob');
+    fireEvent.click(screen.getByRole('button', { name: '開始抽籤' }));
+
+    for (let round = 1; round <= 3; round += 1) {
+      const scoreButtons = screen.getAllByRole('button', { name: '3:0' });
+      fireEvent.click(scoreButtons[scoreButtons.length - 1]);
+      fireEvent.click(screen.getByRole('button', { name: round === 3 ? '結算最終排名' : '進入下一輪' }));
+    }
+
+    expect(screen.getByRole('heading', { name: /賽事.*結果/ })).toBeInTheDocument();
+    expect(screen.queryByText('晉級')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '保留名單重賽' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '全新開賽' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '回到賽事管理首頁' })).toBeInTheDocument();
   });
 
   test('registration enforces the 32-player tournament limit', () => {

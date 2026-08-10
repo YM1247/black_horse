@@ -98,4 +98,6 @@ Firestore 在支援的 Chrome、Safari、Firefox 啟用多分頁 IndexedDB 持�
 
 Firestore 是現行版本唯一的正式賽事資料來源。後台不再讀寫瀏覽器 `localStorage` 賽事進度或歷史檔案庫；IndexedDB 僅由 Firebase SDK 用來維持離線快取與待同步寫入，不能視為另一份可手動載入的存檔。
 
-Firestore 不接受陣列直接包含另一層陣列，因此資料庫中的 `rounds` 使用輪次編號 map，例如 `{ "1": Match[], "2": Match[] }`。前後台 repository 會自動轉換，畫面與瑞士制規則層仍使用原本的 `Match[][]`。新建賽事的 `isPublic` 預設為 `true`，建立後觀眾即可透過賽事代碼讀取。
+後台操作仍使用 400ms debounce 合併寫入。若本機畫面已有尚待同步的新狀態，訂閱回傳的較舊 snapshot 會被暫時忽略，避免比分、賽制或階段按鈕先變更後又回彈；內容與本機狀態吻合時才視為同步確認。多裝置同時編輯同一賽事仍應避免，最終資料衝突仍遵循 Firestore 的寫入順序。
+
+Firestore 不接受陣列直接包含另一層陣列，因此資料庫中的 `rounds` 使用輪次編號 map，例如 `{ "1": Match[], "2": Match[] }`。前後台 repository 會自動轉換，畫面與瑞士制規則層仍使用原本的 `Match[][]`。新建賽事預設三位評審、兩敗淘汰且 `isPublic` 為 `true`，建立後觀眾即可透過賽事代碼讀取。

@@ -53,6 +53,7 @@ GitHub Pages
 - 管理 session 只能由本人建立或刪除，不能更新；token 變更後舊 session 立即無效。
 - audit log 僅允許管理員新增，所有前端使用者都不可修改或刪除。
 - 切換賽事、返回列表與登出會先送出最後一次雲端狀態；一般操作仍以短暫 debounce 合併寫入。
+- 編輯器保存目前待同步狀態的序列值；在本機變更尚未被 Firestore 確認時，較舊的 snapshot 不得覆蓋畫面，只有初始讀取、無本機變更或內容吻合的確認 snapshot 才能套用。
 - Firebase Web 設定本身不是秘密；管理 token、Firebase CLI 登入資訊與本機 `.env` 不可提交。
 
 ## 免費方案考量
