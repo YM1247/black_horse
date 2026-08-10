@@ -951,7 +951,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
             黑馬<span style={{color: COLORS.inkOrange}}>記念</span>
           </h1>
           <p className="font-bold tracking-widest text-lg" style={{ color: COLORS.textMuted }}>
-            挑戰組瑞士制配對系統
+            積分賽瑞士制配對系統
           </p>
           {activeCloudCode && <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full border text-xs font-black tracking-widest" style={{ backgroundColor: COLORS.card, borderColor: COLORS.inkBlue, color: COLORS.inkBlue }}>
             雲端賽事 #{activeCloudCode}
@@ -1249,7 +1249,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
               
               <Medal size={64} className="mx-auto mb-6" style={{ color: COLORS.inkOrange }} />
               <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-[0.2em] text-white">賽事<span style={{color: COLORS.inkBlue}}>結果</span></h2>
-              <p className="font-bold tracking-widest mb-10 text-lg" style={{ color: COLORS.textMuted }}>挑戰組賽事・{judgeCount} 位評審制・{doubleElimination ? '兩敗淘汰' : '不淘汰'}・最終結果</p>
+              <p className="font-bold tracking-widest mb-10 text-lg" style={{ color: COLORS.textMuted }}>積分賽・{judgeCount} 位評審制・{doubleElimination ? '兩敗淘汰' : '不淘汰'}・最終結果</p>
 
               <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: COLORS.cardBorder }}>
                 <table className="w-full text-left border-collapse bg-black/40">

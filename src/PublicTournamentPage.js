@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { isFirebaseConfigured } from './firebase';
 import { normalizeEventCode, subscribeTournament, validateEventCode } from './services/tournamentRepository';
 import { rankPlayers } from './tournament';
+import PublicTournamentBracket from './PublicTournamentBracket';
 
 const PHASE_LABELS = {
   registration: '報名中',
@@ -90,8 +91,20 @@ export default function PublicTournamentPage({ initialCode = '' }) {
             <div className="flex justify-end mb-4 text-xs font-bold text-slate-500">
               {tournament.sync?.hasPendingWrites ? '資料同步中' : tournament.sync?.fromCache ? '離線快取' : '即時更新中'}
             </div>
+
+            {rounds.length > 0 && (
+              <section className="mb-10 bg-[#11151b] border border-slate-700 rounded-2xl p-4 md:p-7">
+                <div className="mb-6">
+                  <h2 className="text-2xl md:text-3xl font-black text-[#b6d2d4]">完整瑞士制樹狀圖</h2>
+                  <p className="mt-2 text-sm font-bold text-slate-500">依輪次與勝場分組呈現，比分及戰績會隨後台操作即時更新。</p>
+                </div>
+                <PublicTournamentBracket rounds={rounds} />
+              </section>
+            )}
+
             <div className="grid xl:grid-cols-[1fr_22rem] gap-8">
               <section className="space-y-8">
+                {rounds.length > 0 && <h2 className="text-2xl font-black text-[#f1c6a6]">逐輪對戰</h2>}
                 {rounds.length === 0 && <div className="p-10 border border-dashed border-slate-700 rounded-xl text-center text-slate-500">尚未產生賽程</div>}
                 {rounds.map((matches, roundIndex) => (
                   <article key={roundIndex} className="bg-[#161920] border border-slate-700 rounded-2xl p-6">
