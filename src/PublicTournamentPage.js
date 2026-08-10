@@ -132,8 +132,9 @@ export default function PublicTournamentPage({ initialCode = '' }) {
                     <div key={player.id} className={`border border-slate-800 rounded-lg p-4 ${player.isWithdrawn || player.isEliminated ? 'opacity-60' : ''}`}>
                       <div className="flex justify-between gap-3">
                         <span className="font-black">{player.displayRank}. {player.name}</span>
-                        <span className="font-black text-[#b6d2d4]">{player.wins}W{tournament.doubleElimination ? ` / ${player.losses || 0}L` : ''} / {player.votes}pt</span>
+                        <span className="font-black text-[#b6d2d4]">{player.wins}W{tournament.doubleElimination ? ` / ${player.losses || 0}L` : ''} / {player.votes}票</span>
                       </div>
+                      {tournament.phase === 'finished' && <div className="text-sm text-[#f1c6a6] font-black mt-2">本場積分 {player.rankingPoints}</div>}
                       {!player.isWithdrawn && <div className="text-[11px] mt-2 text-slate-500">對手勝率 {(player.opponentWinRate * 100).toFixed(1)}%・次級 {(player.opponentsOpponentWinRate * 100).toFixed(1)}%</div>}
                       {player.isEliminated && <div className="text-xs text-amber-300 font-black mt-2">兩敗淘汰</div>}
                       {player.isWithdrawn && <div className="text-xs text-red-300 font-black mt-2">已棄賽</div>}

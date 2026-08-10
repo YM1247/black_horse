@@ -21,6 +21,7 @@ import {
 } from './services/tournamentRepository';
 
 const MAX_ROUNDS = 3;
+export const MAX_PLAYERS = 32;
 const SUPPORTED_JUDGE_COUNTS = [3, 5];
 const DEFAULT_JUDGE_COUNT = 5;
 const createId = () => {
@@ -129,6 +130,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
   // 新增參賽者狀態
   const [newName, setNewName] = useState('');
+  const [rosterError, setRosterError] = useState('');
 
   // Firebase 雲端後台狀態
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(isFirebaseConfigured);
@@ -407,10 +409,15 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     e.preventDefault();
     const trimmedName = newName.trim();
     if (!trimmedName || players.some(p => p.name === trimmedName)) return; // 避免重複名稱
+    if (players.length >= MAX_PLAYERS) {
+      setRosterError(`每場賽事最多 ${MAX_PLAYERS} 位選手。`);
+      return;
+    }
     const newPlayer = { id: createId(), name: trimmedName, wins: 0, votes: 0, losses: 0, isWithdrawn: false, isEliminated: false };
     markCloudAudit('PLAYER_ADDED', { playerId: newPlayer.id, name: newPlayer.name });
     setPlayers(prev => [...prev, newPlayer]);
     setNewName('');
+    setRosterError('');
   };
 
   const handleFileUpload = (e) => {
@@ -439,10 +446,13 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         }
       });
       
-      if (newPlayers.length > 0) {
-        markCloudAudit('PLAYERS_IMPORTED', { count: newPlayers.length, names: newPlayers.map(player => player.name) });
-        setPlayers(prev => [...prev, ...newPlayers]);
+      const availableSlots = Math.max(0, MAX_PLAYERS - players.length);
+      const acceptedPlayers = newPlayers.slice(0, availableSlots);
+      if (acceptedPlayers.length > 0) {
+        markCloudAudit('PLAYERS_IMPORTED', { count: acceptedPlayers.length, names: acceptedPlayers.map(player => player.name) });
+        setPlayers(prev => [...prev, ...acceptedPlayers]);
       }
+      setRosterError(newPlayers.length > acceptedPlayers.length ? `名單已達 ${MAX_PLAYERS} 人上限，超出的選手未匯入。` : '');
       e.target.value = null; // 重置 input 讓下次可以選同一個檔案
     };
     reader.readAsText(file);
@@ -462,6 +472,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     const target = players.find(player => player.id === id);
     markCloudAudit('PLAYER_REMOVED', { playerId: id, name: target?.name });
     setPlayers(players.filter(p => p.id !== id));
+    setRosterError('');
   };
 
   // --- 賽事核心邏輯 ---
@@ -931,7 +942,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                   if (confirmAction.type === 'EDIT_HISTORY') applyHistoricalEdit(confirmAction.roundIndex, confirmAction.matchId, confirmAction.p1Score, confirmAction.p2Score);
                   else if (confirmAction.type === 'REMATCH') confirmRematch();
                   else if (confirmAction.type === 'FULL_RESET') confirmFullReset();
-                  else if (confirmAction.type === 'CLEAR_PLAYERS') { setPlayers([]); setConfirmAction(null); }
+                  else if (confirmAction.type === 'CLEAR_PLAYERS') { setPlayers([]); setRosterError(''); setConfirmAction(null); }
                   else if (confirmAction.type === 'WITHDRAW') confirmWithdraw(confirmAction.playerId);
                 }}
                 className="px-6 py-2.5 rounded-lg font-black tracking-widest brush-border"
@@ -972,14 +983,15 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                 <form onSubmit={handleAddPlayer} className="space-y-5">
                   <div>
                     <label className="block text-sm font-bold mb-2 tracking-widest" style={{ color: COLORS.textMuted }}>選手名稱 (NAME)</label>
-                    <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
-                      className="w-full px-4 py-3 rounded-lg border font-bold text-lg" placeholder="輸入名字..." />
+                    <input type="text" value={newName} onChange={(e) => { setNewName(e.target.value); setRosterError(''); }} disabled={players.length >= MAX_PLAYERS}
+                      className="w-full px-4 py-3 rounded-lg border font-bold text-lg disabled:opacity-40" placeholder={players.length >= MAX_PLAYERS ? '名單已達 32 人上限' : '輸入名字...'} />
                   </div>
-                  <button type="submit" className="w-full font-black py-4 rounded-xl transition-all text-lg tracking-widest mt-4 brush-border"
+                  <button type="submit" disabled={players.length >= MAX_PLAYERS} className="w-full font-black py-4 rounded-xl transition-all text-lg tracking-widest mt-4 brush-border disabled:opacity-40"
                     style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>
                     加入名單 ADD
                   </button>
                 </form>
+                {rosterError && <div role="alert" className="mt-4 p-3 rounded-lg border border-amber-500/40 bg-amber-950/30 text-amber-200 text-sm font-bold">{rosterError}</div>}
 
                 <fieldset className="mt-8 pt-8 border-t border-dashed" style={{ borderColor: COLORS.cardBorder }}>
                   <legend className="block text-sm font-bold px-2 tracking-widest" style={{ color: COLORS.textMuted }}>單場評審人數</legend>
@@ -1028,11 +1040,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                 </fieldset>
 
                 <div className="mt-8 pt-8 border-t border-dashed flex flex-col gap-3" style={{ borderColor: COLORS.cardBorder }}>
-                  <label className="w-full font-bold py-3 rounded-xl transition-colors text-sm tracking-widest border border-dashed flex items-center justify-center gap-2 cursor-pointer hover:bg-white/5"
+                  <label className={`w-full font-bold py-3 rounded-xl transition-colors text-sm tracking-widest border border-dashed flex items-center justify-center gap-2 ${players.length >= MAX_PLAYERS ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-white/5'}`}
                     style={{ backgroundColor: 'transparent', color: COLORS.inkOrange, borderColor: COLORS.inkOrange }}>
                     <Upload size={18} />
                     匯入 CSV 選手名單
-                    <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                    <input type="file" accept=".csv" onChange={handleFileUpload} disabled={players.length >= MAX_PLAYERS} className="hidden" />
                   </label>
                   
                   <button onClick={loadMockData} className="w-full font-bold py-3 rounded-xl transition-colors text-sm tracking-widest border border-dashed hover:bg-white/5"
@@ -1047,7 +1059,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
               <div className="p-8 rounded-2xl border h-full brush-border shadow-xl" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                   <h2 className="text-xl font-black flex items-center gap-3 tracking-widest" style={{ color: COLORS.inkOrange }}>
-                    <Users size={24} /> 參賽陣容 ({players.length})
+                    <Users size={24} /> 參賽陣容 ({players.length}/{MAX_PLAYERS})
                   </h2>
                   <div className="flex gap-3 w-full sm:w-auto">
                     {players.length > 0 && (
@@ -1226,7 +1238,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                         </div>
                         <div className="text-right">
                           <div className="font-black text-base whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins} W</div>
-                          <div className="text-xs font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes} pt</div>
+                          <div className="text-xs font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes} 票</div>
                         </div>
                         {!p.isWithdrawn && !p.isEliminated && <button onClick={() => setConfirmAction({ type: 'WITHDRAW', playerId: p.id, playerName: p.name })} className="px-1.5 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/20 rounded border border-red-500/30 transition-colors shrink-0">棄賽</button>}
                       </div>
@@ -1250,6 +1262,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
               <Medal size={64} className="mx-auto mb-6" style={{ color: COLORS.inkOrange }} />
               <h2 className="text-4xl md:text-5xl font-black mb-4 tracking-[0.2em] text-white">賽事<span style={{color: COLORS.inkBlue}}>結果</span></h2>
               <p className="font-bold tracking-widest mb-10 text-lg" style={{ color: COLORS.textMuted }}>積分賽・{judgeCount} 位評審制・{doubleElimination ? '兩敗淘汰' : '不淘汰'}・最終結果</p>
+              <p className="-mt-7 mb-8 text-sm font-bold" style={{ color: COLORS.inkBlue }}>名次積分採 32 人制固定級距；參賽不足 32 人仍按實際名次計算。</p>
 
               <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: COLORS.cardBorder }}>
                 <table className="w-full text-left border-collapse bg-black/40">
@@ -1259,7 +1272,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                       <th className="p-5 font-black">NAME</th>
                       <th className="p-5 font-black text-center whitespace-nowrap">WINS</th>
                       {doubleElimination && <th className="p-5 font-black text-center whitespace-nowrap">LOSSES</th>}
-                      <th className="p-5 font-black text-center whitespace-nowrap">POINTS</th>
+                      <th className="p-5 font-black text-center whitespace-nowrap">VOTES</th>
+                      <th className="p-5 font-black text-center whitespace-nowrap">積分</th>
                       <th className="p-5 font-black text-center whitespace-nowrap">OPP WIN%</th>
                       <th className="p-5 font-black text-center whitespace-nowrap">OPP² WIN%</th>
                     </tr>
@@ -1279,6 +1293,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                         <td className="p-5 text-center font-black text-2xl whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins}</td>
                         {doubleElimination && <td className="p-5 text-center font-black text-xl whitespace-nowrap" style={{ color: p.isEliminated ? COLORS.inkOrange : COLORS.textMuted }}>{p.losses || 0}</td>}
                         <td className="p-5 text-center font-black text-lg whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes}</td>
+                        <td className="p-5 text-center font-black text-2xl whitespace-nowrap" style={{ color: p.rankingPoints > 0 ? COLORS.inkOrange : COLORS.textMuted }}>{p.rankingPoints}</td>
                         <td className="p-5 text-center font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.isWithdrawn ? '—' : `${(p.opponentWinRate * 100).toFixed(1)}%`}</td>
                         <td className="p-5 text-center font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.isWithdrawn ? '—' : `${(p.opponentsOpponentWinRate * 100).toFixed(1)}%`}</td>
                       </tr>

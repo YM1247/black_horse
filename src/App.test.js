@@ -19,7 +19,7 @@ describe('Swiss tournament Phase 1', () => {
     addPlayer('Alice');
 
     expect(screen.getByText('Alice')).toBeInTheDocument();
-    expect(screen.getByText('參賽陣容 (1)')).toBeInTheDocument();
+    expect(screen.getByText('參賽陣容 (1/32)')).toBeInTheDocument();
   });
 
   test('a three-judge tournament offers only valid three-vote scores', () => {
@@ -47,7 +47,7 @@ describe('Swiss tournament Phase 1', () => {
 
     expect(screen.queryByText('Legacy Player')).not.toBeInTheDocument();
     expect(screen.queryByText('Legacy School')).not.toBeInTheDocument();
-    expect(screen.getByText('參賽陣容 (0)')).toBeInTheDocument();
+    expect(screen.getByText('參賽陣容 (0/32)')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '賽事檔案庫' })).not.toBeInTheDocument();
   });
 
@@ -92,5 +92,15 @@ describe('Swiss tournament Phase 1', () => {
     fireEvent.click(screen.getByRole('button', { name: '兩敗淘汰' }));
     expect(screen.getByRole('button', { name: '兩敗淘汰' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('選手累積第 2 敗後會自動淘汰，不參與後續輪次。')).toBeInTheDocument();
+  });
+
+  test('registration enforces the 32-player tournament limit', () => {
+    render(<TournamentAdminApp />);
+
+    for (let index = 1; index <= 32; index += 1) addPlayer(`Player ${index}`);
+
+    expect(screen.getByText('參賽陣容 (32/32)')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('名單已達 32 人上限')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /加入名單/ })).toBeDisabled();
   });
 });

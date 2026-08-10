@@ -1,4 +1,4 @@
-import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
+import { applyDoubleElimination, getRankingPoints, pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 
 const player = (id, wins = 0, votes = 0) => ({ id, name: id, wins, votes, isWithdrawn: false });
 const completedMatch = (id, p1, p2, p1Votes = 3, p2Votes = 0) => ({
@@ -65,7 +65,24 @@ test('players tied on all automatic criteria are marked for a playoff', () => {
   const ranked = rankPlayers([player('A'), player('B')], []);
   expect(ranked[0].displayRank).toBe(1);
   expect(ranked[1].displayRank).toBe(1);
+  expect(ranked[0].rankingPoints).toBe(100);
+  expect(ranked[1].rankingPoints).toBe(100);
   expect(ranked.every(item => item.needsTiebreaker)).toBe(true);
+});
+
+test.each([
+  [1, 100], [2, 85], [3, 75], [4, 70],
+  [5, 55], [8, 55], [9, 47], [12, 47],
+  [13, 40], [16, 40], [17, 30], [20, 30],
+  [21, 24], [24, 24], [25, 16], [28, 16],
+  [29, 10], [32, 10], [33, 0], ['棄賽', 0]
+])('rank %s receives %s ranking points', (rank, expectedPoints) => {
+  expect(getRankingPoints(rank)).toBe(expectedPoints);
+});
+
+test('withdrawn players receive zero ranking points', () => {
+  const withdrawnPlayer = { ...player('A'), isWithdrawn: true };
+  expect(rankPlayers([withdrawnPlayer], [])[0]).toMatchObject({ displayRank: '棄賽', rankingPoints: 0 });
 });
 
 test('a player is eliminated after a second loss when double elimination is enabled', () => {

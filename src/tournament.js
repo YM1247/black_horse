@@ -190,6 +190,26 @@ export const recalculatePlayerRecords = (players, rounds) => {
 
 const nearlyEqual = (left, right) => Math.abs(left - right) < 1e-9;
 
+export const RANKING_POINTS_TABLE = Object.freeze([
+  { from: 1, to: 1, points: 100 },
+  { from: 2, to: 2, points: 85 },
+  { from: 3, to: 3, points: 75 },
+  { from: 4, to: 4, points: 70 },
+  { from: 5, to: 8, points: 55 },
+  { from: 9, to: 12, points: 47 },
+  { from: 13, to: 16, points: 40 },
+  { from: 17, to: 20, points: 30 },
+  { from: 21, to: 24, points: 24 },
+  { from: 25, to: 28, points: 16 },
+  { from: 29, to: 32, points: 10 }
+]);
+
+export const getRankingPoints = (rank) => {
+  const numericRank = Number(rank);
+  if (!Number.isInteger(numericRank)) return 0;
+  return RANKING_POINTS_TABLE.find(range => numericRank >= range.from && numericRank <= range.to)?.points || 0;
+};
+
 export const rankPlayers = (players, rounds) => {
   const activePlayers = players.filter(player => !player.isWithdrawn && !player.isMC).map(player => ({ ...player }));
   const allPlayers = players.filter(player => !player.isMC);
@@ -247,10 +267,11 @@ export const rankPlayers = (players, rounds) => {
     player.needsTiebreaker = activePlayers.some(other =>
       other.id !== player.id && other.displayRank === player.displayRank
     );
+    player.rankingPoints = getRankingPoints(player.displayRank);
   });
 
   const withdrawn = players
     .filter(player => player.isWithdrawn && !player.isMC)
-    .map(player => ({ ...player, displayRank: '棄賽', needsTiebreaker: false, opponentWinRate: 0, opponentsOpponentWinRate: 0 }));
+    .map(player => ({ ...player, displayRank: '棄賽', rankingPoints: 0, needsTiebreaker: false, opponentWinRate: 0, opponentsOpponentWinRate: 0 }));
   return [...activePlayers, ...withdrawn];
 };

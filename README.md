@@ -11,6 +11,7 @@
 - 奇數選手時安排 MC 對戰，成績正常計入且優先避免同一選手再次遇到 MC。
 - 對戰列表與賽況樹狀圖。
 - 即時排名依勝場、總票數、對手勝率、對手的對手勝率排序；完全同分者標示需要加賽。
+- 單場名單上限 32 人；完賽後依固定名次級距計算積分，參賽不足 32 人仍按實際名次計算。
 - 棄賽保留已完成成績，當輪未完成對戰直接判敗。
 - 後台登入後必須建立或選擇雲端賽事；建立當下即寫入 Firestore 並預設公開，後續操作自動同步。
 - 不需 Email 的 Firebase 管理 token 登入、雲端賽事建立、公開狀態切換、離線快取及操作稽核。
@@ -68,5 +69,6 @@ Bob
 - [Phase 1 實作說明](docs/PHASE1.md)
 - [系統架構與演進方向](docs/ARCHITECTURE.md)
 - [Firebase 設定與部署](docs/FIREBASE_SETUP.md)
+- [積分賽名次積分規則](docs/POINTS_RULES.md)
 - [開發紀錄](docs/DEVELOPMENT_LOG.md)
 - [待確認問題](docs/OPEN_QUESTIONS.md)
