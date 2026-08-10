@@ -22,6 +22,11 @@ test('audit descriptions retain useful management context', () => {
     action: 'DOUBLE_ELIMINATION_CHANGED',
     details: { before: false, after: true }
   })).toBe('啟用兩敗淘汰');
+  expect(getAuditActionLabel('TOURNAMENT_CLEARED')).toBe('清除賽事內容');
+  expect(describeAuditLog({
+    action: 'TOURNAMENT_CLEARED',
+    details: { name: '8/19', removedPlayers: 8, removedRounds: 3 }
+  })).toBe('8/19・清除 8 位選手與 3 輪賽程');
 });
 
 test('audit timestamps use the client fallback while the server timestamp is pending', () => {

@@ -7,18 +7,21 @@ import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit'
 import { isFirebaseConfigured } from './firebase';
 import { shouldApplyCloudSnapshot } from './cloudSync';
 import FullScreenCloudManager from './FullScreenCloudManager';
-import { buildSeriesStandings, SERIES } from './series';
+import { buildSeriesStandings, normalizeSeriesDefinition, SERIES } from './series';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
 import {
   createCloudTournament,
+  deleteCloudTournament,
   generateEventCode,
   getAdminLoginErrorMessage,
   normalizeEventCode,
   saveCloudTournament,
+  saveCloudSeries,
   signInAdminWithToken,
   signOutAdmin,
   subscribeAdminTournaments,
   subscribeAuth,
+  subscribeCloudSeries,
   subscribeTournamentAuditLogs,
   subscribeTournament,
   validateEventCode
@@ -152,9 +155,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [newCloudCode, setNewCloudCode] = useState(() => generateEventCode());
   const [newCloudJudgeCount, setNewCloudJudgeCount] = useState(DEFAULT_JUDGE_COUNT);
   const [newCloudDoubleElimination, setNewCloudDoubleElimination] = useState(DEFAULT_DOUBLE_ELIMINATION);
+  const [seriesDefinitions, setSeriesDefinitions] = useState(() => SERIES.map(series => normalizeSeriesDefinition(null, series)));
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
   const [activeSeriesId, setActiveSeriesId] = useState('');
   const [creatingSeriesEventCode, setCreatingSeriesEventCode] = useState('');
+  const [seriesMutationStatus, setSeriesMutationStatus] = useState('');
   const [publicQrCode, setPublicQrCode] = useState('');
   const cloudReadyRef = useRef(false);
   const lastCloudStateRef = useRef(null);
@@ -183,6 +188,18 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       return undefined;
     }
     return subscribeAdminTournaments(setCloudTournaments, error => setCloudError(error.message));
+  }, [adminUser]);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured || !adminUser) {
+      setSeriesDefinitions(SERIES.map(series => normalizeSeriesDefinition(null, series)));
+      return undefined;
+    }
+    const unsubscribers = SERIES.map(fallback => subscribeCloudSeries(fallback.id, data => {
+      const normalized = normalizeSeriesDefinition(data, fallback);
+      setSeriesDefinitions(current => current.map(series => series.id === normalized.id ? normalized : series));
+    }, error => setCloudError(error.message)));
+    return () => unsubscribers.forEach(unsubscribe => unsubscribe());
   }, [adminUser]);
 
   useEffect(() => {
@@ -302,9 +319,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     v1: judgeCount - p2Votes,
     v2: p2Votes
   }));
-  const selectedSeries = SERIES.find(series => series.id === selectedSeriesId) || null;
-  const activeSeries = SERIES.find(series => series.id === activeSeriesId) || null;
-  const seriesEventCodes = new Set(SERIES.flatMap(series => series.events.map(event => event.eventCode)));
+  const selectedSeries = seriesDefinitions.find(series => series.id === selectedSeriesId) || null;
+  const activeSeries = seriesDefinitions.find(series => series.id === activeSeriesId) || null;
+  const seriesEventCodes = new Set(seriesDefinitions.flatMap(series => series.events.map(event => event.eventCode)));
   const standaloneTournaments = cloudTournaments.filter(tournament => !seriesEventCodes.has(tournament.id));
   const selectedSeriesStandings = selectedSeries ? buildSeriesStandings(selectedSeries, cloudTournaments) : [];
 
@@ -473,6 +490,97 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCloudError(error.message);
     } finally {
       setCreatingSeriesEventCode('');
+    }
+  };
+
+  const replaceSeriesDefinition = (nextSeries) => {
+    setSeriesDefinitions(current => current.map(series => series.id === nextSeries.id ? nextSeries : series));
+  };
+
+  const handleAddSeriesEvent = async (series, { name, eventCode }) => {
+    const normalizedName = String(name || '').trim();
+    const normalizedCode = normalizeEventCode(eventCode);
+    setCloudError('');
+    if (!normalizedName) {
+      setCloudError('請輸入系列場次名稱。');
+      return false;
+    }
+    if (!validateEventCode(normalizedCode)) {
+      setCloudError('賽事代碼需為 4–10 位英文字母或數字。');
+      return false;
+    }
+    if (seriesDefinitions.some(item => item.events.some(event => event.eventCode === normalizedCode)) || cloudTournaments.some(tournament => tournament.id === normalizedCode)) {
+      setCloudError('此賽事代碼已被其他場次或賽事使用。');
+      return false;
+    }
+
+    const nextSeries = {
+      ...series,
+      events: [...series.events, {
+        id: `event-${normalizedCode.toLowerCase()}`,
+        name: normalizedName,
+        eventCode: normalizedCode,
+        judgeCount: DEFAULT_JUDGE_COUNT,
+        doubleElimination: DEFAULT_DOUBLE_ELIMINATION
+      }]
+    };
+    setSeriesMutationStatus('adding');
+    try {
+      await saveCloudSeries(nextSeries);
+      replaceSeriesDefinition(nextSeries);
+      return true;
+    } catch (error) {
+      setCloudError(error.message);
+      return false;
+    } finally {
+      setSeriesMutationStatus('');
+    }
+  };
+
+  const handleClearSeriesEvent = async (series, eventDefinition, tournament) => {
+    setCloudError('');
+    setSeriesMutationStatus(`clear:${eventDefinition.eventCode}`);
+    try {
+      const emptyTournament = createEmptyTournament({
+        judgeCount: eventDefinition.judgeCount,
+        doubleElimination: eventDefinition.doubleElimination
+      });
+      await saveCloudTournament(eventDefinition.eventCode, emptyTournament, {
+        action: 'TOURNAMENT_CLEARED',
+        details: {
+          seriesId: series.id,
+          name: eventDefinition.name,
+          previousPhase: tournament.phase,
+          removedPlayers: tournament.players?.length || 0,
+          removedRounds: tournament.rounds?.length || 0
+        }
+      });
+      setConfirmAction(null);
+    } catch (error) {
+      setCloudError(error.message);
+      setConfirmAction(null);
+    } finally {
+      setSeriesMutationStatus('');
+    }
+  };
+
+  const handleDeleteSeriesEvent = async (series, eventDefinition, tournament) => {
+    setCloudError('');
+    setSeriesMutationStatus(`delete:${eventDefinition.eventCode}`);
+    try {
+      if (tournament) await deleteCloudTournament(eventDefinition.eventCode);
+      const nextSeries = {
+        ...series,
+        events: series.events.filter(event => event.id !== eventDefinition.id)
+      };
+      await saveCloudSeries(nextSeries);
+      replaceSeriesDefinition(nextSeries);
+      setConfirmAction(null);
+    } catch (error) {
+      setCloudError(error.message);
+      setConfirmAction(null);
+    } finally {
+      setSeriesMutationStatus('');
     }
   };
 
@@ -892,9 +1000,13 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                       tournaments={cloudTournaments}
                       standings={selectedSeriesStandings}
                       creatingEventCode={creatingSeriesEventCode}
+                      mutationStatus={seriesMutationStatus}
                       onBack={() => setSelectedSeriesId('')}
                       onOpenEvent={(series, eventDefinition, tournament) => handleSelectCloudTournament(tournament.id, series.id)}
                       onCreateEvent={handleCreateSeriesTournament}
+                      onAddEvent={handleAddSeriesEvent}
+                      onClearEvent={(series, eventDefinition, tournament) => setConfirmAction({ type: 'CLEAR_SERIES_EVENT', series, eventDefinition, tournament })}
+                      onDeleteEvent={(series, eventDefinition, tournament) => setConfirmAction({ type: 'DELETE_SERIES_EVENT', series, eventDefinition, tournament })}
                     />
                   ) : (
                     <>
@@ -962,13 +1074,13 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                     <h3 className="font-black text-lg mb-2">系列賽</h3>
                     <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>進入系列賽後可分別管理各場報名與賽程，並查看跨場積分。</p>
                     <div className="grid sm:grid-cols-2 gap-3">
-                      {SERIES.map(series => (
+                      {seriesDefinitions.map(series => (
                         <button key={series.id} type="button" onClick={() => { setCloudError(''); setSelectedSeriesId(series.id); }}
                           className="p-5 rounded-xl border text-left hover:bg-white/5 flex items-center justify-between gap-4"
                           style={{ borderColor: COLORS.inkOrange }}>
                           <div>
                             <div className="text-xl font-black text-white">{series.name}</div>
-                            <div className="text-xs font-bold mt-2" style={{ color: COLORS.textMuted }}>{series.events.map(event => event.name).join('・')}・3 位評審・兩敗淘汰</div>
+                            <div className="text-xs font-bold mt-2" style={{ color: COLORS.textMuted }}>{series.events.length} 場・3 位評審・兩敗淘汰</div>
                           </div>
                           <span className="text-sm font-black whitespace-nowrap" style={{ color: COLORS.inkOrange }}>進入管理 →</span>
                         </button>
@@ -1045,24 +1157,27 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
             <div className="flex items-center gap-4 mb-6">
               <AlertTriangle size={32} style={{ color: COLORS.inkOrange }} />
               <h3 className="text-2xl font-black tracking-widest text-white">
-                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : confirmAction.type === 'WITHDRAW' ? `確定要讓 ${confirmAction.playerName} 棄賽嗎？` : ''}
+                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : confirmAction.type === 'WITHDRAW' ? `確定要讓 ${confirmAction.playerName} 棄賽嗎？` : confirmAction.type === 'CLEAR_SERIES_EVENT' ? `清除 ${confirmAction.eventDefinition.name}？` : confirmAction.type === 'DELETE_SERIES_EVENT' ? `刪除 ${confirmAction.eventDefinition.name}？` : ''}
               </h3>
             </div>
             <p className="mb-8 font-bold leading-relaxed text-base" style={{ color: COLORS.textMuted }}>
-              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? `棄賽前已完成的成績會保留；本輪未完成的對戰將直接判為 0:${judgeCount} 敗，且退出後續輪次。` : ''}
+              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? `棄賽前已完成的成績會保留；本輪未完成的對戰將直接判為 0:${judgeCount} 敗，且退出後續輪次。` : confirmAction.type === 'CLEAR_SERIES_EVENT' ? '場次名稱、賽事代碼、賽制標籤與操作紀錄會保留；選手、輪次、比分與結果將全部重置並回到報名狀態。' : confirmAction.type === 'DELETE_SERIES_EVENT' ? `場次卡、雲端賽事與操作紀錄都會永久刪除。賽事代碼 #${confirmAction.eventDefinition.eventCode} 之後可重新使用。` : ''}
             </p>
 
             <div className="flex justify-end gap-4">
               <button onClick={() => setConfirmAction(null)} className="px-6 py-2.5 rounded-lg font-bold" style={{ backgroundColor: '#1e293b', color: COLORS.textMain }}>取消</button>
               <button
-                onClick={() => {
+                disabled={Boolean(seriesMutationStatus)}
+                onClick={async () => {
                   if (confirmAction.type === 'EDIT_HISTORY') applyHistoricalEdit(confirmAction.roundIndex, confirmAction.matchId, confirmAction.p1Score, confirmAction.p2Score);
                   else if (confirmAction.type === 'CLEAR_PLAYERS') { setPlayers([]); setRosterError(''); setConfirmAction(null); }
                   else if (confirmAction.type === 'WITHDRAW') confirmWithdraw(confirmAction.playerId);
+                  else if (confirmAction.type === 'CLEAR_SERIES_EVENT') await handleClearSeriesEvent(confirmAction.series, confirmAction.eventDefinition, confirmAction.tournament);
+                  else if (confirmAction.type === 'DELETE_SERIES_EVENT') await handleDeleteSeriesEvent(confirmAction.series, confirmAction.eventDefinition, confirmAction.tournament);
                 }}
-                className="px-6 py-2.5 rounded-lg font-black tracking-widest brush-border"
-                style={{ backgroundColor: (confirmAction.type === 'CLEAR_PLAYERS' || confirmAction.type === 'WITHDRAW') ? '#ef4444' : COLORS.inkOrange, color: COLORS.bg }}>
-                確定執行
+                className="px-6 py-2.5 rounded-lg font-black tracking-widest brush-border disabled:opacity-40"
+                style={{ backgroundColor: (confirmAction.type === 'CLEAR_PLAYERS' || confirmAction.type === 'WITHDRAW' || confirmAction.type === 'DELETE_SERIES_EVENT') ? '#ef4444' : COLORS.inkOrange, color: COLORS.bg }}>
+                {seriesMutationStatus ? '處理中…' : '確定執行'}
               </button>
             </div>
           </div>

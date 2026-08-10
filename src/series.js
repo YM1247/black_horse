@@ -3,7 +3,7 @@ import { rankPlayers } from './tournament';
 export const SIMULATION_SERIES = Object.freeze({
   id: 'simulation-series',
   name: '模擬賽',
-  description: '三場獨立報名的系列積分賽',
+  description: '各場獨立報名的系列積分賽',
   events: Object.freeze([
     Object.freeze({ id: 'aug-19', name: '8/19', eventCode: 'MOCK819', judgeCount: 3, doubleElimination: true }),
     Object.freeze({ id: 'aug-21', name: '8/21', eventCode: 'MOCK821', judgeCount: 3, doubleElimination: true }),
@@ -14,6 +14,29 @@ export const SIMULATION_SERIES = Object.freeze({
 export const SERIES = Object.freeze([SIMULATION_SERIES]);
 
 const normalizePlayerName = (name) => String(name || '').trim();
+
+export const normalizeSeriesDefinition = (data, fallback) => {
+  if (!data) return { ...fallback, events: fallback.events.map(event => ({ ...event })) };
+  const events = Array.isArray(data.events) ? data.events : [];
+  return {
+    id: data.id || fallback.id,
+    name: String(data.name || fallback.name).trim(),
+    description: String(data.description || fallback.description).trim(),
+    events: events
+      .map(event => {
+        const eventCode = String(event?.eventCode || '').trim().toUpperCase();
+        if (!eventCode || !String(event?.name || '').trim()) return null;
+        return {
+          id: String(event.id || `event-${eventCode.toLowerCase()}`),
+          name: String(event.name).trim(),
+          eventCode,
+          judgeCount: [3, 5].includes(Number(event.judgeCount)) ? Number(event.judgeCount) : 3,
+          doubleElimination: event.doubleElimination !== false
+        };
+      })
+      .filter(Boolean)
+  };
+};
 
 export const buildSeriesStandings = (series, tournaments = []) => {
   if (!series?.events?.length) return [];

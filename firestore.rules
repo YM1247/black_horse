@@ -46,6 +46,10 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /series/{seriesId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
     match /tournaments/{eventCode} {
       allow get: if isAdmin() || resource.data.isPublic == true;
       allow list: if isAdmin();
@@ -55,7 +59,8 @@ service cloud.firestore {
         allow read: if isAdmin();
         allow create: if isAdmin()
           && request.resource.data.createdBy == request.auth.uid;
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if isAdmin();
       }
     }
   }

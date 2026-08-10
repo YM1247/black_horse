@@ -1,4 +1,4 @@
-import { buildSeriesStandings, SIMULATION_SERIES } from './series';
+import { buildSeriesStandings, normalizeSeriesDefinition, SIMULATION_SERIES } from './series';
 
 const player = (name, wins, votes, isWithdrawn = false) => ({
   id: `${name}-${wins}-${votes}`,
@@ -16,6 +16,28 @@ test('simulation series contains three separate three-judge double-elimination e
   expect(SIMULATION_SERIES.events.every(event => event.judgeCount === 3)).toBe(true);
   expect(SIMULATION_SERIES.events.every(event => event.doubleElimination)).toBe(true);
   expect(new Set(SIMULATION_SERIES.events.map(event => event.eventCode)).size).toBe(3);
+});
+
+test('cloud series can add or remove event definitions without restoring defaults', () => {
+  const series = normalizeSeriesDefinition({
+    id: SIMULATION_SERIES.id,
+    name: SIMULATION_SERIES.name,
+    events: [{ id: 'aug-28', name: '8/28', eventCode: 'mock828' }]
+  }, SIMULATION_SERIES);
+
+  expect(series.events).toEqual([{
+    id: 'aug-28',
+    name: '8/28',
+    eventCode: 'MOCK828',
+    judgeCount: 3,
+    doubleElimination: true
+  }]);
+});
+
+test('missing cloud series keeps a mutable copy of the initial events', () => {
+  const series = normalizeSeriesDefinition(null, SIMULATION_SERIES);
+  expect(series.events).toEqual(SIMULATION_SERIES.events);
+  expect(series.events).not.toBe(SIMULATION_SERIES.events);
 });
 
 test('series standings combine finished events by exact player name', () => {

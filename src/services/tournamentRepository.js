@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDocFromServer,
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
@@ -54,6 +55,18 @@ export const decodeTournamentFromFirestore = (tournament = {}) => {
 
   return { ...tournament, rounds };
 };
+
+export const encodeSeriesForFirestore = (series = {}) => cleanData({
+  name: String(series.name || '').trim(),
+  description: String(series.description || '').trim(),
+  events: (Array.isArray(series.events) ? series.events : []).map(event => ({
+    id: String(event.id || '').trim(),
+    name: String(event.name || '').trim(),
+    eventCode: normalizeEventCode(event.eventCode),
+    judgeCount: Number(event.judgeCount) === 5 ? 5 : 3,
+    doubleElimination: event.doubleElimination !== false
+  }))
+});
 
 export const normalizeEventCode = (value = '') => value.trim().toUpperCase();
 
@@ -230,6 +243,40 @@ export const subscribeAdminTournaments = (onTournaments, onError) => {
   return onSnapshot(tournamentsQuery, { includeMetadataChanges: true }, snapshot => {
     onTournaments(snapshot.docs.map(item => decodeTournamentFromFirestore({ id: item.id, ...item.data() })));
   }, onError);
+};
+
+export const subscribeCloudSeries = (seriesId, onSeries, onError) => {
+  const { db } = getFirebaseServices();
+  return onSnapshot(doc(db, 'series', seriesId), snapshot => {
+    onSeries(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null);
+  }, onError);
+};
+
+export const saveCloudSeries = async (series) => {
+  const user = requireUser();
+  const { db } = getFirebaseServices();
+  await setDoc(doc(db, 'series', series.id), {
+    ...encodeSeriesForFirestore(series),
+    updatedAt: serverTimestamp(),
+    updatedBy: user.uid
+  });
+};
+
+export const deleteCloudTournament = async (eventCode) => {
+  const code = normalizeEventCode(eventCode);
+  if (!validateEventCode(code)) throw new Error('賽事代碼格式錯誤。');
+  requireUser();
+  const { db } = getFirebaseServices();
+  const tournamentRef = doc(db, 'tournaments', code);
+  const auditSnapshot = await getDocs(collection(tournamentRef, 'auditLogs'));
+  const auditDocs = auditSnapshot.docs;
+
+  for (let index = 0; index < auditDocs.length; index += 400) {
+    const batch = writeBatch(db);
+    auditDocs.slice(index, index + 400).forEach(audit => batch.delete(audit.ref));
+    await batch.commit();
+  }
+  await deleteDoc(tournamentRef);
 };
 
 export const subscribeTournamentAuditLogs = (eventCode, onLogs, onError, maximum = 50) => {

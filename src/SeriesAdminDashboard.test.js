@@ -1,10 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
 import { SIMULATION_SERIES } from './series';
 
-test('series dashboard shows separate event controls and cumulative standings', () => {
+test('series dashboard shows separate event controls and cumulative standings', async () => {
   const onOpenEvent = jest.fn();
   const onCreateEvent = jest.fn();
+  const onAddEvent = jest.fn().mockResolvedValue(true);
+  const onClearEvent = jest.fn();
+  const onDeleteEvent = jest.fn();
   const tournaments = [{
     id: 'MOCK819',
     phase: 'finished',
@@ -26,6 +29,9 @@ test('series dashboard shows separate event controls and cumulative standings', 
     onBack={jest.fn()}
     onOpenEvent={onOpenEvent}
     onCreateEvent={onCreateEvent}
+    onAddEvent={onAddEvent}
+    onClearEvent={onClearEvent}
+    onDeleteEvent={onDeleteEvent}
   />);
 
   expect(screen.getByRole('heading', { name: '模擬賽' })).toBeInTheDocument();
@@ -39,4 +45,14 @@ test('series dashboard shows separate event controls and cumulative standings', 
   expect(onOpenEvent).toHaveBeenCalledWith(SIMULATION_SERIES, SIMULATION_SERIES.events[0], tournaments[0]);
   fireEvent.click(screen.getByRole('button', { name: '建立 8/21' }));
   expect(onCreateEvent).toHaveBeenCalledWith(SIMULATION_SERIES, SIMULATION_SERIES.events[1]);
+
+  fireEvent.click(screen.getByRole('button', { name: '清除內容' }));
+  expect(onClearEvent).toHaveBeenCalledWith(SIMULATION_SERIES, SIMULATION_SERIES.events[0], tournaments[0]);
+  fireEvent.click(screen.getAllByRole('button', { name: '刪除場次' })[0]);
+  expect(onDeleteEvent).toHaveBeenCalledWith(SIMULATION_SERIES, SIMULATION_SERIES.events[0], tournaments[0]);
+
+  fireEvent.change(screen.getByLabelText('新場次名稱'), { target: { value: '8/28' } });
+  fireEvent.change(screen.getByLabelText('新場次代碼'), { target: { value: 'mock828' } });
+  fireEvent.click(screen.getByRole('button', { name: '新增場次' }));
+  await waitFor(() => expect(onAddEvent).toHaveBeenCalledWith(SIMULATION_SERIES, { name: '8/28', eventCode: 'MOCK828' }));
 });

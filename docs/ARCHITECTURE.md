@@ -24,6 +24,7 @@ GitHub Pages
                      └── Cloud Firestore
                           ├── tournaments/{eventCode}
                           ├── tournaments/{eventCode}/auditLogs/{logId}
+                          ├── series/{seriesId}
                           ├── settings/admin
                           └── adminSessions/{uid}
 ```
@@ -34,7 +35,8 @@ GitHub Pages
 - 雲端唯一資料源：後台通過 token 後必須先建立或選擇 Firestore 賽事，才能操作管理畫面。建立賽事時直接保存空白報名狀態、評審人數與淘汰規則；不再讀取或建立瀏覽器本機存檔。
 - 賽程序列化：領域層維持 `Match[][]`，寫入 Firestore 前將 `rounds` 轉為 `{ "1": Match[], "2": Match[] }`，讀取時再還原，避免 Firestore 禁止的直接巢狀陣列。
 - 前台：網站根目錄為純查詢入口；`?event={code}` 直接查看指定賽事的輪次、比分、戰績與狀態。後台在瀏覽器內產生對應 QR Code，不使用第三方 QR 服務。
-- 稽核：比分與重要狀態變更另外建立 audit log；Security Rules 禁止更新或刪除既有紀錄，後台即時顯示目前賽事最近 50 筆操作。
+- 稽核：比分與重要狀態變更另外建立 audit log；Security Rules 禁止更新既有紀錄，只有完整刪除整場賽事時允許管理員一併刪除紀錄。後台即時顯示目前賽事最近 50 筆操作。
+- 系列設定：`series/{seriesId}` 保存可編輯的場次名稱、代碼與賽制標籤。初次尚無文件時使用程式內建場次；第一次新增或刪除後，完整設定會寫入雲端。
 
 為維持 Spark 免費方案，Phase 2 不依賴 Cloud Functions。重要原則是把配對、計分、排名等規則抽成可測試的領域層，前後台不可各自複製一份規則。賽事資料先保存為單一 Firestore document，以便離線與即時同步整體狀態；若未來規模接近 Firestore 單一文件限制，再將輪次與對戰拆成子集合。
 
@@ -52,6 +54,7 @@ GitHub Pages
 - `settings/admin` 不允許任何前端讀寫，需由 Firebase Console 建立。
 - 管理 session 只能由本人建立或刪除，不能更新；token 變更後舊 session 立即無效。
 - audit log 僅允許管理員新增，所有前端使用者都不可修改或刪除。
+- 系列設定只允許管理員讀寫。管理員執行「刪除場次」時可刪除該賽事的 audit logs；一般操作仍不可更新既有 audit log。
 - 切換賽事、返回列表與登出會先送出最後一次雲端狀態；一般操作仍以短暫 debounce 合併寫入。
 - 編輯器保存目前待同步狀態的序列值；在本機變更尚未被 Firestore 確認時，較舊的 snapshot 不得覆蓋畫面，只有初始讀取、無本機變更或內容吻合的確認 snapshot 才能套用。
 - Firebase Web 設定本身不是秘密；管理 token、Firebase CLI 登入資訊與本機 `.env` 不可提交。
@@ -77,18 +80,18 @@ Firebase Spark 目前提供 Firestore 每日免費讀寫額度，且一般 Email
 - 單站結果轉換為系列積分的規則與可稽核明細。
 - 系列排行榜公開查詢。
 
-單場名次積分已依 [POINTS_RULES.md](POINTS_RULES.md) 實作為可測試的純函式，完賽時由既有 `displayRank` 即時計算。第一個固定系列「模擬賽」也已接上跨場彙總；它由程式內的系列設定關聯三份既有 `tournaments/{eventCode}` 文件，不新增另一份可過期的排名資料。正式系列所需的可編輯系列資料、跨系列選手識別與公開排行榜仍屬後續範圍。
+單場名次積分已依 [POINTS_RULES.md](POINTS_RULES.md) 實作為可測試的純函式，完賽時由既有 `displayRank` 即時計算。「模擬賽」已接上可編輯的雲端場次設定與跨場彙總，各場由賽事代碼關聯既有 `tournaments/{eventCode}` 文件，不新增另一份可過期的排名資料。跨系列選手識別與公開排行榜仍屬後續範圍。
 
 ### 模擬賽系列資料流
 
 ```text
-series.js 固定設定
+series.js 初始設定 / series/{seriesId} 雲端設定
   ├── MOCK819（8/19）─┐
   ├── MOCK821（8/21）─┼── 完賽名次積分 ── 依精確選手名稱彙總 ── 後台系列排名
   └── MOCK826（8/26）─┘
 ```
 
-三場各自擁有報名名單及完整賽事狀態，均固定為三位評審、兩敗淘汰。新建文件會包含 `seriesId` 與 `seriesEventId`；固定代碼仍作為相容既有文件的主關聯鍵。詳細行為見 [SIMULATION_SERIES.md](SIMULATION_SERIES.md)。
+每場各自擁有報名名單及完整賽事狀態，均固定為三位評審、兩敗淘汰。初始代碼為上圖三場，之後可由後台新增或刪除；新建文件會包含 `seriesId` 與 `seriesEventId`，賽事代碼作為場次與賽事文件的關聯鍵。詳細行為見 [SIMULATION_SERIES.md](SIMULATION_SERIES.md)。
 
 ## 建議的實作順序
 

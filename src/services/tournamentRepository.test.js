@@ -1,6 +1,7 @@
 import {
   decodeTournamentFromFirestore,
   DEFAULT_CLOUD_TOURNAMENT_VISIBILITY,
+  encodeSeriesForFirestore,
   encodeTournamentForFirestore,
   generateEventCode,
   getAdminLoginErrorMessage,
@@ -22,6 +23,19 @@ test('generated event codes avoid visually ambiguous characters', () => {
 
 test('new cloud tournaments are public by default', () => {
   expect(DEFAULT_CLOUD_TOURNAMENT_VISIBILITY).toBe(true);
+});
+
+test('series definitions keep editable event labels and fixed rules', () => {
+  expect(encodeSeriesForFirestore({
+    id: 'simulation-series',
+    name: ' 模擬賽 ',
+    description: ' 測試系列 ',
+    events: [{ id: 'aug-28', name: ' 8/28 ', eventCode: ' mock828 ', judgeCount: 3, doubleElimination: true }]
+  })).toEqual({
+    name: '模擬賽',
+    description: '測試系列',
+    events: [{ id: 'aug-28', name: '8/28', eventCode: 'MOCK828', judgeCount: 3, doubleElimination: true }]
+  });
 });
 
 test('rounds use a Firestore-safe map and restore the domain array shape', () => {

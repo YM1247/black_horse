@@ -3,6 +3,7 @@ const AUDIT_ACTION_LABELS = {
   TOURNAMENT_STARTED: '開始賽事',
   TOURNAMENT_FINISHED: '結算賽事',
   TOURNAMENT_RESET: '重設賽事',
+  TOURNAMENT_CLEARED: '清除賽事內容',
   TOURNAMENT_CLOSED: '離開賽事管理',
   TOURNAMENT_STATE_UPDATED: '更新賽事狀態',
   ADMIN_SIGNED_OUT: '管理員登出',
@@ -48,6 +49,8 @@ export const describeAuditLog = (audit = {}) => {
       return `完成第 ${details.round || '—'} 輪`;
     case 'TOURNAMENT_STARTED':
       return `${Number(details.playerCount) || 0} 位選手・${details.judgeCount || '—'} 位評審・${details.doubleElimination ? '兩敗淘汰' : '不淘汰'}`;
+    case 'TOURNAMENT_CLEARED':
+      return `${details.name || '未命名場次'}・清除 ${Number(details.removedPlayers) || 0} 位選手與 ${Number(details.removedRounds) || 0} 輪賽程`;
     case 'PUBLIC_VISIBILITY_CHANGED':
       return details.after ? '設為公開' : '設為不公開';
     case 'TOURNAMENT_CLOSED':
