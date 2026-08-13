@@ -83,6 +83,33 @@ export const encodeSeriesForFirestore = (series = {}) => cleanData({
   ...(typeof series.isPublic === 'boolean' ? { isPublic: series.isPublic } : {})
 });
 
+export const buildPublicSeriesProjection = (series = {}, tournaments = []) => {
+  const tournamentsByCode = new Map(tournaments.map(tournament => [
+    normalizeEventCode(tournament.id || tournament.eventCode || ''),
+    tournament
+  ]));
+  const publicCode = normalizeEventCode(series.publicCode || '');
+
+  return cleanData({
+    publicCode,
+    name: String(series.name || '').trim(),
+    description: String(series.description || '').trim(),
+    isPublic: series.isPublic !== false,
+    events: (Array.isArray(series.events) ? series.events : []).flatMap(event => {
+      const eventCode = normalizeEventCode(event.eventCode || '');
+      const tournament = tournamentsByCode.get(eventCode);
+      if (!tournament || tournament.isPublic !== true) return [];
+      return [{
+        id: String(event.id || `event-${eventCode.toLowerCase()}`),
+        name: String(event.name || tournament.name || eventCode).trim(),
+        eventCode,
+        judgeCount: Number(event.judgeCount) === 5 ? 5 : 3,
+        doubleElimination: event.doubleElimination !== false
+      }];
+    })
+  });
+};
+
 export const normalizeEventCode = (value = '') => value.trim().toUpperCase();
 
 export const validateEventCode = (value) => EVENT_CODE_PATTERN.test(normalizeEventCode(value));
@@ -390,6 +417,38 @@ export const subscribeCloudSeries = (seriesId, onSeries, onError) => {
   return onSnapshot(doc(db, 'series', seriesId), snapshot => {
     onSeries(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null);
   }, onError);
+};
+
+export const subscribePublicSeries = (publicCode, onSeries, onError) => {
+  const code = normalizeEventCode(publicCode);
+  if (!validateEventCode(code)) throw new Error('系列代碼需為 4–10 位英文字母或數字。');
+  const { db } = getFirebaseServices();
+  return onSnapshot(doc(db, 'publicSeries', code), { includeMetadataChanges: true }, snapshot => {
+    onSeries(snapshot.exists() ? {
+      id: snapshot.id,
+      ...snapshot.data(),
+      sync: {
+        fromCache: snapshot.metadata.fromCache,
+        hasPendingWrites: snapshot.metadata.hasPendingWrites
+      }
+    } : null);
+  }, onError);
+};
+
+export const syncPublicSeriesProjection = async (series, tournaments = []) => {
+  const user = requireUser();
+  const projection = buildPublicSeriesProjection(series, tournaments);
+  if (!validateEventCode(projection.publicCode)) throw new Error('系列公開代碼需為 4–10 位英文字母或數字。');
+  const { db } = getFirebaseServices();
+  await setDoc(doc(db, 'publicSeries', projection.publicCode), {
+    ...projection,
+    sourceSeriesId: String(series.id || ''),
+    sourceRevision: Number(series.revision) || 0,
+    updatedAt: serverTimestamp(),
+    clientUpdatedAt: new Date().toISOString(),
+    updatedBy: user.uid
+  });
+  return projection;
 };
 
 export const saveCloudSeries = async (series, expectedRevision = null) => {

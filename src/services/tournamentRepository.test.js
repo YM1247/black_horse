@@ -1,4 +1,5 @@
 import {
+  buildPublicSeriesProjection,
   decodeTournamentFromFirestore,
   DEFAULT_CLOUD_TOURNAMENT_VISIBILITY,
   encodeSeriesForFirestore,
@@ -53,6 +54,33 @@ test('series encoding keeps public settings without persisting revision twice', 
     isPublic: true,
     events: []
   });
+});
+
+test('public series projection contains only existing public events', () => {
+  const projection = buildPublicSeriesProjection({
+    id: 'simulation-series',
+    name: '模擬賽',
+    description: '公開排名',
+    publicCode: 'sim2026',
+    isPublic: true,
+    events: [
+      { id: 'one', name: '8/19', eventCode: 'MOCK819', judgeCount: 3, doubleElimination: true },
+      { id: 'two', name: '8/21', eventCode: 'MOCK821', judgeCount: 3, doubleElimination: true },
+      { id: 'three', name: '8/26', eventCode: 'MOCK826', judgeCount: 3, doubleElimination: true }
+    ]
+  }, [
+    { id: 'MOCK819', name: '8/19', isPublic: true, players: [{ name: '不應洩漏' }] },
+    { id: 'MOCK821', name: '8/21', isPublic: false }
+  ]);
+
+  expect(projection).toEqual({
+    publicCode: 'SIM2026',
+    name: '模擬賽',
+    description: '公開排名',
+    isPublic: true,
+    events: [{ id: 'one', name: '8/19', eventCode: 'MOCK819', judgeCount: 3, doubleElimination: true }]
+  });
+  expect(JSON.stringify(projection)).not.toContain('不應洩漏');
 });
 
 test('rounds use a Firestore-safe map and restore the domain array shape', () => {

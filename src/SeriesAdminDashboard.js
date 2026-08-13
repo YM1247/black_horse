@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { generateEventCode, normalizeEventCode } from './services/tournamentRepository';
 
 const PHASE_LABELS = {
@@ -18,13 +19,41 @@ export default function SeriesAdminDashboard({
   onCreateEvent,
   onAddEvent,
   onClearEvent,
-  onDeleteEvent
+  onDeleteEvent,
+  onToggleVisibility
 }) {
   const [newEventName, setNewEventName] = useState('');
   const [newEventCode, setNewEventCode] = useState(() => generateEventCode());
+  const [publicQrCode, setPublicQrCode] = useState('');
+  const [copyStatus, setCopyStatus] = useState('');
   const tournamentByCode = new Map(tournaments.map(tournament => [tournament.id, tournament]));
   const finishedCount = series.events.filter(event => tournamentByCode.get(event.eventCode)?.phase === 'finished').length;
   const isBusy = Boolean(creatingEventCode || mutationStatus);
+  const publicUrl = series.publicCode
+    ? `${window.location.origin}${window.location.pathname}?series=${series.publicCode}`
+    : '';
+
+  useEffect(() => {
+    if (!publicUrl) {
+      setPublicQrCode('');
+      return undefined;
+    }
+    let active = true;
+    Promise.resolve(QRCode.toDataURL(publicUrl, { width: 240, margin: 2, errorCorrectionLevel: 'M' }))
+      .then(dataUrl => { if (active) setPublicQrCode(dataUrl); })
+      .catch(() => { if (active) setPublicQrCode(''); });
+    return () => { active = false; };
+  }, [publicUrl]);
+
+  const handleCopyPublicUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setCopyStatus('已複製');
+    } catch (error) {
+      setCopyStatus('請手動複製網址');
+    }
+    window.setTimeout(() => setCopyStatus(''), 2500);
+  };
 
   const handleAddEvent = async (event) => {
     event.preventDefault();
@@ -44,6 +73,37 @@ export default function SeriesAdminDashboard({
             <p className="mt-2 text-sm font-bold text-slate-400">{series.description}・已完成 {finishedCount}/{series.events.length} 場</p>
           </div>
           <div className="text-xs font-black text-[#b6d2d4]">同名選手跨場自動合併積分</div>
+        </div>
+      </section>
+
+      <section className="p-5 rounded-xl border-2 bg-[#131e24] border-[#b6d2d4]">
+        <div className="grid md:grid-cols-[1fr_auto] gap-5 items-center">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h4 className="font-black text-lg text-[#b6d2d4]">公開系列賽頁</h4>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-black ${series.isPublic ? 'bg-green-950/60 text-green-300' : 'bg-slate-800 text-slate-400'}`}>
+                {series.isPublic ? '已公開' : '未公開'}
+              </span>
+            </div>
+            <a href={publicUrl} target="_blank" rel="noreferrer" className="block mt-3 text-sm font-bold text-[#b6d2d4] break-all hover:underline">{publicUrl}</a>
+            <p className="mt-2 text-xs font-bold text-slate-500">公開頁只列出目前存在且已公開的場次，未公開場次不會計入觀眾看到的積分。</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" disabled={isBusy || !publicUrl} onClick={handleCopyPublicUrl}
+                className="px-4 py-2 rounded-lg font-black border border-[#b6d2d4] text-[#b6d2d4] disabled:opacity-40">
+                {copyStatus || '複製公開連結'}
+              </button>
+              <button type="button" disabled={isBusy} onClick={() => onToggleVisibility(series)}
+                className={`px-4 py-2 rounded-lg font-black border disabled:opacity-40 ${series.isPublic ? 'border-red-500/50 text-red-300' : 'border-green-500/50 text-green-300'}`}>
+                {mutationStatus === 'visibility' ? '更新中…' : series.isPublic ? '關閉系列公開' : '開啟系列公開'}
+              </button>
+            </div>
+          </div>
+          {publicQrCode && (
+            <a href={publicQrCode} download={`${series.publicCode}-series-qrcode.png`} className="justify-self-center text-center">
+              <img src={publicQrCode} alt={`${series.name}公開網址 QR Code`} className="w-36 h-36 rounded-lg bg-white p-1" />
+              <span className="block text-xs font-black mt-2 text-[#f1c6a6]">下載 QR Code</span>
+            </a>
+          )}
         </div>
       </section>
 

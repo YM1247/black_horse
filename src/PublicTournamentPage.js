@@ -3,6 +3,7 @@ import { isFirebaseConfigured } from './firebase';
 import { normalizeEventCode, subscribeTournament, validateEventCode } from './services/tournamentRepository';
 import { rankPlayers } from './tournament';
 import PublicTournamentBracket from './PublicTournamentBracket';
+import { SERIES } from './series';
 
 const PHASE_LABELS = {
   registration: '報名中',
@@ -63,6 +64,9 @@ export default function PublicTournamentPage({ initialCode = '' }) {
   const rounds = Array.isArray(tournament?.rounds) ? tournament.rounds : [];
   const players = Array.isArray(tournament?.players) ? tournament.players : [];
   const rankedPlayers = tournament ? rankPlayers(players, rounds) : [];
+  const parentSeries = tournament?.seriesId
+    ? SERIES.find(series => series.id === tournament.seriesId)
+    : null;
 
   return (
     <main className="min-h-screen bg-[#0d0f12] text-slate-100 p-4 md:p-8">
@@ -70,6 +74,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
         <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 border-b border-slate-800 pb-8">
           <div>
             {eventCode && <a href={window.location.pathname} className="text-sm font-bold text-slate-500 hover:text-slate-200">← 查詢其他賽事</a>}
+            {parentSeries?.publicCode && <a href={`${window.location.pathname}?series=${parentSeries.publicCode}`} className="ml-4 text-sm font-bold text-[#b6d2d4] hover:text-white">查看整個系列賽</a>}
             <h1 className="text-4xl font-black mt-3">{tournament?.name || '觀眾即時賽況'}</h1>
             {tournament && <p className="mt-2 text-slate-400 font-bold">代碼 {eventCode}・{PHASE_LABELS[tournament.phase] || tournament.phase}・{tournament.judgeCount} 位評審・{tournament.doubleElimination ? '兩敗淘汰' : '不淘汰'}</p>}
           </div>

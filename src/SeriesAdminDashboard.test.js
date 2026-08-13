@@ -2,12 +2,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
 import { SIMULATION_SERIES } from './series';
 
+jest.mock('qrcode', () => ({
+  toDataURL: jest.fn().mockResolvedValue('data:image/png;base64,series')
+}));
+
 test('series dashboard shows separate event controls and cumulative standings', async () => {
   const onOpenEvent = jest.fn();
   const onCreateEvent = jest.fn();
   const onAddEvent = jest.fn().mockResolvedValue(true);
   const onClearEvent = jest.fn();
   const onDeleteEvent = jest.fn();
+  const onToggleVisibility = jest.fn();
   const tournaments = [{
     id: 'MOCK819',
     phase: 'finished',
@@ -32,6 +37,7 @@ test('series dashboard shows separate event controls and cumulative standings', 
     onAddEvent={onAddEvent}
     onClearEvent={onClearEvent}
     onDeleteEvent={onDeleteEvent}
+    onToggleVisibility={onToggleVisibility}
   />);
 
   expect(screen.getByRole('heading', { name: '模擬賽' })).toBeInTheDocument();
@@ -40,6 +46,10 @@ test('series dashboard shows separate event controls and cumulative standings', 
   expect(screen.getByRole('button', { name: '建立 8/26' })).toBeInTheDocument();
   expect(screen.getByText('Alice')).toBeInTheDocument();
   expect(screen.getAllByText('100')).toHaveLength(2);
+  expect(screen.getByRole('link', { name: 'http://localhost/?series=SIM2026' })).toHaveAttribute('href', 'http://localhost/?series=SIM2026');
+
+  fireEvent.click(screen.getByRole('button', { name: '關閉系列公開' }));
+  expect(onToggleVisibility).toHaveBeenCalledWith(SIMULATION_SERIES);
 
   fireEvent.click(screen.getByRole('button', { name: '管理 8/19' }));
   expect(onOpenEvent).toHaveBeenCalledWith(SIMULATION_SERIES, SIMULATION_SERIES.events[0], tournaments[0]);

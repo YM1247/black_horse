@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { Trophy, Users, Swords, UserPlus, Play, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, X, Clock, Home, Upload } from 'lucide-react';
 import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 import PublicTournamentPage from './PublicTournamentPage';
+import PublicSeriesPage from './PublicSeriesPage';
 import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit';
 import { isFirebaseConfigured } from './firebase';
 import { runWithCloudRetry, shouldApplyCloudSnapshot, summarizePendingOperation } from './cloudSync';
@@ -27,6 +28,7 @@ import {
   subscribeTournamentAuditLogs,
   subscribeTournamentVersions,
   subscribeTournament,
+  syncPublicSeriesProjection,
   validateEventCode
 } from './services/tournamentRepository';
 
@@ -252,6 +254,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const cloudSyncPromiseRef = useRef(null);
   const flushCloudSyncRef = useRef(null);
   const versionMigrationRef = useRef(false);
+  const projectionSyncSignaturesRef = useRef({});
   const transitionGuardRef = useRef(false);
   const closeCloudModalAfterLoadRef = useRef(false);
   currentCloudStateRef.current = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked, currentVersion });
@@ -334,6 +337,32 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     }, error => setCloudError(error.message)));
     return () => unsubscribers.forEach(unsubscribe => unsubscribe());
   }, [adminUser]);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured || !adminUser || !isOnline) return;
+    seriesDefinitions.forEach(series => {
+      const relatedTournaments = cloudTournaments.filter(tournament =>
+        series.events.some(event => event.eventCode === tournament.id)
+      );
+      const signature = JSON.stringify({
+        publicCode: series.publicCode,
+        isPublic: series.isPublic,
+        revision: series.revision,
+        events: series.events,
+        tournaments: relatedTournaments.map(tournament => ({
+          id: tournament.id,
+          name: tournament.name,
+          isPublic: tournament.isPublic
+        }))
+      });
+      if (projectionSyncSignaturesRef.current[series.id] === signature) return;
+      projectionSyncSignaturesRef.current[series.id] = signature;
+      syncPublicSeriesProjection(series, relatedTournaments).catch(error => {
+        delete projectionSyncSignaturesRef.current[series.id];
+        setCloudError(`公開系列資料同步失敗：${error.message}`);
+      });
+    });
+  }, [adminUser, cloudTournaments, isOnline, seriesDefinitions]);
 
   useEffect(() => {
     if (!isFirebaseConfigured || !adminUser || !activeCloudCode) {
@@ -796,6 +825,20 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     } catch (error) {
       setCloudError(error.message);
       setConfirmAction(null);
+    } finally {
+      setSeriesMutationStatus('');
+    }
+  };
+
+  const handleToggleSeriesVisibility = async (series) => {
+    setCloudError('');
+    setSeriesMutationStatus('visibility');
+    try {
+      const nextSeries = { ...series, isPublic: !series.isPublic };
+      const nextRevision = await saveCloudSeries(nextSeries, series.revision || 0);
+      replaceSeriesDefinition({ ...nextSeries, revision: nextRevision });
+    } catch (error) {
+      setCloudError(error.message);
     } finally {
       setSeriesMutationStatus('');
     }
@@ -1408,6 +1451,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                       onAddEvent={handleAddSeriesEvent}
                       onClearEvent={(series, eventDefinition, tournament) => setConfirmAction({ type: 'CLEAR_SERIES_EVENT', series, eventDefinition, tournament })}
                       onDeleteEvent={(series, eventDefinition, tournament) => setConfirmAction({ type: 'DELETE_SERIES_EVENT', series, eventDefinition, tournament })}
+                      onToggleVisibility={handleToggleSeriesVisibility}
                     />
                   ) : (
                     <>
@@ -2109,6 +2153,8 @@ function AdminPortal() {
 export default function App() {
   const params = new URLSearchParams(window.location.search);
   if (params.has('admin')) return <AdminPortal />;
+  const publicSeriesCode = params.get('series');
+  if (publicSeriesCode !== null) return <PublicSeriesPage initialCode={publicSeriesCode} />;
   const publicEventCode = params.get('event');
   return <PublicTournamentPage initialCode={publicEventCode || ''} />;
 }
