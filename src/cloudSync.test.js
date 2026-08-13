@@ -1,4 +1,10 @@
-import { isTransientCloudError, runWithCloudRetry, shouldApplyCloudSnapshot, shouldShowCloudSyncAlert } from './cloudSync';
+import {
+  canLeaveWithoutTournamentWrite,
+  isTransientCloudError,
+  runWithCloudRetry,
+  shouldApplyCloudSnapshot,
+  shouldShowCloudSyncAlert
+} from './cloudSync';
 import { vi } from 'vitest';
 
 test('initial and idle cloud snapshots can update the editor', () => {
@@ -63,4 +69,10 @@ test('the sync alert is reserved for offline, retrying, and failed states', () =
   expect(shouldShowCloudSyncAlert({ isOnline: true, status: 'offline' })).toBe(true);
   expect(shouldShowCloudSyncAlert({ isOnline: true, status: 'error' })).toBe(true);
   expect(shouldShowCloudSyncAlert({ isOnline: true, status: 'pending', retryMessage: 'retrying' })).toBe(true);
+});
+
+test('a committed finished result can return home without rewriting the locked tournament', () => {
+  expect(canLeaveWithoutTournamentWrite({ phase: 'finished', resultLocked: true })).toBe(true);
+  expect(canLeaveWithoutTournamentWrite({ phase: 'finished', resultLocked: false })).toBe(false);
+  expect(canLeaveWithoutTournamentWrite({ phase: 'playing', resultLocked: true })).toBe(false);
 });

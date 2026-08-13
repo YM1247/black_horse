@@ -4,6 +4,9 @@ export const shouldApplyCloudSnapshot = ({ cloudReady, pendingLocalState, snapsh
 export const shouldShowCloudSyncAlert = ({ isOnline, status, retryMessage = '' }) =>
   !isOnline || status === 'offline' || status === 'error' || Boolean(retryMessage);
 
+export const canLeaveWithoutTournamentWrite = ({ phase, resultLocked }) =>
+  phase === 'finished' && resultLocked === true;
+
 export const CLOUD_RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000];
 
 export const isTransientCloudError = (error = {}) => [

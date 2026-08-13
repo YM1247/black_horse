@@ -16,7 +16,7 @@ import PublicTournamentPage from './PublicTournamentPage';
 import PublicSeriesPage from './PublicSeriesPage';
 import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit';
 import { isFirebaseConfigured } from './firebase';
-import { runWithCloudRetry, shouldApplyCloudSnapshot, shouldShowCloudSyncAlert } from './cloudSync';
+import { canLeaveWithoutTournamentWrite, runWithCloudRetry, shouldApplyCloudSnapshot, shouldShowCloudSyncAlert } from './cloudSync';
 import FullScreenCloudManager from './FullScreenCloudManager';
 import { buildSeriesStandings, normalizeSeriesDefinition, SERIES } from './series';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
@@ -516,7 +516,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     }
   };
 
-  const persistCurrentCloudState = async (audit = null) => {
+  const persistCurrentCloudState = async () => {
     if (!adminUser || !activeCloudCode || !cloudReadyRef.current) return true;
     if (cloudSyncTimeoutRef.current) {
       window.clearTimeout(cloudSyncTimeoutRef.current);
@@ -526,7 +526,6 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCloudError('目前沒有網路連線，恢復連線並完成同步後才能離開賽事。');
       return false;
     }
-    if (audit) markCloudAudit(audit.action, audit.details || {});
     const firstFlush = await flushCloudSyncRef.current?.();
     if (!firstFlush) return false;
     const currentSerialized = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked, currentVersion });
@@ -537,11 +536,13 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   };
 
   const handleLeaveCloudTournament = async () => {
-    const persisted = await persistCurrentCloudState({
-      action: 'TOURNAMENT_CLOSED',
-      details: { phase, currentRoundNum }
-    });
+    const resultAlreadyCommitted = canLeaveWithoutTournamentWrite({ phase, resultLocked });
+    const persisted = resultAlreadyCommitted ? true : await persistCurrentCloudState();
     if (!persisted) return;
+    // 完賽版本已由 saveTournamentVersion 原子儲存；返回首頁是純導航，
+    // 不得再將 TOURNAMENT_CLOSED 當成賽事變更寫回已鎖定文件。
+    pendingAuditRef.current = [];
+    setPendingOperationCount(0);
     cloudReadyRef.current = false;
     pendingCloudStateRef.current = null;
     lastCloudStateRef.current = null;
@@ -572,12 +573,12 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   };
 
   const handleCloudSignOut = async () => {
-    if (activeCloudCode && !await persistCurrentCloudState({
-      action: 'ADMIN_SIGNED_OUT',
-      details: { phase, currentRoundNum }
-    })) return;
+    const resultAlreadyCommitted = canLeaveWithoutTournamentWrite({ phase, resultLocked });
+    if (activeCloudCode && !resultAlreadyCommitted && !await persistCurrentCloudState()) return;
     cloudReadyRef.current = false;
     pendingCloudStateRef.current = null;
+    pendingAuditRef.current = [];
+    setPendingOperationCount(0);
     setSelectedSeriesId('');
     setActiveSeriesId('');
     setActiveCloudCode('');
@@ -2019,7 +2020,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                   更正結果・查看版本（v{currentVersion}）
                 </button>}
                 <button onClick={handleLeaveCloudTournament}
-                  className="flex items-center justify-center gap-3 px-8 py-4 rounded-xl font-black text-lg tracking-widest transition-all brush-border border-2"
+                  className="pointer-events-auto flex items-center justify-center gap-3 px-8 py-4 rounded-xl font-black text-lg tracking-widest transition-all brush-border border-2"
                   style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg, borderColor: COLORS.inkOrange }}>
                   <Home size={22} /> {activeSeries ? `回到${activeSeries.name}系列賽首頁` : '回到賽事管理首頁'}
                 </button>
