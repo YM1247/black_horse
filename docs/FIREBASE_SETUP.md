@@ -101,7 +101,7 @@ Firestore 在支援的 Chrome、Safari、Firefox 啟用多分頁 IndexedDB 持�
 
 管理 session 保存 `createdAt` 與 `expiresAt`，建立後 24 小時失效。更換 `settings/admin.tokenHash` 後，舊瀏覽器會在登入時先移除自己的失效 session，再使用新 token 建立 session，不需要清除網站資料。
 
-賽事與系列文件具有遞增 `revision`。所有更新都必須由 transaction 將 revision 恰好增加 1；這項限制同時由 repository 與 Firestore Rules 驗證，用來阻止多台裝置以舊快照覆蓋新資料。
+賽事與系列文件具有遞增 `revision`。所有更新都必須由 transaction 將 revision 恰好增加 1；這項限制同時由 repository 與 Firestore Rules 驗證。賽事編輯器目前以單一後台裝置為使用前提，每次 transaction 直接使用雲端當下 revision，不啟用多裝置衝突對話框。
 
 Firestore 是現行版本唯一的正式賽事資料來源。後台不再讀寫瀏覽器 `localStorage` 賽事進度或歷史檔案庫；IndexedDB 僅由 Firebase SDK 用來維持離線快取與待同步寫入，不能視為另一份可手動載入的存檔。
 
@@ -128,6 +128,6 @@ npm audit
 
 公開系列資料保存於 `publicSeries/{publicCode}`。它只包含系列名稱、說明及存在且公開的場次摘要，不含私人系列設定、選手、比分、audit 或歷史版本。公開系列頁再訂閱摘要列出的公開單場文件，只有公開且已完賽的場次會計入系列積分。
 
-後台以 400ms debounce 啟動序列化操作佇列，但每個操作各自保留 audit。若 revision 已落後，transaction 會拒絕寫入；後台載入雲端最新版並顯示本機操作摘要，管理員可逐筆選擇是否重新套用，不採 last-write-wins 靜默覆蓋。
+後台以 400ms debounce 啟動序列化操作佇列，每個操作各自保留 audit。普通等待中操作不顯示紅色警告；只有離線、進入自動重試或重試結束仍失敗時才顯示。暫時性網路錯誤依 1、2、4、8、16 秒重試，最終失敗可由管理員手動重新同步。目前不支援多台後台同時修改同一賽事。
 
 Firestore 不接受陣列直接包含另一層陣列，因此資料庫中的 `rounds` 使用輪次編號 map，例如 `{ "1": Match[], "2": Match[] }`。前後台 repository 會自動轉換，畫面與瑞士制規則層仍使用原本的 `Match[][]`。新建賽事預設三位評審、兩敗淘汰且 `isPublic` 為 `true`，建立後觀眾即可透過賽事代碼讀取。

@@ -1,4 +1,4 @@
-import { isTransientCloudError, runWithCloudRetry, shouldApplyCloudSnapshot, summarizePendingOperation } from './cloudSync';
+import { isTransientCloudError, runWithCloudRetry, shouldApplyCloudSnapshot, shouldShowCloudSyncAlert } from './cloudSync';
 import { vi } from 'vitest';
 
 test('initial and idle cloud snapshots can update the editor', () => {
@@ -53,9 +53,14 @@ test('permission and revision conflicts are not retried', async () => {
   expect(operation).toHaveBeenCalledTimes(1);
 });
 
-test('pending operations have readable conflict summaries', () => {
-  expect(summarizePendingOperation({
-    action: 'SCORE_UPDATED',
-    details: { round: 2, players: ['甲', '乙'], after: { p1Votes: 2, p2Votes: 1 } }
-  })).toBe('第 2 輪 甲 vs 乙：2:1');
+test('normal pending writes do not open the disruptive sync alert', () => {
+  expect(shouldShowCloudSyncAlert({ isOnline: true, status: 'pending' })).toBe(false);
+  expect(shouldShowCloudSyncAlert({ isOnline: true, status: 'synced' })).toBe(false);
+});
+
+test('the sync alert is reserved for offline, retrying, and failed states', () => {
+  expect(shouldShowCloudSyncAlert({ isOnline: false, status: 'pending' })).toBe(true);
+  expect(shouldShowCloudSyncAlert({ isOnline: true, status: 'offline' })).toBe(true);
+  expect(shouldShowCloudSyncAlert({ isOnline: true, status: 'error' })).toBe(true);
+  expect(shouldShowCloudSyncAlert({ isOnline: true, status: 'pending', retryMessage: 'retrying' })).toBe(true);
 });

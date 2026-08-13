@@ -44,18 +44,17 @@ GitHub Pages
 
 為維持 Spark 免費方案，Phase 2 不依賴 Cloud Functions。重要原則是把配對、計分、排名等規則抽成可測試的領域層，前後台不可各自複製一份規則。賽事完整內容保存於單一 Firestore document，以便即時同步；後台首頁只讀 `tournamentSummaries/{eventCode}` 摘要，進入單場或系列後才下載完整選手與輪次。
 
-### 多裝置同步
+### 單一後台裝置同步
 
-`tournaments/{eventCode}` 與 `series/{seriesId}` 以遞增 `revision` 實作樂觀並行控制。管理端每批操作攜帶讀取時的 revision，repository 在 transaction 中再次比對；若其他裝置已先寫入，舊資料不會覆蓋新版本，畫面會載入最新版並保留本機操作摘要供管理員重新確認。比分等操作各自建立 audit，不再由單一 debounce 紀錄互相覆蓋。
+`tournaments/{eventCode}` 與 `series/{seriesId}` 仍保留遞增 `revision`，Firestore transaction 在每次寫入時讀取當下 revision 並加 1。賽事編輯器目前明確假設同一時間只有一台後台裝置，因此不攜帶畫面上可能落後的 expected revision，避免連續操作因即時監聽尚未回傳自己的上一筆寫入而誤判衝突。比分等操作仍各自建立 audit，寫入依序排隊。
 
-管理端無法連線時立即切成唯讀。暫時性錯誤會依 1、2、4、8、16 秒重試；切換賽事、回首頁與登出前必須先完成同步。
+管理端無法連線時立即切成唯讀。暫時性錯誤會依 1、2、4、8、16 秒重試；切換賽事、回首頁與登出前必須先完成同步。一般 400ms 等待中寫入只在頁首顯示簡短的「同步中」狀態，只有離線、自動重試或最終失敗才顯示醒目警告。讀取中與最終同步失敗時編輯區維持唯讀，管理員可由警告上的按鈕重試。現階段不支援多裝置同時編輯；若未來要恢復，必須另行設計衝突解決流程。
 
 ### 前端模組
 
 - `tournament.js`：配對、比分重算、排名與積分規則。
 - `tournamentState.js`：賽事資料正規化、預設設定與新賽事狀態。
-- `cloudSync.js`：退避重試、pending snapshot 防回彈與操作摘要。
-- `conflictResolution.js`：revision 衝突後可重新套用操作的判斷與重算。
+- `cloudSync.js`：退避重試、pending snapshot 防回彈與同步警告顯示條件。
 - `ResultCorrectionPanel.jsx`：完賽更正、差異預覽與版本回復 UI。
 - `SeriesAdminDashboard.jsx`：系列場次管理、公開分享與後台排名。
 - `PublicTournamentPage.jsx`／`PublicSeriesPage.jsx`：公開唯讀入口。
