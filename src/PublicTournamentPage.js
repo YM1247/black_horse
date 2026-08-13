@@ -17,6 +17,29 @@ export default function PublicTournamentPage({ initialCode = '' }) {
   const [tournament, setTournament] = useState(null);
   const [status, setStatus] = useState(eventCode ? 'loading' : 'idle');
   const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    const handlePopState = () => {
+      const code = normalizeEventCode(new URLSearchParams(window.location.search).get('event') || '');
+      setTournament(null);
+      setInput(code);
+      setEventCode(validateEventCode(code) ? code : '');
+      setStatus(validateEventCode(code) ? 'loading' : 'idle');
+      setError('');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
 
   useEffect(() => {
     document.title = tournament?.name
@@ -36,7 +59,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
       setStatus('error');
       setError(firebaseError.code === 'permission-denied' ? '此賽事不存在或尚未公開。' : '讀取賽事失敗，請稍後再試。');
     });
-  }, [eventCode]);
+  }, [eventCode, retryKey]);
 
   const handleLookup = (event) => {
     event.preventDefault();
@@ -45,7 +68,9 @@ export default function PublicTournamentPage({ initialCode = '' }) {
       setError('賽事代碼需為 4–10 位英文字母或數字。');
       return;
     }
-    window.history.replaceState({}, '', `${window.location.pathname}?event=${code}`);
+    setTournament(null);
+    setStatus('loading');
+    window.history.pushState({}, '', `${window.location.pathname}?event=${code}`);
     setEventCode(code);
   };
 
@@ -87,6 +112,12 @@ export default function PublicTournamentPage({ initialCode = '' }) {
         </header>
 
         {error && <div role="alert" className="mb-6 p-4 rounded-lg border border-red-500/40 bg-red-950/30 text-red-300 font-bold">{error}</div>}
+        {tournament && (!isOnline || tournament.sync?.fromCache) && (
+          <div role="alert" className="mb-6 p-4 rounded-xl border border-amber-500/50 bg-amber-950/30 text-amber-200 font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <span>目前離線，顯示的是快取資料。最後更新：{tournament.clientUpdatedAt ? new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW') : '尚未取得'}</span>
+            <button type="button" onClick={() => setRetryKey(value => value + 1)} className="px-4 py-2 rounded-lg border border-amber-400">重試</button>
+          </div>
+        )}
         {status === 'loading' && <div className="py-20 text-center text-slate-500 font-bold">正在載入賽事…</div>}
         {status === 'not-found' && <div className="py-20 text-center text-slate-500 font-bold">找不到此賽事。</div>}
         {status === 'idle' && <div className="py-20 text-center text-slate-500 font-bold">請輸入賽事代碼。</div>}
@@ -94,7 +125,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
         {tournament && (
           <>
             <div className="flex justify-end mb-4 text-xs font-bold text-slate-500">
-              {tournament.sync?.hasPendingWrites ? '資料同步中' : tournament.sync?.fromCache ? '離線快取' : '即時更新中'}
+              {tournament.sync?.hasPendingWrites ? '資料同步中' : tournament.sync?.fromCache ? '離線快取' : '即時更新中'}・最後更新 {tournament.clientUpdatedAt ? new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW') : '尚未取得'}
             </div>
 
             {rounds.length > 0 && (

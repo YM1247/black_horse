@@ -58,6 +58,11 @@ service cloud.firestore {
           (!resource.data.keys().hasAny(['revision']) && request.resource.data.revision == 1)
           || (resource.data.keys().hasAny(['revision']) && request.resource.data.revision == resource.data.revision + 1)
         );
+
+      match /deletionAudits/{logId} {
+        allow read, create: if isAdmin();
+        allow update, delete: if false;
+      }
     }
 
     match /publicSeries/{publicCode} {

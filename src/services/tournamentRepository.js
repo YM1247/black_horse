@@ -28,6 +28,7 @@ const EVENT_CODE_PATTERN = /^[A-Z0-9]{4,10}$/;
 const EVENT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const DEFAULT_CLOUD_TOURNAMENT_VISIBILITY = true;
 export const ADMIN_SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+export const TOURNAMENT_DELETION_SUBCOLLECTIONS = Object.freeze(['auditLogs', 'versions']);
 
 export class CloudRevisionConflictError extends Error {
   constructor({ expectedRevision, actualRevision, tournament }) {
@@ -98,7 +99,7 @@ export const buildPublicSeriesProjection = (series = {}, tournaments = []) => {
     events: (Array.isArray(series.events) ? series.events : []).flatMap(event => {
       const eventCode = normalizeEventCode(event.eventCode || '');
       const tournament = tournamentsByCode.get(eventCode);
-      if (!tournament || tournament.isPublic !== true) return [];
+      if (!tournament || tournament.isPublic !== true || tournament.deletionStatus === 'deleting') return [];
       return [{
         id: String(event.id || `event-${eventCode.toLowerCase()}`),
         name: String(event.name || tournament.name || eventCode).trim(),
@@ -451,7 +452,7 @@ export const syncPublicSeriesProjection = async (series, tournaments = []) => {
   return projection;
 };
 
-export const saveCloudSeries = async (series, expectedRevision = null) => {
+export const saveCloudSeries = async (series, expectedRevision = null, audit = null) => {
   const user = requireUser();
   const { db } = getFirebaseServices();
   const seriesRef = doc(db, 'series', series.id);
@@ -471,6 +472,16 @@ export const saveCloudSeries = async (series, expectedRevision = null) => {
       updatedAt: serverTimestamp(),
       updatedBy: user.uid
     });
+    if (audit) {
+      const auditRef = doc(collection(seriesRef, 'deletionAudits'));
+      transaction.set(auditRef, {
+        action: audit.action || 'TOURNAMENT_DELETED',
+        details: cleanData(audit.details || {}),
+        createdAt: serverTimestamp(),
+        clientTimestamp: new Date().toISOString(),
+        createdBy: user.uid
+      });
+    }
     return nextRevision;
   });
 };
@@ -481,15 +492,17 @@ export const deleteCloudTournament = async (eventCode) => {
   requireUser();
   const { db } = getFirebaseServices();
   const tournamentRef = doc(db, 'tournaments', code);
-  const auditSnapshot = await getDocs(collection(tournamentRef, 'auditLogs'));
-  const auditDocs = auditSnapshot.docs;
-
-  for (let index = 0; index < auditDocs.length; index += 400) {
-    const batch = writeBatch(db);
-    auditDocs.slice(index, index + 400).forEach(audit => batch.delete(audit.ref));
-    await batch.commit();
+  for (const subcollectionName of TOURNAMENT_DELETION_SUBCOLLECTIONS) {
+    const snapshot = await getDocs(collection(tournamentRef, subcollectionName));
+    for (let index = 0; index < snapshot.docs.length; index += 400) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(index, index + 400).forEach(item => batch.delete(item.ref));
+      await batch.commit();
+    }
   }
-  await deleteDoc(tournamentRef);
+  await deleteDoc(tournamentRef).catch(error => {
+    if (error.code !== 'not-found') throw error;
+  });
 };
 
 export const subscribeTournamentAuditLogs = (eventCode, onLogs, onError, maximum = 50) => {

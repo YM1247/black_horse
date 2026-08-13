@@ -74,6 +74,7 @@ npx firebase-tools deploy --only firestore:rules
 - 匿名使用者必須以正確 tokenHash 建立有效 `adminSessions/{uid}` 才可管理賽事。
 - 前端不可讀寫 `settings/admin`，也不可更新其他人的 session。
 - audit log 只能新增，不能更新或刪除。
+- 系列刪除 audit 只能由管理員建立及讀取，建立後不可更新或刪除。
 
 ## 5. GitHub Pages production 發布
 

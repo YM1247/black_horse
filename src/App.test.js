@@ -80,6 +80,14 @@ describe('Swiss tournament Phase 1', () => {
     expect(screen.getByText(/尚未設定 Firebase/)).toBeInTheDocument();
   });
 
+  test('a series query opens the public series page', () => {
+    window.history.replaceState({}, '', '/?series=SIM2026');
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: '公開系列賽查詢' })).toBeInTheDocument();
+    expect(screen.getByText(/尚未設定 Firebase/)).toBeInTheDocument();
+  });
+
   test('the default URL is the read-only public tournament frontend', () => {
     render(<App />);
 

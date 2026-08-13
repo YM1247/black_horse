@@ -37,11 +37,22 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
+    const handlePopState = () => {
+      const code = normalizeEventCode(new URLSearchParams(window.location.search).get('series') || '');
+      setSeries(null);
+      setTournamentsByCode({});
+      setInput(code);
+      setPublicCode(validateEventCode(code) ? code : '');
+      setStatus(validateEventCode(code) ? 'loading' : 'idle');
+      setError('');
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('popstate', handlePopState);
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('popstate', handlePopState);
     };
   }, []);
 
@@ -96,6 +107,9 @@ export default function PublicSeriesPage({ initialCode = '' }) {
       setError('系列代碼需為 4–10 位英文字母或數字。');
       return;
     }
+    setSeries(null);
+    setTournamentsByCode({});
+    setStatus('loading');
     window.history.pushState({}, '', `${window.location.pathname}?series=${code}`);
     setPublicCode(code);
   };

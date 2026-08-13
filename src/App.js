@@ -42,6 +42,44 @@ const createId = () => {
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const useDialogFocusTrap = (active, onDismiss) => {
+  const containerRef = useRef(null);
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
+  useEffect(() => {
+    if (!active) return undefined;
+    const previousFocus = document.activeElement;
+    const container = containerRef.current;
+    const focusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+    window.setTimeout(() => container?.querySelector(focusableSelector)?.focus(), 0);
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        dismissRef.current?.();
+        return;
+      }
+      if (event.key !== 'Tab' || !container) return;
+      const focusable = Array.from(container.querySelectorAll(focusableSelector));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocus?.focus?.();
+    };
+  }, [active]);
+  return containerRef;
+};
+
 // 主題色票 (對應黑馬記念圖片)
 const COLORS = {
   bg: '#0d0f12',
@@ -233,6 +271,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [activeSeriesId, setActiveSeriesId] = useState('');
   const [creatingSeriesEventCode, setCreatingSeriesEventCode] = useState('');
   const [seriesMutationStatus, setSeriesMutationStatus] = useState('');
+  const [standaloneSearch, setStandaloneSearch] = useState('');
+  const [showArchivedTournaments, setShowArchivedTournaments] = useState(false);
   const [publicQrCode, setPublicQrCode] = useState('');
   const [pendingOperationCount, setPendingOperationCount] = useState(0);
   const [lastCloudSuccessAt, setLastCloudSuccessAt] = useState(null);
@@ -257,6 +297,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const projectionSyncSignaturesRef = useRef({});
   const transitionGuardRef = useRef(false);
   const closeCloudModalAfterLoadRef = useRef(false);
+  const conflictDialogRef = useDialogFocusTrap(Boolean(cloudConflict), () => discardConflictOperations());
+  const renameDialogRef = useDialogFocusTrap(Boolean(renamePlayerId), () => { setRenamePlayerId(''); setRenamePlayerName(''); });
+  const confirmDialogRef = useDialogFocusTrap(Boolean(confirmAction), () => { if (!seriesMutationStatus) setConfirmAction(null); });
   currentCloudStateRef.current = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked, currentVersion });
 
   const markCloudAudit = (action, details = {}) => {
@@ -559,6 +602,13 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const activeSeries = seriesDefinitions.find(series => series.id === activeSeriesId) || null;
   const seriesEventCodes = new Set(seriesDefinitions.flatMap(series => series.events.map(event => event.eventCode)));
   const standaloneTournaments = cloudTournaments.filter(tournament => !seriesEventCodes.has(tournament.id));
+  const visibleStandaloneTournaments = standaloneTournaments.filter(tournament => {
+    const keyword = standaloneSearch.trim().toLocaleLowerCase('zh-TW');
+    const matchesSearch = !keyword
+      || String(tournament.name || '').toLocaleLowerCase('zh-TW').includes(keyword)
+      || tournament.id.toLocaleLowerCase('zh-TW').includes(keyword);
+    return matchesSearch && (showArchivedTournaments || !tournament.isArchived);
+  });
   const selectedSeriesStandings = selectedSeries ? buildSeriesStandings(selectedSeries, cloudTournaments) : [];
   const otherSeriesPlayerNames = activeSeries
     ? cloudTournaments
@@ -814,16 +864,74 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     setCloudError('');
     setSeriesMutationStatus(`delete:${eventDefinition.eventCode}`);
     try {
-      if (tournament) await deleteCloudTournament(eventDefinition.eventCode);
+      const currentTournament = cloudTournaments.find(item => item.id === eventDefinition.eventCode);
+      if (currentTournament) {
+        await syncPublicSeriesProjection(series, cloudTournaments.map(item =>
+          item.id === eventDefinition.eventCode ? { ...item, isPublic: false, deletionStatus: 'deleting' } : item
+        ));
+        if (currentTournament.deletionStatus !== 'deleting') {
+          await saveCloudTournament(eventDefinition.eventCode, {
+            isPublic: false,
+            deletionStatus: 'deleting'
+          }, {
+            action: 'TOURNAMENT_DELETION_STARTED',
+            details: { seriesId: series.id, name: eventDefinition.name }
+          }, currentTournament.revision || 0);
+        }
+        await deleteCloudTournament(eventDefinition.eventCode);
+      }
       const nextSeries = {
         ...series,
         events: series.events.filter(event => event.id !== eventDefinition.id)
       };
-      const nextRevision = await saveCloudSeries(nextSeries, series.revision || 0);
+      const nextRevision = await saveCloudSeries(nextSeries, series.revision || 0, {
+        action: 'TOURNAMENT_DELETED',
+        details: {
+          eventCode: eventDefinition.eventCode,
+          eventName: eventDefinition.name,
+          deletedTournament: Boolean(currentTournament)
+        }
+      });
       replaceSeriesDefinition({ ...nextSeries, revision: nextRevision });
       setConfirmAction(null);
     } catch (error) {
+      setCloudError(`刪除未完成：${error.message}。請在場次卡重新執行刪除，系統會從中斷處續跑。`);
+      setConfirmAction(null);
+    } finally {
+      setSeriesMutationStatus('');
+    }
+  };
+
+  const handleArchiveStandaloneTournament = async (tournament) => {
+    setCloudError('');
+    setSeriesMutationStatus(`archive:${tournament.id}`);
+    try {
+      await saveCloudTournament(tournament.id, { isArchived: !tournament.isArchived }, {
+        action: tournament.isArchived ? 'TOURNAMENT_UNARCHIVED' : 'TOURNAMENT_ARCHIVED',
+        details: { before: Boolean(tournament.isArchived), after: !tournament.isArchived }
+      }, tournament.revision || 0);
+    } catch (error) {
       setCloudError(error.message);
+    } finally {
+      setSeriesMutationStatus('');
+    }
+  };
+
+  const handleDeleteStandaloneTournament = async (tournament) => {
+    setCloudError('');
+    setSeriesMutationStatus(`delete:${tournament.id}`);
+    try {
+      const currentTournament = cloudTournaments.find(item => item.id === tournament.id);
+      if (currentTournament && currentTournament.deletionStatus !== 'deleting') {
+        await saveCloudTournament(tournament.id, { isPublic: false, deletionStatus: 'deleting' }, {
+          action: 'TOURNAMENT_DELETION_STARTED',
+          details: { standalone: true, name: tournament.name || tournament.id }
+        }, currentTournament.revision || 0);
+      }
+      await deleteCloudTournament(tournament.id);
+      setConfirmAction(null);
+    } catch (error) {
+      setCloudError(`刪除未完成：${error.message}。請重新執行永久刪除以續跑。`);
       setConfirmAction(null);
     } finally {
       setSeriesMutationStatus('');
@@ -1573,18 +1681,36 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                   </section>
 
                   <section>
-                    <h3 className="font-black mb-3">既有單場賽事 ({standaloneTournaments.length})</h3>
+                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-3">
+                      <div>
+                        <h3 className="font-black">既有單場賽事 ({visibleStandaloneTournaments.length}/{standaloneTournaments.length})</h3>
+                        <label className="mt-2 flex items-center gap-2 text-xs font-bold" style={{ color: COLORS.textMuted }}>
+                          <input type="checkbox" checked={showArchivedTournaments} onChange={event => setShowArchivedTournaments(event.target.checked)} />
+                          顯示已封存賽事
+                        </label>
+                      </div>
+                      <input type="search" aria-label="搜尋獨立賽事" value={standaloneSearch} onChange={event => setStandaloneSearch(event.target.value)}
+                        placeholder="搜尋名稱或代碼" className="px-4 py-2.5 rounded-lg border min-w-64" />
+                    </div>
                     <div className="space-y-3">
-                      {standaloneTournaments.map(tournament => (
-                        <button key={tournament.id} onClick={() => handleSelectCloudTournament(tournament.id)} className="w-full p-4 rounded-xl border text-left flex items-center justify-between gap-4 hover:bg-white/5" style={{ borderColor: tournament.id === activeCloudCode ? COLORS.inkBlue : COLORS.cardBorder }}>
-                          <div>
+                      {visibleStandaloneTournaments.map(tournament => (
+                        <article key={tournament.id} className={`w-full p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${tournament.isArchived ? 'opacity-65' : ''}`} style={{ borderColor: tournament.deletionStatus === 'deleting' ? '#ef4444' : COLORS.cardBorder }}>
+                          <button type="button" onClick={() => handleSelectCloudTournament(tournament.id)} className="text-left flex-1 hover:text-[#b6d2d4]">
                             <div className="font-black text-white">{tournament.name || tournament.id}</div>
-                            <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>#{tournament.id}・{tournament.phase === 'finished' ? '已完賽' : `第 ${tournament.currentRoundNum || 1} 輪`}</div>
+                            <div className="text-xs mt-1" style={{ color: COLORS.textMuted }}>#{tournament.id}・{tournament.phase === 'finished' ? '已完賽' : `第 ${tournament.currentRoundNum || 1} 輪`}・{tournament.isArchived ? '已封存' : tournament.isPublic ? '公開' : '未公開'}</div>
+                            {tournament.deletionStatus === 'deleting' && <div className="text-xs font-black text-red-300 mt-2">刪除未完成，請按永久刪除續跑</div>}
+                          </button>
+                          <div className="flex gap-2">
+                            <button type="button" disabled={Boolean(seriesMutationStatus)} onClick={() => handleArchiveStandaloneTournament(tournament)}
+                              className="px-3 py-2 rounded-lg border text-xs font-black disabled:opacity-40" style={{ borderColor: COLORS.cardBorder, color: COLORS.inkBlue }}>
+                              {seriesMutationStatus === `archive:${tournament.id}` ? '處理中…' : tournament.isArchived ? '取消封存' : '封存'}
+                            </button>
+                            <button type="button" disabled={Boolean(seriesMutationStatus)} onClick={() => setConfirmAction({ type: 'DELETE_STANDALONE', tournament })}
+                              className="px-3 py-2 rounded-lg border border-red-500/50 text-red-300 text-xs font-black disabled:opacity-40">永久刪除</button>
                           </div>
-                          <span className="text-xs font-black" style={{ color: tournament.isPublic ? '#4ade80' : COLORS.textMuted }}>{tournament.isPublic ? '公開' : '關閉'}</span>
-                        </button>
+                        </article>
                       ))}
-                      {standaloneTournaments.length === 0 && <div className="p-8 text-center border border-dashed rounded-xl" style={{ borderColor: COLORS.cardBorder, color: COLORS.textMuted }}>尚無獨立單場賽事</div>}
+                      {visibleStandaloneTournaments.length === 0 && <div className="p-8 text-center border border-dashed rounded-xl" style={{ borderColor: COLORS.cardBorder, color: COLORS.textMuted }}>{standaloneTournaments.length ? '沒有符合條件的賽事' : '尚無獨立單場賽事'}</div>}
                     </div>
                   </section>
                     </>
@@ -1596,7 +1722,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       )}
 
       {cloudConflict && (
-        <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cloud-conflict-title">
+        <div ref={conflictDialogRef} className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cloud-conflict-title">
           <section className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border-2 p-6 md:p-8" style={{ backgroundColor: COLORS.card, borderColor: COLORS.inkOrange }}>
             <h2 id="cloud-conflict-title" className="text-2xl font-black text-white">資料已由其他裝置更新</h2>
             <p className="mt-3 text-sm font-bold leading-relaxed" style={{ color: COLORS.textMuted }}>
@@ -1626,7 +1752,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       )}
 
       {renamePlayerId && (
-        <div className="fixed inset-0 z-[75] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="rename-player-title">
+        <div ref={renameDialogRef} className="fixed inset-0 z-[75] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="rename-player-title">
           <form onSubmit={confirmRenamePlayer} className="w-full max-w-md rounded-2xl p-7 border-2" style={{ backgroundColor: COLORS.card, borderColor: COLORS.inkBlue }}>
             <h2 id="rename-player-title" className="text-2xl font-black text-white">更改選手姓名</h2>
             <p className="mt-2 text-sm font-bold" style={{ color: COLORS.textMuted }}>已產生的對戰名稱會同步更新；選手 ID 與成績不變。</p>
@@ -1641,20 +1767,22 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
       {/* 全局確認視窗 Modal (Highest Z-index) */}
       {confirmAction && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+        <div ref={confirmDialogRef} className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
+          role="dialog" aria-modal="true" aria-labelledby="global-confirm-title"
+          onKeyDown={event => { if (event.key === 'Escape' && !seriesMutationStatus) setConfirmAction(null); }}>
           <div className="rounded-2xl p-8 max-w-md w-full shadow-2xl transform transition-all border-2 brush-border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
             <div className="flex items-center gap-4 mb-6">
               <AlertTriangle size={32} style={{ color: COLORS.inkOrange }} />
-              <h3 className="text-2xl font-black tracking-widest text-white">
-                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : confirmAction.type === 'WITHDRAW' ? `確定要讓 ${confirmAction.playerName} 棄賽嗎？` : confirmAction.type === 'CLEAR_SERIES_EVENT' ? `清除 ${confirmAction.eventDefinition.name}？` : confirmAction.type === 'DELETE_SERIES_EVENT' ? `刪除 ${confirmAction.eventDefinition.name}？` : ''}
+              <h3 id="global-confirm-title" className="text-2xl font-black tracking-widest text-white">
+                {confirmAction.type === 'EDIT_HISTORY' ? '修改歷史賽果' : confirmAction.type === 'CLEAR_PLAYERS' ? '清空選手名單' : confirmAction.type === 'WITHDRAW' ? `確定要讓 ${confirmAction.playerName} 棄賽嗎？` : confirmAction.type === 'CLEAR_SERIES_EVENT' ? `清除 ${confirmAction.eventDefinition.name}？` : confirmAction.type === 'DELETE_SERIES_EVENT' ? `刪除 ${confirmAction.eventDefinition.name}？` : confirmAction.type === 'DELETE_STANDALONE' ? `永久刪除 ${confirmAction.tournament.name || confirmAction.tournament.id}？` : ''}
               </h3>
             </div>
             <p className="mb-8 font-bold leading-relaxed text-base" style={{ color: COLORS.textMuted }}>
-              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? `棄賽前已完成的成績會保留；本輪未完成的對戰將直接判為 0:${judgeCount} 敗，且退出後續輪次。` : confirmAction.type === 'CLEAR_SERIES_EVENT' ? '場次名稱、賽事代碼、賽制標籤與操作紀錄會保留；選手、輪次、比分與結果將全部重置並回到報名狀態。' : confirmAction.type === 'DELETE_SERIES_EVENT' ? `場次卡、雲端賽事與操作紀錄都會永久刪除。賽事代碼 #${confirmAction.eventDefinition.eventCode} 之後可重新使用。` : ''}
+              {confirmAction.type === 'EDIT_HISTORY' ? '修改之前的賽果將會作廢並重新計算後續的所有賽程，您確定要覆寫此筆成績嗎？' : confirmAction.type === 'CLEAR_PLAYERS' ? '確定要清除所有已加入的選手嗎？此動作無法復原。' : confirmAction.type === 'WITHDRAW' ? `棄賽前已完成的成績會保留；本輪未完成的對戰將直接判為 0:${judgeCount} 敗，且退出後續輪次。` : confirmAction.type === 'CLEAR_SERIES_EVENT' ? '場次名稱、賽事代碼、賽制標籤與操作紀錄會保留；選手、輪次、比分與結果將全部重置並回到報名狀態。' : confirmAction.type === 'DELETE_SERIES_EVENT' ? `場次卡、雲端賽事、所有版本與操作紀錄都會永久刪除。賽事代碼 #${confirmAction.eventDefinition.eventCode} 之後可重新使用；中斷時可從場次卡續跑。` : confirmAction.type === 'DELETE_STANDALONE' ? `賽事 #${confirmAction.tournament.id}、所有版本與操作紀錄都會永久刪除。刪除中斷時可從列表續跑。` : ''}
             </p>
 
             <div className="flex justify-end gap-4">
-              <button onClick={() => setConfirmAction(null)} className="px-6 py-2.5 rounded-lg font-bold" style={{ backgroundColor: '#1e293b', color: COLORS.textMain }}>取消</button>
+              <button autoFocus onClick={() => setConfirmAction(null)} className="px-6 py-2.5 rounded-lg font-bold" style={{ backgroundColor: '#1e293b', color: COLORS.textMain }}>取消</button>
               <button
                 disabled={Boolean(seriesMutationStatus)}
                 onClick={async () => {
@@ -1663,9 +1791,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                   else if (confirmAction.type === 'WITHDRAW') confirmWithdraw(confirmAction.playerId);
                   else if (confirmAction.type === 'CLEAR_SERIES_EVENT') await handleClearSeriesEvent(confirmAction.series, confirmAction.eventDefinition, confirmAction.tournament);
                   else if (confirmAction.type === 'DELETE_SERIES_EVENT') await handleDeleteSeriesEvent(confirmAction.series, confirmAction.eventDefinition, confirmAction.tournament);
+                  else if (confirmAction.type === 'DELETE_STANDALONE') await handleDeleteStandaloneTournament(confirmAction.tournament);
                 }}
                 className="px-6 py-2.5 rounded-lg font-black tracking-widest brush-border disabled:opacity-40"
-                style={{ backgroundColor: (confirmAction.type === 'CLEAR_PLAYERS' || confirmAction.type === 'WITHDRAW' || confirmAction.type === 'DELETE_SERIES_EVENT') ? '#ef4444' : COLORS.inkOrange, color: COLORS.bg }}>
+                style={{ backgroundColor: (confirmAction.type === 'CLEAR_PLAYERS' || confirmAction.type === 'WITHDRAW' || confirmAction.type === 'DELETE_SERIES_EVENT' || confirmAction.type === 'DELETE_STANDALONE') ? '#ef4444' : COLORS.inkOrange, color: COLORS.bg }}>
                 {seriesMutationStatus ? '處理中…' : '確定執行'}
               </button>
             </div>
@@ -2132,7 +2261,7 @@ function AdminPortal() {
         <h1 className="text-3xl font-black mt-6">賽事管理後台</h1>
         <p className="text-sm text-slate-400 mt-2 leading-relaxed">輸入管理 token 後才能建立或操作賽事。</p>
         <div className="mt-5 p-4 rounded-lg border border-slate-700 bg-[#0d0f12] text-xs text-slate-400 leading-relaxed">
-          登入欄位請輸入原始 token；Firestore 的 <code className="text-[#b6d2d4]">settings/admin.tokenHash</code> 必須保存該 token 的 64 字元 SHA-256，不能保存原始 token。
+          管理 token 由賽事主辦單位提供。登入後可建立、管理與更正賽事；請勿將 token 分享給觀眾。設定或登入異常請參考專案的 Firebase 疑難排解文件。
         </div>
         {!isFirebaseConfigured && <div role="alert" className="mt-5 p-3 rounded-lg border border-amber-500/40 bg-amber-950/30 text-amber-200 text-sm font-bold">此環境尚未設定 Firebase。</div>}
         {error && <div role="alert" className="mt-5 p-3 rounded-lg border border-red-500/40 bg-red-950/30 text-red-300 text-sm font-bold">{error}</div>}

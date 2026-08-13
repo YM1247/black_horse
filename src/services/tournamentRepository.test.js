@@ -7,6 +7,7 @@ import {
   generateEventCode,
   getAdminLoginErrorMessage,
   normalizeEventCode,
+  TOURNAMENT_DELETION_SUBCOLLECTIONS,
   validateEventCode
 } from './tournamentRepository';
 
@@ -24,6 +25,10 @@ test('generated event codes avoid visually ambiguous characters', () => {
 
 test('new cloud tournaments are public by default', () => {
   expect(DEFAULT_CLOUD_TOURNAMENT_VISIBILITY).toBe(true);
+});
+
+test('permanent deletion covers immutable versions and audit logs', () => {
+  expect(TOURNAMENT_DELETION_SUBCOLLECTIONS).toEqual(['auditLogs', 'versions']);
 });
 
 test('series definitions keep editable event labels and fixed rules', () => {
@@ -70,7 +75,8 @@ test('public series projection contains only existing public events', () => {
     ]
   }, [
     { id: 'MOCK819', name: '8/19', isPublic: true, players: [{ name: '不應洩漏' }] },
-    { id: 'MOCK821', name: '8/21', isPublic: false }
+    { id: 'MOCK821', name: '8/21', isPublic: false },
+    { id: 'MOCK826', name: '8/26', isPublic: true, deletionStatus: 'deleting' }
   ]);
 
   expect(projection).toEqual({
