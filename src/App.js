@@ -9,6 +9,7 @@ import { runWithCloudRetry, shouldApplyCloudSnapshot, summarizePendingOperation 
 import FullScreenCloudManager from './FullScreenCloudManager';
 import { buildSeriesStandings, normalizeSeriesDefinition, SERIES } from './series';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
+import ResultCorrectionPanel from './ResultCorrectionPanel';
 import {
   createCloudTournament,
   deleteCloudTournament,
@@ -17,12 +18,14 @@ import {
   normalizeEventCode,
   saveCloudTournament,
   saveCloudSeries,
+  saveTournamentVersion,
   signInAdminWithToken,
   signOutAdmin,
   subscribeAdminTournaments,
   subscribeAuth,
   subscribeCloudSeries,
   subscribeTournamentAuditLogs,
+  subscribeTournamentVersions,
   subscribeTournament,
   validateEventCode
 } from './services/tournamentRepository';
@@ -91,7 +94,11 @@ const normalizeTournamentData = (data = {}) => {
     rounds,
     currentRoundNum: Math.max(1, Number(data.currentRoundNum) || 1),
     judgeCount: normalizeJudgeCount(data.judgeCount, inferJudgeCount(rounds)),
-    doubleElimination
+    doubleElimination,
+    runId: String(data.runId || createId()),
+    runNumber: Math.max(1, Number(data.runNumber) || 1),
+    resultLocked: Boolean(data.resultLocked),
+    currentVersion: Math.max(0, Number(data.currentVersion) || 0)
   };
 };
 
@@ -156,7 +163,11 @@ export const createEmptyTournament = ({
   rounds: [],
   currentRoundNum: 1,
   judgeCount,
-  doubleElimination
+  doubleElimination,
+  runId: createId(),
+  runNumber: 1,
+  resultLocked: false,
+  currentVersion: 0
 });
 
 // Helper: 根據字數動態調整字體大小
@@ -183,6 +194,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [currentRoundNum, setCurrentRoundNum] = useState(initialTournament.currentRoundNum);
   const [judgeCount, setJudgeCount] = useState(initialTournament.judgeCount);
   const [doubleElimination, setDoubleElimination] = useState(initialTournament.doubleElimination);
+  const [runId, setRunId] = useState(initialTournament.runId);
+  const [runNumber, setRunNumber] = useState(initialTournament.runNumber);
+  const [resultLocked, setResultLocked] = useState(initialTournament.resultLocked);
+  const [currentVersion, setCurrentVersion] = useState(initialTournament.currentVersion);
   const [viewMode, setViewMode] = useState('tree'); // 預設改為樹狀圖
 
   // Modal 視窗狀態
@@ -191,6 +206,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   // 新增參賽者狀態
   const [newName, setNewName] = useState('');
   const [rosterError, setRosterError] = useState('');
+  const [renamePlayerId, setRenamePlayerId] = useState('');
+  const [renamePlayerName, setRenamePlayerName] = useState('');
+  const [mockConfirmUntil, setMockConfirmUntil] = useState(0);
 
   // Firebase 雲端後台狀態
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(isFirebaseConfigured);
@@ -198,6 +216,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [adminToken, setAdminToken] = useState('');
   const [cloudTournaments, setCloudTournaments] = useState([]);
   const [cloudAuditLogs, setCloudAuditLogs] = useState([]);
+  const [cloudVersions, setCloudVersions] = useState([]);
   const [activeCloudCode, setActiveCloudCode] = useState('');
   const [activeCloudName, setActiveCloudName] = useState('');
   const [cloudIsPublic, setCloudIsPublic] = useState(false);
@@ -219,6 +238,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [cloudConflict, setCloudConflict] = useState(null);
   const [conflictSelection, setConflictSelection] = useState({});
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isCorrectionMode, setIsCorrectionMode] = useState(false);
   const cloudReadyRef = useRef(false);
   const lastCloudStateRef = useRef(null);
   const pendingCloudStateRef = useRef(null);
@@ -230,8 +251,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const cloudSyncRequestedRef = useRef(false);
   const cloudSyncPromiseRef = useRef(null);
   const flushCloudSyncRef = useRef(null);
+  const versionMigrationRef = useRef(false);
+  const transitionGuardRef = useRef(false);
   const closeCloudModalAfterLoadRef = useRef(false);
-  currentCloudStateRef.current = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination });
+  currentCloudStateRef.current = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked, currentVersion });
 
   const markCloudAudit = (action, details = {}) => {
     const operation = { clientOperationId: createId(), action, details };
@@ -251,6 +274,16 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     };
   }, []);
 
+  useEffect(() => {
+    setMockConfirmUntil(0);
+  }, [activeCloudCode, phase]);
+
+  useEffect(() => {
+    if (!mockConfirmUntil) return undefined;
+    const timer = window.setTimeout(() => setMockConfirmUntil(0), Math.max(0, mockConfirmUntil - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [mockConfirmUntil]);
+
   useEffect(() => subscribeAuth(setAdminUser), []);
 
   useEffect(() => {
@@ -258,6 +291,29 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setIsCloudModalOpen(true);
     }
   }, [adminUser, activeCloudCode]);
+
+  useEffect(() => {
+    if (!adminUser || !activeCloudCode || !cloudReadyRef.current || phase !== 'finished' || resultLocked || versionMigrationRef.current || !isOnline) return;
+    versionMigrationRef.current = true;
+    const legacyState = { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked: true, currentVersion };
+    saveTournamentVersion(activeCloudCode, legacyState, {
+      expectedRevision: cloudRevisionRef.current,
+      type: 'migration',
+      reason: '既有完賽資料建立初始鎖定版本',
+      changes: []
+    }).then(result => {
+      const migrated = { ...legacyState, resultLocked: true, currentVersion: result.version };
+      cloudRevisionRef.current = result.revision;
+      lastCloudStateRef.current = JSON.stringify(migrated);
+      setResultLocked(true);
+      setCurrentVersion(result.version);
+      setLastCloudSuccessAt(new Date());
+      setCloudSyncStatus('synced');
+    }).catch(error => {
+      setCloudError(error.message);
+      setCloudSyncStatus('error');
+    }).finally(() => { versionMigrationRef.current = false; });
+  }, [adminUser, activeCloudCode, phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked, currentVersion, isOnline]);
 
   useEffect(() => {
     if (!isFirebaseConfigured || !adminUser) {
@@ -318,6 +374,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCurrentRoundNum(normalized.currentRoundNum);
       setJudgeCount(normalized.judgeCount);
       setDoubleElimination(normalized.doubleElimination);
+      setRunId(normalized.runId);
+      setRunNumber(normalized.runNumber);
+      setResultLocked(normalized.resultLocked);
+      setCurrentVersion(normalized.currentVersion);
       setActiveCloudName(data.name || activeCloudCode);
       setCloudIsPublic(Boolean(data.isPublic));
       setCloudSyncStatus(data.sync?.hasPendingWrites ? 'pending' : data.sync?.fromCache ? 'offline' : 'synced');
@@ -345,13 +405,21 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     );
   }, [adminUser, activeCloudCode]);
 
+  useEffect(() => {
+    if (!isFirebaseConfigured || !adminUser || !activeCloudCode) {
+      setCloudVersions([]);
+      return undefined;
+    }
+    return subscribeTournamentVersions(activeCloudCode, setCloudVersions, error => setCloudError(error.message));
+  }, [adminUser, activeCloudCode]);
+
   flushCloudSyncRef.current = async () => {
     if (!adminUser || !activeCloudCode || !cloudReadyRef.current || cloudConflict || !isOnline) return false;
     if (cloudSyncInFlightRef.current) {
       cloudSyncRequestedRef.current = true;
       return cloudSyncPromiseRef.current;
     }
-    const cloudState = { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination };
+    const cloudState = { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked, currentVersion };
     const serialized = JSON.stringify(cloudState);
     if (serialized === lastCloudStateRef.current && pendingAuditRef.current.length === 0) return true;
 
@@ -395,6 +463,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         setCurrentRoundNum(remote.currentRoundNum);
         setJudgeCount(remote.judgeCount);
         setDoubleElimination(remote.doubleElimination);
+        setRunId(remote.runId);
+        setRunNumber(remote.runNumber);
+        setResultLocked(remote.resultLocked);
+        setCurrentVersion(remote.currentVersion);
         setCloudConflict({
           expectedRevision: error.expectedRevision,
           actualRevision: error.actualRevision,
@@ -423,7 +495,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
   useEffect(() => {
     if (!adminUser || !activeCloudCode || !cloudReadyRef.current || cloudConflict || !isOnline) return undefined;
-    const serialized = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination });
+    const serialized = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked, currentVersion });
     if (serialized === lastCloudStateRef.current && pendingAuditRef.current.length === 0) return undefined;
     pendingCloudStateRef.current = serialized;
     setCloudSyncStatus('pending');
@@ -432,7 +504,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       if (cloudSyncTimeoutRef.current) window.clearTimeout(cloudSyncTimeoutRef.current);
       cloudSyncTimeoutRef.current = null;
     };
-  }, [adminUser, activeCloudCode, phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, cloudConflict, isOnline]);
+  }, [adminUser, activeCloudCode, phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked, currentVersion, cloudConflict, isOnline]);
 
   const publicTournamentUrl = activeCloudCode
     ? `${window.location.origin}${window.location.pathname}?event=${activeCloudCode}`
@@ -459,6 +531,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const seriesEventCodes = new Set(seriesDefinitions.flatMap(series => series.events.map(event => event.eventCode)));
   const standaloneTournaments = cloudTournaments.filter(tournament => !seriesEventCodes.has(tournament.id));
   const selectedSeriesStandings = selectedSeries ? buildSeriesStandings(selectedSeries, cloudTournaments) : [];
+  const otherSeriesPlayerNames = activeSeries
+    ? cloudTournaments
+      .filter(tournament => tournament.id !== activeCloudCode && activeSeries.events.some(event => event.eventCode === tournament.id))
+      .flatMap(tournament => (tournament.players || []).filter(player => !player.isMC).map(player => player.name))
+    : [];
 
   const handleCloudLogin = async (event) => {
     event.preventDefault();
@@ -485,7 +562,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     if (audit) markCloudAudit(audit.action, audit.details || {});
     const firstFlush = await flushCloudSyncRef.current?.();
     if (!firstFlush || cloudConflict) return false;
-    const currentSerialized = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination });
+    const currentSerialized = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked, currentVersion });
     if (lastCloudStateRef.current !== currentSerialized || pendingAuditRef.current.length > 0) {
       return Boolean(await flushCloudSyncRef.current?.());
     }
@@ -565,6 +642,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCurrentRoundNum(tournament.currentRoundNum);
       setJudgeCount(tournament.judgeCount);
       setDoubleElimination(tournament.doubleElimination);
+      setRunId(tournament.runId);
+      setRunNumber(tournament.runNumber);
+      setResultLocked(tournament.resultLocked);
+      setCurrentVersion(tournament.currentVersion);
       setSelectedSeriesId('');
       setActiveSeriesId('');
       setActiveCloudCode(code);
@@ -613,6 +694,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCurrentRoundNum(tournament.currentRoundNum);
       setJudgeCount(tournament.judgeCount);
       setDoubleElimination(tournament.doubleElimination);
+      setRunId(tournament.runId);
+      setRunNumber(tournament.runNumber);
+      setResultLocked(tournament.resultLocked);
+      setCurrentVersion(tournament.currentVersion);
       setActiveSeriesId(series.id);
       setSelectedSeriesId('');
       setActiveCloudCode(code);
@@ -676,6 +761,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         judgeCount: eventDefinition.judgeCount,
         doubleElimination: eventDefinition.doubleElimination
       });
+      emptyTournament.runNumber = (Number(tournament.runNumber) || 1) + 1;
       await saveCloudTournament(eventDefinition.eventCode, emptyTournament, {
         action: 'TOURNAMENT_CLEARED',
         details: {
@@ -793,6 +879,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   };
 
   const loadMockData = () => {
+    if (mockConfirmUntil <= Date.now()) {
+      setMockConfirmUntil(Date.now() + 10000);
+      return;
+    }
     const mockPlayers = [
       ...Array.from({ length: 8 }, (_, index) => ({
         id: createId(), name: `player-${String(index + 1).padStart(3, '0')}`, wins: 0, votes: 0, losses: 0, isWithdrawn: false, isEliminated: false
@@ -800,6 +890,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     ];
     markCloudAudit('TEST_PLAYERS_LOADED', { count: mockPlayers.length, players: mockPlayers });
     setPlayers(mockPlayers);
+    setMockConfirmUntil(0);
   };
 
   const removePlayer = (id) => {
@@ -809,11 +900,48 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     setRosterError('');
   };
 
+  const openRenamePlayer = (player) => {
+    if (phase === 'finished') {
+      setIsCorrectionMode(true);
+      return;
+    }
+    setRenamePlayerId(player.id);
+    setRenamePlayerName(player.name);
+    setRosterError('');
+  };
+
+  const confirmRenamePlayer = (event) => {
+    event.preventDefault();
+    const target = players.find(player => player.id === renamePlayerId);
+    const nextName = renamePlayerName.trim();
+    if (!target || !nextName) return setRosterError('選手姓名不可空白。');
+    if (players.some(player => player.id !== target.id && player.name === nextName)) return setRosterError('同一場賽事不可有重複姓名。');
+    if (target.name === nextName) {
+      setRenamePlayerId('');
+      return;
+    }
+    markCloudAudit('PLAYER_RENAMED', { playerId: target.id, before: target.name, after: nextName });
+    setPlayers(current => current.map(player => player.id === target.id ? { ...player, name: nextName } : player));
+    setRounds(current => current.map(round => round.map(match => ({
+      ...match,
+      p1: match.p1.id === target.id ? { ...match.p1, name: nextName } : match.p1,
+      p2: match.p2.id === target.id ? { ...match.p2, name: nextName } : match.p2
+    }))));
+    setRenamePlayerId('');
+    setRenamePlayerName('');
+    setRosterError('');
+  };
+
   // --- 賽事核心邏輯 ---
   const startTournament = () => {
+    if (transitionGuardRef.current) return;
+    transitionGuardRef.current = true;
+    setIsTransitioning(true);
     markCloudAudit('TOURNAMENT_STARTED', { playerCount: players.filter(player => !player.isWithdrawn).length, judgeCount, doubleElimination });
     setPhase('playing');
     generateRound(1, players.filter(p => !p.isWithdrawn)); // 第一輪只配對未棄賽選手
+    setIsTransitioning(false);
+    transitionGuardRef.current = false;
   };
 
   const generateRound = (roundNum, currentPlayers) => {
@@ -858,8 +986,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     setRounds(updatedRounds); setPlayers(updatedPlayers);
   };
 
-  const advanceToNextRound = () => {
+  const advanceToNextRound = async () => {
+    if (transitionGuardRef.current) return;
+    transitionGuardRef.current = true;
     if (currentRoundNum < MAX_ROUNDS) {
+      setIsTransitioning(true);
       const nextRoundNum = currentRoundNum + 1;
       const updatedPlayers = applyDoubleElimination(players, rounds, doubleElimination);
       const newlyEliminated = updatedPlayers.filter(player =>
@@ -868,9 +999,43 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       markCloudAudit('ROUND_ADVANCED', { from: currentRoundNum, to: nextRoundNum, eliminated: newlyEliminated.map(player => player.name) });
       setCurrentRoundNum(nextRoundNum);
       generateRound(nextRoundNum, updatedPlayers);
+      setIsTransitioning(false);
+      transitionGuardRef.current = false;
     } else {
-      markCloudAudit('TOURNAMENT_FINISHED', { round: currentRoundNum });
-      setPhase('finished');
+      if (!activeCloudCode) {
+        setPhase('finished');
+        setResultLocked(true);
+        transitionGuardRef.current = false;
+        return;
+      }
+      setIsTransitioning(true);
+      try {
+        if (!await persistCurrentCloudState()) return;
+        const finalState = { phase: 'finished', players, rounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked: true, currentVersion };
+        const result = await saveTournamentVersion(activeCloudCode, finalState, {
+          expectedRevision: cloudRevisionRef.current,
+          type: 'completed',
+          reason: '賽事完賽鎖定',
+          changes: []
+        });
+        const lockedState = { ...finalState, currentVersion: result.version };
+        cloudRevisionRef.current = result.revision;
+        lastCloudStateRef.current = JSON.stringify(lockedState);
+        pendingCloudStateRef.current = null;
+        pendingAuditRef.current = [];
+        setPendingOperationCount(0);
+        setPhase('finished');
+        setResultLocked(true);
+        setCurrentVersion(result.version);
+        setLastCloudSuccessAt(new Date());
+        setCloudSyncStatus('synced');
+      } catch (error) {
+        setCloudError(error.message);
+        setCloudSyncStatus('error');
+      } finally {
+        transitionGuardRef.current = false;
+        setIsTransitioning(false);
+      }
     }
   };
 
@@ -893,6 +1058,77 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     setPlayers(updatedPlayers);
     setRounds(updatedRounds);
     setConfirmAction(null);
+  };
+
+  const applyLockedVersionState = (state, revision, version) => {
+    const normalized = normalizeTournamentData({ ...state, phase: 'finished', resultLocked: true, currentVersion: version });
+    const serialized = JSON.stringify(normalized);
+    cloudRevisionRef.current = revision;
+    lastCloudStateRef.current = serialized;
+    pendingCloudStateRef.current = null;
+    pendingAuditRef.current = [];
+    setPendingOperationCount(0);
+    setPhase(normalized.phase);
+    setPlayers(normalized.players);
+    setRounds(normalized.rounds);
+    setCurrentRoundNum(normalized.currentRoundNum);
+    setJudgeCount(normalized.judgeCount);
+    setDoubleElimination(normalized.doubleElimination);
+    setRunId(normalized.runId);
+    setRunNumber(normalized.runNumber);
+    setResultLocked(true);
+    setCurrentVersion(version);
+    setLastCloudSuccessAt(new Date());
+    setCloudSyncStatus('synced');
+  };
+
+  const commitResultCorrection = async ({ players: correctedPlayers, rounds: correctedRounds, reason, changes }) => {
+    setIsTransitioning(true);
+    setCloudError('');
+    try {
+      const recalculatedPlayers = applyDoubleElimination(
+        recalculatePlayerRecords(correctedPlayers, correctedRounds),
+        correctedRounds,
+        doubleElimination
+      );
+      const correctedState = { phase: 'finished', players: recalculatedPlayers, rounds: correctedRounds, currentRoundNum, judgeCount, doubleElimination, runId, runNumber, resultLocked: true, currentVersion };
+      const result = await saveTournamentVersion(activeCloudCode, correctedState, {
+        expectedRevision: cloudRevisionRef.current,
+        type: 'correction',
+        reason,
+        changes
+      });
+      applyLockedVersionState(correctedState, result.revision, result.version);
+      setIsCorrectionMode(false);
+    } catch (error) {
+      setCloudError(error.message);
+      setCloudSyncStatus('error');
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
+  const restoreResultVersion = async (version, reason) => {
+    if (!version || version.runId !== runId) return;
+    setIsTransitioning(true);
+    setCloudError('');
+    try {
+      const restoredState = normalizeTournamentData({ ...version.snapshot, runId, runNumber, resultLocked: true, currentVersion });
+      const result = await saveTournamentVersion(activeCloudCode, restoredState, {
+        expectedRevision: cloudRevisionRef.current,
+        type: 'restore',
+        reason,
+        changes: [{ type: 'restore', fromVersion: currentVersion, toVersion: version.version }],
+        sourceVersion: version.version
+      });
+      applyLockedVersionState(restoredState, result.revision, result.version);
+      setIsCorrectionMode(false);
+    } catch (error) {
+      setCloudError(error.message);
+      setCloudSyncStatus('error');
+    } finally {
+      setIsTransitioning(false);
+    }
   };
 
   // 並列計算功能
@@ -1040,10 +1276,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       {/* 下一輪按鈕 */}
       {!isReadOnly && rounds[currentRoundNum - 1]?.every(m => m.p1Votes !== null && m.p2Votes !== null) && currentRoundNum <= MAX_ROUNDS && (
         <div className="mt-10 flex justify-center sticky bottom-6 z-20">
-           <button onClick={advanceToNextRound}
+           <button onClick={advanceToNextRound} disabled={isTransitioning}
               className="flex items-center gap-3 px-10 py-4 rounded-xl font-black text-xl uppercase tracking-widest shadow-2xl transition-all hover:scale-105 active:scale-95 brush-border"
               style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg, boxShadow: `0 0 25px ${COLORS.inkBlue}60` }}>
-              {currentRoundNum === MAX_ROUNDS ? '結算最終排名' : '進入下一輪'} <ChevronRight size={24} />
+              {isTransitioning ? '處理中…' : currentRoundNum === MAX_ROUNDS ? '結算最終排名' : '進入下一輪'} <ChevronRight size={24} />
             </button>
         </div>
       )}
@@ -1073,6 +1309,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     setCurrentRoundNum(replayed.currentRoundNum);
     setJudgeCount(replayed.judgeCount);
     setDoubleElimination(replayed.doubleElimination);
+    setRunId(replayed.runId);
+    setRunNumber(replayed.runNumber);
+    setResultLocked(replayed.resultLocked);
+    setCurrentVersion(replayed.currentVersion);
     setCloudConflict(null);
     setConflictSelection({});
     setCloudError('');
@@ -1341,6 +1581,20 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         </div>
       )}
 
+      {renamePlayerId && (
+        <div className="fixed inset-0 z-[75] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="rename-player-title">
+          <form onSubmit={confirmRenamePlayer} className="w-full max-w-md rounded-2xl p-7 border-2" style={{ backgroundColor: COLORS.card, borderColor: COLORS.inkBlue }}>
+            <h2 id="rename-player-title" className="text-2xl font-black text-white">更改選手姓名</h2>
+            <p className="mt-2 text-sm font-bold" style={{ color: COLORS.textMuted }}>已產生的對戰名稱會同步更新；選手 ID 與成績不變。</p>
+            <input autoFocus value={renamePlayerName} onChange={event => setRenamePlayerName(event.target.value)} className="w-full mt-5 px-4 py-3 rounded-lg border font-black" aria-label="新的選手姓名" />
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => { setRenamePlayerId(''); setRenamePlayerName(''); }} className="px-5 py-2.5 rounded-lg border" style={{ borderColor: COLORS.cardBorder }}>取消</button>
+              <button type="submit" className="px-5 py-2.5 rounded-lg font-black" style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>儲存改名</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* 全局確認視窗 Modal (Highest Z-index) */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
@@ -1484,9 +1738,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                   </label>
                   
                   <button onClick={loadMockData} className="w-full font-bold py-3 rounded-xl transition-colors text-sm tracking-widest border border-dashed hover:bg-white/5"
-                    style={{ backgroundColor: 'transparent', color: COLORS.inkBlue, borderColor: COLORS.inkBlue }}>
-                    載入測試名單 (8人)
+                    style={{ backgroundColor: mockConfirmUntil > Date.now() ? '#7f1d1d' : 'transparent', color: mockConfirmUntil > Date.now() ? '#fecaca' : COLORS.inkBlue, borderColor: mockConfirmUntil > Date.now() ? '#ef4444' : COLORS.inkBlue }}>
+                    {mockConfirmUntil > Date.now() ? `再次點擊確認覆蓋目前 ${players.length} 人名單` : '載入測試名單 (8人)'}
                   </button>
+                  {mockConfirmUntil > Date.now() && <p className="text-xs font-black text-red-300 text-center">此操作會刪除目前名單；10 秒後自動取消。</p>}
                 </div>
               </div>
             </div>
@@ -1505,7 +1760,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                         <Trash2 size={18} /> 清空名單
                       </button>
                     )}
-                    <button onClick={startTournament} disabled={players.length < 2}
+                    <button onClick={startTournament} disabled={players.length < 2 || isTransitioning}
                       className="flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-black uppercase tracking-widest shadow-lg disabled:opacity-30 transition-all hover:scale-105 active:scale-95 brush-border flex-1 sm:flex-none"
                       style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>
                       <Play size={20} fill="currentColor" /> 開始抽籤
@@ -1531,6 +1786,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                             <td className="p-4 font-black" style={{ color: COLORS.textMuted }}>{idx + 1}</td>
                             <td className="p-4 font-black text-lg text-white">{p.name}</td>
                             <td className="p-4 text-right">
+                              <button onClick={() => openRenamePlayer(p)} className="mr-4 font-bold text-sm tracking-widest" style={{ color: COLORS.inkBlue }}>改名</button>
                               <button onClick={() => removePlayer(p.id)} className="text-red-400 hover:text-red-300 font-bold text-sm tracking-widest">移除</button>
                             </td>
                           </tr>
@@ -1628,10 +1884,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                       </div>
                       {isCurrentRound && (
                         <div className="mt-8 pt-6 border-t flex justify-end" style={{ borderColor: COLORS.cardBorder }}>
-                          <button onClick={advanceToNextRound} disabled={!roundMatches.every(m => m.p1Votes !== null && m.p2Votes !== null)}
+                          <button onClick={advanceToNextRound} disabled={isTransitioning || !roundMatches.every(m => m.p1Votes !== null && m.p2Votes !== null)}
                             className="flex items-center gap-2 px-8 py-3 rounded-xl font-black uppercase tracking-widest transition-all disabled:opacity-30 brush-border"
                             style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>
-                            {currentRoundNum === MAX_ROUNDS ? '結算賽事' : '下一輪'} <ChevronRight size={20} />
+                            {isTransitioning ? '處理中…' : currentRoundNum === MAX_ROUNDS ? '結算賽事' : '下一輪'} <ChevronRight size={20} />
                           </button>
                         </div>
                       )}
@@ -1676,7 +1932,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                           <div className="font-black text-base whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins} W</div>
                           <div className="text-xs font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes} 票</div>
                         </div>
-                        {!p.isWithdrawn && !p.isEliminated && <button onClick={() => setConfirmAction({ type: 'WITHDRAW', playerId: p.id, playerName: p.name })} className="px-1.5 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/20 rounded border border-red-500/30 transition-colors shrink-0">棄賽</button>}
+                        {!p.isWithdrawn && !p.isEliminated && <div className="flex flex-col gap-1 shrink-0">
+                          <button onClick={() => openRenamePlayer(p)} className="px-1.5 py-0.5 text-[10px] font-bold rounded border transition-colors" style={{ color: COLORS.inkBlue, borderColor: COLORS.inkBlue }}>改名</button>
+                          <button onClick={() => setConfirmAction({ type: 'WITHDRAW', playerId: p.id, playerName: p.name })} className="px-1.5 py-0.5 text-[10px] font-bold text-red-400 hover:bg-red-500/20 rounded border border-red-500/30 transition-colors">棄賽</button>
+                        </div>}
                       </div>
                     ))}
                   </div>
@@ -1687,7 +1946,22 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         )}
 
         {/* Phase 3: Finished / Standings */}
-        {phase === 'finished' && (
+        {phase === 'finished' && (isCorrectionMode ? (
+          <ResultCorrectionPanel
+            players={players}
+            rounds={rounds}
+            judgeCount={judgeCount}
+            doubleElimination={doubleElimination}
+            versions={cloudVersions}
+            runId={runId}
+            currentVersion={currentVersion}
+            otherSeriesPlayerNames={otherSeriesPlayerNames}
+            busy={isTransitioning}
+            onCancel={() => setIsCorrectionMode(false)}
+            onCommit={commitResultCorrection}
+            onRestore={restoreResultVersion}
+          />
+        ) : (
           <div className="space-y-12 max-w-7xl mx-auto flex flex-col items-center">
             
             {/* 最終排名區塊 */}
@@ -1739,6 +2013,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
               </div>
 
               <div className="mt-12 flex justify-center">
+                {resultLocked && <button onClick={() => setIsCorrectionMode(true)}
+                  className="mr-3 px-6 py-4 rounded-xl font-black border-2"
+                  style={{ borderColor: COLORS.inkBlue, color: COLORS.inkBlue }}>
+                  更正結果・查看版本（v{currentVersion}）
+                </button>}
                 <button onClick={handleLeaveCloudTournament}
                   className="flex items-center justify-center gap-3 px-8 py-4 rounded-xl font-black text-lg tracking-widest transition-all brush-border border-2"
                   style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg, borderColor: COLORS.inkOrange }}>
@@ -1760,7 +2039,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
             </div>
 
           </div>
-        )}
+        ))}
 
         </div>
 

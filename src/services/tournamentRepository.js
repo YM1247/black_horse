@@ -244,6 +244,17 @@ export const saveCloudTournament = async (eventCode, tournament, audits, expecte
         tournament: decodeTournamentFromFirestore({ id: snapshot.id, ...snapshot.data() })
       });
     }
+    const lockedCoreKeys = ['phase', 'players', 'rounds', 'currentRoundNum', 'judgeCount', 'doubleElimination', 'runId', 'runNumber'];
+    const isClearingRun = auditEntries.some(audit => audit.action === 'TOURNAMENT_CLEARED');
+    if (snapshot.data().resultLocked === true && !isClearingRun && lockedCoreKeys.some(key => Object.prototype.hasOwnProperty.call(tournament, key))) {
+      const currentCore = encodeTournamentForFirestore(Object.fromEntries(lockedCoreKeys.map(key => [key, snapshot.data()[key]])));
+      const nextCore = encodeTournamentForFirestore(Object.fromEntries(lockedCoreKeys.map(key => [key, tournament[key]])));
+      if (JSON.stringify(currentCore) !== JSON.stringify(nextCore)) {
+        const error = new Error('賽事結果已鎖定，請使用完賽結果更正功能。');
+        error.code = 'cloud/result-locked';
+        throw error;
+      }
+    }
     const nextRevision = actualRevision + 1;
     transaction.set(tournamentRef, {
       ...encodeTournamentForFirestore(tournament),
@@ -263,6 +274,91 @@ export const saveCloudTournament = async (eventCode, tournament, audits, expecte
     ));
     return nextRevision;
   });
+};
+
+export const saveTournamentVersion = async (eventCode, tournament, {
+  expectedRevision,
+  type,
+  reason,
+  changes = [],
+  sourceVersion = null
+}) => {
+  const code = normalizeEventCode(eventCode);
+  if (!validateEventCode(code)) throw new Error('賽事代碼格式錯誤。');
+  const user = requireUser();
+  const { db } = getFirebaseServices();
+  const tournamentRef = doc(db, 'tournaments', code);
+
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(tournamentRef);
+    if (!snapshot.exists()) throw new Error('找不到指定的雲端賽事。');
+    const actualRevision = Number(snapshot.data().revision) || 0;
+    if (Number(expectedRevision) !== actualRevision) {
+      throw new CloudRevisionConflictError({
+        expectedRevision: Number(expectedRevision),
+        actualRevision,
+        tournament: decodeTournamentFromFirestore({ id: snapshot.id, ...snapshot.data() })
+      });
+    }
+
+    const currentVersion = Number(snapshot.data().currentVersion) || 0;
+    const nextVersion = currentVersion + 1;
+    const runId = String(tournament.runId || snapshot.data().runId || `legacy-${code.toLowerCase()}`);
+    const versionId = `${runId}-v${nextVersion}`;
+    const nextRevision = actualRevision + 1;
+    const lockedTournament = {
+      ...tournament,
+      phase: 'finished',
+      resultLocked: true,
+      runId,
+      runNumber: Number(tournament.runNumber || snapshot.data().runNumber) || 1,
+      currentVersion: nextVersion
+    };
+    const versionRef = doc(tournamentRef, 'versions', versionId);
+
+    transaction.set(versionRef, {
+      version: nextVersion,
+      runId,
+      runNumber: lockedTournament.runNumber,
+      type,
+      reason: String(reason || '').trim(),
+      changes: cleanData(changes),
+      ...(sourceVersion ? { sourceVersion } : {}),
+      snapshot: encodeTournamentForFirestore(lockedTournament),
+      createdAt: serverTimestamp(),
+      clientTimestamp: new Date().toISOString(),
+      createdBy: user.uid
+    });
+    transaction.set(tournamentRef, {
+      ...encodeTournamentForFirestore(lockedTournament),
+      revision: nextRevision,
+      updatedAt: serverTimestamp(),
+      clientUpdatedAt: new Date().toISOString(),
+      updatedBy: user.uid
+    }, { merge: true });
+    createAuditLog(transaction, tournamentRef, user,
+      type === 'completed' || type === 'migration' ? 'TOURNAMENT_FINISHED' : type === 'restore' ? 'RESULT_VERSION_RESTORED' : 'RESULT_CORRECTED',
+      { version: nextVersion, reason: String(reason || '').trim(), changes: cleanData(changes), sourceVersion }
+    );
+    return { revision: nextRevision, version: nextVersion, versionId };
+  });
+};
+
+export const subscribeTournamentVersions = (eventCode, onVersions, onError) => {
+  const code = normalizeEventCode(eventCode);
+  if (!validateEventCode(code)) throw new Error('賽事代碼格式錯誤。');
+  const { db } = getFirebaseServices();
+  const versionsQuery = query(collection(db, 'tournaments', code, 'versions'), orderBy('createdAt', 'desc'));
+  return onSnapshot(versionsQuery, snapshot => {
+    onVersions(snapshot.docs.map(item => {
+      const data = item.data();
+      return {
+        id: item.id,
+        ...data,
+        snapshot: decodeTournamentFromFirestore(data.snapshot || {})
+      };
+    }));
+  }, onError);
 };
 
 export const subscribeTournament = (eventCode, onTournament, onError) => {

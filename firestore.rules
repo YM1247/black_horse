@@ -69,6 +69,30 @@ service cloud.firestore {
         && (
           (!resource.data.keys().hasAny(['revision']) && request.resource.data.revision == 1)
           || (resource.data.keys().hasAny(['revision']) && request.resource.data.revision == resource.data.revision + 1)
+        )
+        && (
+          !resource.data.keys().hasAny(['resultLocked'])
+          || resource.data.resultLocked != true
+          || (
+            request.resource.data.phase == resource.data.phase
+            && request.resource.data.players == resource.data.players
+            && request.resource.data.rounds == resource.data.rounds
+            && request.resource.data.currentRoundNum == resource.data.currentRoundNum
+            && request.resource.data.judgeCount == resource.data.judgeCount
+            && request.resource.data.doubleElimination == resource.data.doubleElimination
+            && request.resource.data.runId == resource.data.runId
+            && request.resource.data.runNumber == resource.data.runNumber
+            && request.resource.data.currentVersion == resource.data.currentVersion
+          )
+          || request.resource.data.currentVersion == resource.data.currentVersion + 1
+          || (
+            request.resource.data.phase == 'registration'
+            && request.resource.data.resultLocked == false
+            && request.resource.data.currentVersion == 0
+            && request.resource.data.runNumber == resource.data.runNumber + 1
+            && request.resource.data.players.size() == 0
+            && request.resource.data.rounds.size() == 0
+          )
         );
       allow delete: if isAdmin();
 
@@ -76,6 +100,16 @@ service cloud.firestore {
         allow read: if isAdmin();
         allow create: if isAdmin()
           && request.resource.data.createdBy == request.auth.uid;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+
+      match /versions/{versionId} {
+        allow read: if isAdmin();
+        allow create: if isAdmin()
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.version is int
+          && request.resource.data.runId is string;
         allow update: if false;
         allow delete: if isAdmin();
       }
