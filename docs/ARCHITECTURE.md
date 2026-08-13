@@ -2,7 +2,7 @@
 
 ## Phase 1 歷史架構
 
-目前是 Create React App 建立的單頁前端應用：
+目前是由 Vite 建置的 React 單頁前端應用：
 
 ```text
 React UI / 賽事規則
@@ -42,13 +42,24 @@ GitHub Pages
 - 系列設定：`series/{seriesId}` 保存可編輯的場次名稱、代碼與賽制標籤。初次尚無文件時使用程式內建場次；第一次新增或刪除後，完整設定會寫入雲端。
 - 公開系列：`publicSeries/{publicCode}` 是不含私人設定的安全投影，只列出存在且公開的場次。公開頁訂閱各單場文件後，以管理端共用函式即時計算排名，不保存第二份排行榜。
 
-為維持 Spark 免費方案，Phase 2 不依賴 Cloud Functions。重要原則是把配對、計分、排名等規則抽成可測試的領域層，前後台不可各自複製一份規則。賽事資料先保存為單一 Firestore document，以便離線與即時同步整體狀態；若未來規模接近 Firestore 單一文件限制，再將輪次與對戰拆成子集合。
+為維持 Spark 免費方案，Phase 2 不依賴 Cloud Functions。重要原則是把配對、計分、排名等規則抽成可測試的領域層，前後台不可各自複製一份規則。賽事完整內容保存於單一 Firestore document，以便即時同步；後台首頁只讀 `tournamentSummaries/{eventCode}` 摘要，進入單場或系列後才下載完整選手與輪次。
 
 ### 多裝置同步
 
 `tournaments/{eventCode}` 與 `series/{seriesId}` 以遞增 `revision` 實作樂觀並行控制。管理端每批操作攜帶讀取時的 revision，repository 在 transaction 中再次比對；若其他裝置已先寫入，舊資料不會覆蓋新版本，畫面會載入最新版並保留本機操作摘要供管理員重新確認。比分等操作各自建立 audit，不再由單一 debounce 紀錄互相覆蓋。
 
 管理端無法連線時立即切成唯讀。暫時性錯誤會依 1、2、4、8、16 秒重試；切換賽事、回首頁與登出前必須先完成同步。
+
+### 前端模組
+
+- `tournament.js`：配對、比分重算、排名與積分規則。
+- `tournamentState.js`：賽事資料正規化、預設設定與新賽事狀態。
+- `cloudSync.js`：退避重試、pending snapshot 防回彈與操作摘要。
+- `conflictResolution.js`：revision 衝突後可重新套用操作的判斷與重算。
+- `ResultCorrectionPanel.jsx`：完賽更正、差異預覽與版本回復 UI。
+- `SeriesAdminDashboard.jsx`：系列場次管理、公開分享與後台排名。
+- `PublicTournamentPage.jsx`／`PublicSeriesPage.jsx`：公開唯讀入口。
+- `services/tournamentRepository.js`：Firestore transaction、版本、摘要、投影及訂閱。
 
 ## 兩敗淘汰規則
 

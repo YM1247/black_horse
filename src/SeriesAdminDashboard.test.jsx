@@ -1,18 +1,19 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { vi } from 'vitest';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
 import { SIMULATION_SERIES } from './series';
 
-jest.mock('qrcode', () => ({
-  toDataURL: jest.fn().mockResolvedValue('data:image/png;base64,series')
+vi.mock('qrcode', () => ({
+  default: { toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,series') }
 }));
 
 test('series dashboard shows separate event controls and cumulative standings', async () => {
-  const onOpenEvent = jest.fn();
-  const onCreateEvent = jest.fn();
-  const onAddEvent = jest.fn().mockResolvedValue(true);
-  const onClearEvent = jest.fn();
-  const onDeleteEvent = jest.fn();
-  const onToggleVisibility = jest.fn();
+  const onOpenEvent = vi.fn();
+  const onCreateEvent = vi.fn();
+  const onAddEvent = vi.fn().mockResolvedValue(true);
+  const onClearEvent = vi.fn();
+  const onDeleteEvent = vi.fn();
+  const onToggleVisibility = vi.fn();
   const tournaments = [{
     id: 'MOCK819',
     phase: 'finished',
@@ -31,7 +32,7 @@ test('series dashboard shows separate event controls and cumulative standings', 
     series={SIMULATION_SERIES}
     tournaments={tournaments}
     standings={standings}
-    onBack={jest.fn()}
+    onBack={vi.fn()}
     onOpenEvent={onOpenEvent}
     onCreateEvent={onCreateEvent}
     onAddEvent={onAddEvent}
@@ -46,7 +47,8 @@ test('series dashboard shows separate event controls and cumulative standings', 
   expect(screen.getByRole('button', { name: '建立 8/26' })).toBeInTheDocument();
   expect(screen.getByText('Alice')).toBeInTheDocument();
   expect(screen.getAllByText('100')).toHaveLength(2);
-  expect(screen.getByRole('link', { name: 'http://localhost/?series=SIM2026' })).toHaveAttribute('href', 'http://localhost/?series=SIM2026');
+  expect(screen.getByRole('link', { name: /\?series=SIM2026$/ })).toHaveAttribute('href', expect.stringMatching(/\?series=SIM2026$/));
+  await waitFor(() => expect(screen.getByAltText('模擬賽公開網址 QR Code')).toBeInTheDocument());
 
   fireEvent.click(screen.getByRole('button', { name: '關閉系列公開' }));
   expect(onToggleVisibility).toHaveBeenCalledWith(SIMULATION_SERIES);

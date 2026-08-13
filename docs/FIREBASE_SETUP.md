@@ -56,7 +56,7 @@ unset ADMIN_TOKEN
 cp .env.example .env.local
 ```
 
-`.env.local` 已由 Git 忽略。Firebase Web config 不是秘密，但管理 token 不可放在任何 `REACT_APP_*` 變數或提交至 Git。
+`.env.local` 已由 Git 忽略。Firebase Web config 不是秘密，但管理 token 不可放在任何 `VITE_*` 變數或提交至 Git。
 
 ## 4. 發布 Security Rules
 
@@ -104,6 +104,25 @@ Firestore 在支援的 Chrome、Safari、Firefox 啟用多分頁 IndexedDB 持�
 賽事與系列文件具有遞增 `revision`。所有更新都必須由 transaction 將 revision 恰好增加 1；這項限制同時由 repository 與 Firestore Rules 驗證，用來阻止多台裝置以舊快照覆蓋新資料。
 
 Firestore 是現行版本唯一的正式賽事資料來源。後台不再讀寫瀏覽器 `localStorage` 賽事進度或歷史檔案庫；IndexedDB 僅由 Firebase SDK 用來維持離線快取與待同步寫入，不能視為另一份可手動載入的存檔。
+
+後台首頁改讀 `tournamentSummaries/{eventCode}`，不下載選手與輪次。部署後管理員第一次登入會以一次性遷移建立既有賽事摘要；之後建立、同步、完賽更正、封存及刪除都與完整賽事在同一批操作更新摘要。開啟單場或系列頁時才訂閱完整 `tournaments/{eventCode}`。
+
+## App Check 監控
+
+在 Firebase Console 建立 Web App 的 reCAPTCHA v3 App Check provider 後，將 site key 設為 `VITE_FIREBASE_APP_CHECK_SITE_KEY`。前端會開始自動取得 App Check token，但 Console 請先維持「監控、未強制執行」。確認 GitHub Pages 的有效請求比例及錯誤率正常後，再由管理員於 Firebase Console 開啟 Firestore enforcement。
+
+本機除錯可設定 `VITE_FIREBASE_APP_CHECK_DEBUG_TOKEN`；此值不可提交或用於正式站。未設定 site key 時 App Check 完全不初始化，不影響既有流量。
+
+## Emulator 與測試
+
+```bash
+npm test
+npm run test:rules
+npm run build
+npm audit
+```
+
+`test:rules` 會啟動 Firestore Emulator，驗證 revision、完賽版本原子性、版本不可更新、公開／私人讀取及 token session 到期／輪替。需先安裝 Java；macOS 可使用 `brew install openjdk`。
 
 系列場次設定保存於 `series/{seriesId}`，只有通過管理 token 的後台可讀寫。新增場次先保存名稱、代碼與三位評審／兩敗淘汰標籤，再由管理員建立對應的 `tournaments/{eventCode}`。清除內容會保留系列設定、賽事名稱、公開狀態和 audit logs；完整刪除則移除賽事文件、其 audit logs 與系列場次設定。
 

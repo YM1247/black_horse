@@ -111,6 +111,23 @@ export const buildPublicSeriesProjection = (series = {}, tournaments = []) => {
   });
 };
 
+export const buildTournamentSummary = (tournament = {}, eventCode = '') => cleanData({
+  eventCode: normalizeEventCode(eventCode || tournament.eventCode || tournament.id || ''),
+  name: String(tournament.name || eventCode || '').trim(),
+  phase: ['registration', 'playing', 'finished'].includes(tournament.phase) ? tournament.phase : 'registration',
+  currentRoundNum: Math.max(1, Number(tournament.currentRoundNum) || 1),
+  judgeCount: Number(tournament.judgeCount) === 5 ? 5 : 3,
+  doubleElimination: tournament.doubleElimination !== false,
+  isPublic: tournament.isPublic === true,
+  isArchived: tournament.isArchived === true,
+  deletionStatus: tournament.deletionStatus === 'deleting' ? 'deleting' : '',
+  playerCount: Array.isArray(tournament.players) ? tournament.players.filter(player => !player?.isMC).length : Number(tournament.playerCount) || 0,
+  revision: Number(tournament.revision) || 0,
+  ...(tournament.seriesId ? { seriesId: String(tournament.seriesId) } : {}),
+  ...(tournament.seriesEventId ? { seriesEventId: String(tournament.seriesEventId) } : {}),
+  ...(tournament.clientUpdatedAt ? { clientUpdatedAt: String(tournament.clientUpdatedAt) } : {})
+});
+
 export const normalizeEventCode = (value = '') => value.trim().toUpperCase();
 
 export const validateEventCode = (value) => EVENT_CODE_PATTERN.test(normalizeEventCode(value));
@@ -234,19 +251,27 @@ export const createCloudTournament = async ({ eventCode, name, tournament }) => 
   const user = requireUser();
   const { db } = getFirebaseServices();
   const tournamentRef = doc(db, 'tournaments', code);
+  const summaryRef = doc(db, 'tournamentSummaries', code);
   const now = new Date().toISOString();
   await runTransaction(db, async transaction => {
     const existing = await transaction.get(tournamentRef);
     if (existing.exists()) throw new Error('此賽事代碼已存在，請更換代碼。');
-    transaction.set(tournamentRef, {
+    const tournamentDocument = {
       ...encodeTournamentForFirestore(tournament),
       eventCode: code,
       name: name.trim() || code,
       isPublic: DEFAULT_CLOUD_TOURNAMENT_VISIBILITY,
       revision: 0,
+      currentVersionId: '',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       clientUpdatedAt: now,
+      updatedBy: user.uid
+    };
+    transaction.set(tournamentRef, tournamentDocument);
+    transaction.set(summaryRef, {
+      ...buildTournamentSummary(tournamentDocument, code),
+      updatedAt: serverTimestamp(),
       updatedBy: user.uid
     });
     createAuditLog(transaction, tournamentRef, user, 'TOURNAMENT_CREATED', { name, eventCode: code });
@@ -260,6 +285,7 @@ export const saveCloudTournament = async (eventCode, tournament, audits, expecte
   const user = requireUser();
   const { db } = getFirebaseServices();
   const tournamentRef = doc(db, 'tournaments', code);
+  const summaryRef = doc(db, 'tournamentSummaries', code);
   const auditEntries = (Array.isArray(audits) ? audits : [audits]).filter(Boolean);
   return runTransaction(db, async transaction => {
     const snapshot = await transaction.get(tournamentRef);
@@ -284,14 +310,21 @@ export const saveCloudTournament = async (eventCode, tournament, audits, expecte
       }
     }
     const nextRevision = actualRevision + 1;
-    transaction.set(tournamentRef, {
+    const tournamentUpdate = {
       ...encodeTournamentForFirestore(tournament),
+      ...(isClearingRun ? { currentVersionId: '' } : {}),
       eventCode: code,
       revision: nextRevision,
       updatedAt: serverTimestamp(),
       clientUpdatedAt: new Date().toISOString(),
       updatedBy: user.uid
-    }, { merge: true });
+    };
+    transaction.set(tournamentRef, tournamentUpdate, { merge: true });
+    transaction.set(summaryRef, {
+      ...buildTournamentSummary({ ...snapshot.data(), ...tournamentUpdate }, code),
+      updatedAt: serverTimestamp(),
+      updatedBy: user.uid
+    });
     auditEntries.forEach(audit => createAuditLog(
       transaction,
       tournamentRef,
@@ -316,6 +349,7 @@ export const saveTournamentVersion = async (eventCode, tournament, {
   const user = requireUser();
   const { db } = getFirebaseServices();
   const tournamentRef = doc(db, 'tournaments', code);
+  const summaryRef = doc(db, 'tournamentSummaries', code);
 
   return runTransaction(db, async transaction => {
     const snapshot = await transaction.get(tournamentRef);
@@ -357,13 +391,20 @@ export const saveTournamentVersion = async (eventCode, tournament, {
       clientTimestamp: new Date().toISOString(),
       createdBy: user.uid
     });
-    transaction.set(tournamentRef, {
+    const tournamentUpdate = {
       ...encodeTournamentForFirestore(lockedTournament),
+      currentVersionId: versionId,
       revision: nextRevision,
       updatedAt: serverTimestamp(),
       clientUpdatedAt: new Date().toISOString(),
       updatedBy: user.uid
-    }, { merge: true });
+    };
+    transaction.set(tournamentRef, tournamentUpdate, { merge: true });
+    transaction.set(summaryRef, {
+      ...buildTournamentSummary({ ...snapshot.data(), ...tournamentUpdate }, code),
+      updatedAt: serverTimestamp(),
+      updatedBy: user.uid
+    });
     createAuditLog(transaction, tournamentRef, user,
       type === 'completed' || type === 'migration' ? 'TOURNAMENT_FINISHED' : type === 'restore' ? 'RESULT_VERSION_RESTORED' : 'RESULT_CORRECTED',
       { version: nextVersion, reason: String(reason || '').trim(), changes: cleanData(changes), sourceVersion }
@@ -407,10 +448,39 @@ export const subscribeTournament = (eventCode, onTournament, onError) => {
 
 export const subscribeAdminTournaments = (onTournaments, onError) => {
   const { db } = getFirebaseServices();
-  const tournamentsQuery = query(collection(db, 'tournaments'), orderBy('updatedAt', 'desc'));
+  const tournamentsQuery = query(collection(db, 'tournamentSummaries'), orderBy('updatedAt', 'desc'));
   return onSnapshot(tournamentsQuery, { includeMetadataChanges: true }, snapshot => {
-    onTournaments(snapshot.docs.map(item => decodeTournamentFromFirestore({ id: item.id, ...item.data() })));
+    onTournaments(snapshot.docs.map(item => ({ id: item.id, ...item.data() })));
   }, onError);
+};
+
+export const ensureTournamentSummaries = async () => {
+  const user = requireUser();
+  const { db } = getFirebaseServices();
+  const migrationRef = doc(db, 'systemMetadata', 'tournamentSummariesV1');
+  const migration = await getDocFromServer(migrationRef).catch(error => {
+    if (error.code === 'not-found') return null;
+    throw error;
+  });
+  if (migration?.exists()) return;
+
+  const tournaments = await getDocs(collection(db, 'tournaments'));
+  for (let index = 0; index < tournaments.docs.length; index += 350) {
+    const batch = writeBatch(db);
+    tournaments.docs.slice(index, index + 350).forEach(item => {
+      batch.set(doc(db, 'tournamentSummaries', item.id), {
+        ...buildTournamentSummary(item.data(), item.id),
+        updatedAt: item.data().updatedAt || serverTimestamp(),
+        updatedBy: user.uid
+      });
+    });
+    await batch.commit();
+  }
+  await setDoc(migrationRef, {
+    completedAt: serverTimestamp(),
+    migratedCount: tournaments.size,
+    completedBy: user.uid
+  });
 };
 
 export const subscribeCloudSeries = (seriesId, onSeries, onError) => {
@@ -501,6 +571,9 @@ export const deleteCloudTournament = async (eventCode) => {
     }
   }
   await deleteDoc(tournamentRef).catch(error => {
+    if (error.code !== 'not-found') throw error;
+  });
+  await deleteDoc(doc(db, 'tournamentSummaries', code)).catch(error => {
     if (error.code !== 'not-found') throw error;
   });
 };

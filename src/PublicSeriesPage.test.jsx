@@ -1,9 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { vi } from 'vitest';
 import PublicSeriesPage from './PublicSeriesPage';
 
-jest.mock('./firebase', () => ({ isFirebaseConfigured: true }));
+vi.mock('./firebase', () => ({ isFirebaseConfigured: true }));
 
-jest.mock('./services/tournamentRepository', () => ({
+vi.mock('./services/tournamentRepository', () => ({
   normalizeEventCode: value => String(value || '').trim().toUpperCase(),
   validateEventCode: value => /^[A-Z0-9]{4,10}$/.test(String(value || '').trim().toUpperCase()),
   subscribePublicSeries: (code, onSeries) => {
@@ -19,7 +20,7 @@ jest.mock('./services/tournamentRepository', () => ({
         { id: 'two', name: '8/21', eventCode: 'MOCK821', judgeCount: 3, doubleElimination: true }
       ]
     });
-    return jest.fn();
+    return vi.fn();
   },
   subscribeTournament: (code, onTournament) => {
     onTournament({
@@ -32,7 +33,7 @@ jest.mock('./services/tournamentRepository', () => ({
       clientUpdatedAt: '2026-08-13T10:01:00.000Z',
       sync: { fromCache: false }
     });
-    return jest.fn();
+    return vi.fn();
   }
 }));
 

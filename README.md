@@ -44,7 +44,8 @@ npm start
 ## 驗證
 
 ```bash
-npm test -- --watchAll=false
+npm test
+npm run test:rules
 npm run build
 ```
 

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { vi } from 'vitest';
 import ResultCorrectionPanel from './ResultCorrectionPanel';
 
 const players = [
@@ -24,9 +25,9 @@ const renderPanel = (overrides = {}) => {
     versions: [],
     runId: 'run-1',
     currentVersion: 1,
-    onCancel: jest.fn(),
-    onCommit: jest.fn().mockResolvedValue(undefined),
-    onRestore: jest.fn().mockResolvedValue(undefined),
+    onCancel: vi.fn(),
+    onCommit: vi.fn().mockResolvedValue(undefined),
+    onRestore: vi.fn().mockResolvedValue(undefined),
     ...overrides
   };
   render(<ResultCorrectionPanel {...props} />);
@@ -55,4 +56,3 @@ test('versions from an older cleared run are view-only', () => {
   expect(screen.getByText('舊場次紀錄・僅供查看')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '回復此版本' })).not.toBeInTheDocument();
 });
-

@@ -1,5 +1,6 @@
 import {
   buildPublicSeriesProjection,
+  buildTournamentSummary,
   decodeTournamentFromFirestore,
   DEFAULT_CLOUD_TOURNAMENT_VISIBILITY,
   encodeSeriesForFirestore,
@@ -29,6 +30,25 @@ test('new cloud tournaments are public by default', () => {
 
 test('permanent deletion covers immutable versions and audit logs', () => {
   expect(TOURNAMENT_DELETION_SUBCOLLECTIONS).toEqual(['auditLogs', 'versions']);
+});
+
+test('admin home summary excludes players, rounds, and score details', () => {
+  const summary = buildTournamentSummary({
+    id: 'ABCD1',
+    name: '測試賽',
+    phase: 'playing',
+    currentRoundNum: 2,
+    judgeCount: 3,
+    doubleElimination: true,
+    isPublic: true,
+    revision: 7,
+    players: [{ name: '甲' }, { name: 'MC', isMC: true }],
+    rounds: [[{ p1Votes: 3, p2Votes: 0 }]]
+  });
+
+  expect(summary).toMatchObject({ eventCode: 'ABCD1', name: '測試賽', phase: 'playing', playerCount: 1, revision: 7 });
+  expect(summary).not.toHaveProperty('players');
+  expect(summary).not.toHaveProperty('rounds');
 });
 
 test('series definitions keep editable event labels and fixed rules', () => {

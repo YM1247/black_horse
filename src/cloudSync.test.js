@@ -1,4 +1,5 @@
 import { isTransientCloudError, runWithCloudRetry, shouldApplyCloudSnapshot, summarizePendingOperation } from './cloudSync';
+import { vi } from 'vitest';
 
 test('initial and idle cloud snapshots can update the editor', () => {
   expect(shouldApplyCloudSnapshot({
@@ -31,12 +32,12 @@ test('the snapshot matching pending local state is accepted as an acknowledgemen
 });
 
 test('transient cloud errors retry with the configured delays', async () => {
-  const operation = jest.fn()
+  const operation = vi.fn()
     .mockRejectedValueOnce({ code: 'unavailable' })
     .mockRejectedValueOnce({ code: 'aborted' })
     .mockResolvedValue(7);
-  const waitFor = jest.fn().mockResolvedValue(undefined);
-  const onRetry = jest.fn();
+  const waitFor = vi.fn().mockResolvedValue(undefined);
+  const onRetry = vi.fn();
 
   await expect(runWithCloudRetry(operation, { delays: [10, 20], waitFor, onRetry })).resolves.toBe(7);
   expect(waitFor).toHaveBeenNthCalledWith(1, 10);
@@ -47,8 +48,8 @@ test('transient cloud errors retry with the configured delays', async () => {
 test('permission and revision conflicts are not retried', async () => {
   expect(isTransientCloudError({ code: 'permission-denied' })).toBe(false);
   expect(isTransientCloudError({ code: 'cloud/revision-conflict' })).toBe(false);
-  const operation = jest.fn().mockRejectedValue({ code: 'permission-denied' });
-  await expect(runWithCloudRetry(operation, { waitFor: jest.fn() })).rejects.toEqual({ code: 'permission-denied' });
+  const operation = vi.fn().mockRejectedValue({ code: 'permission-denied' });
+  await expect(runWithCloudRetry(operation, { waitFor: vi.fn() })).rejects.toEqual({ code: 'permission-denied' });
   expect(operation).toHaveBeenCalledTimes(1);
 });
 

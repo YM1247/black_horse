@@ -1,5 +1,22 @@
 # 開發紀錄
 
+## 2026-08-13｜Vite、Emulator 測試與摘要資料層
+
+### 修改內容
+
+- 將 Create React App／`react-scripts` 遷移至 Vite 8 與 Vitest 4，保留 GitHub Pages `/black_horse/` base path 及既有 query-string 網址。
+- 將 JSX 檔案改用 `.jsx`，拆出賽事狀態正規化與多人衝突重播模組；管理、公開、結果更正及系列元件維持既有責任邊界。
+- 新增 `tournamentSummaries/{eventCode}`；後台首頁只監聽摘要，第一次登入自動遷移既有賽事，開啟單場或系列才讀取完整選手與輪次。
+- 完賽版本新增 `currentVersionId` 關聯；Firestore Rules 使用 `existsAfter/getAfter` 強制結果更正與不可變版本在同一原子寫入中建立。
+- 新增 Firestore Emulator 規則測試，涵蓋 revision 衝突、transaction 遞增、完賽鎖定與版本、私人資料、session 到期及 token 輪替。
+- App Check 加入可選 reCAPTCHA v3 初始化與自動 token 更新，預設未設定 site key、維持監控前準備狀態，不啟用 enforcement。
+
+### 驗證範圍
+
+- 75 個 Vitest 單元／元件測試通過；新增衝突重播與輕量摘要測試。
+- 4 個 Firestore Emulator Security Rules 測試通過。
+- Vite production build 成功；安裝／移除工具鏈時 npm 回報 0 個已知漏洞。
+
 ## 2026-08-13｜可續跑刪除與管理操作改善
 
 ### 修改內容

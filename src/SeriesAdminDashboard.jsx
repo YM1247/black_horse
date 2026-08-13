@@ -143,7 +143,7 @@ export default function SeriesAdminDashboard({
                 </div>
                 <div className="mt-5 text-sm font-bold text-slate-400 space-y-1">
                   <div>3 位評審・兩敗淘汰</div>
-                  <div>{tournament ? `${tournament.players?.length || 0} 位選手・${tournament.isPublic ? '公開' : '未公開'}` : '獨立報名名單'}</div>
+                  <div>{tournament ? `${tournament.players?.length ?? tournament.playerCount ?? 0} 位選手・${tournament.isPublic ? '公開' : '未公開'}` : '獨立報名名單'}</div>
                 </div>
                 <div className="mt-auto pt-4 grid grid-cols-2 gap-2">
                   <button type="button" disabled={isBusy}

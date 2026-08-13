@@ -71,6 +71,15 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /tournamentSummaries/{eventCode} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /systemMetadata/{documentId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if false;
+    }
+
     match /tournaments/{eventCode} {
       allow get: if isAdmin() || resource.data.isPublic == true;
       allow list: if isAdmin();
@@ -94,12 +103,18 @@ service cloud.firestore {
             && request.resource.data.runId == resource.data.runId
             && request.resource.data.runNumber == resource.data.runNumber
             && request.resource.data.currentVersion == resource.data.currentVersion
+            && request.resource.data.get('currentVersionId', '') == resource.data.get('currentVersionId', '')
           )
-          || request.resource.data.currentVersion == resource.data.currentVersion + 1
+          || (
+            request.resource.data.currentVersion == resource.data.currentVersion + 1
+            && request.resource.data.currentVersionId is string
+            && existsAfter(/databases/$(database)/documents/tournaments/$(eventCode)/versions/$(request.resource.data.currentVersionId))
+          )
           || (
             request.resource.data.phase == 'registration'
             && request.resource.data.resultLocked == false
             && request.resource.data.currentVersion == 0
+            && request.resource.data.currentVersionId == ''
             && request.resource.data.runNumber == resource.data.runNumber + 1
             && request.resource.data.players.size() == 0
             && request.resource.data.rounds.size() == 0
@@ -120,7 +135,9 @@ service cloud.firestore {
         allow create: if isAdmin()
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.version is int
-          && request.resource.data.runId is string;
+          && request.resource.data.runId is string
+          && getAfter(/databases/$(database)/documents/tournaments/$(eventCode)).data.currentVersionId == versionId
+          && getAfter(/databases/$(database)/documents/tournaments/$(eventCode)).data.currentVersion == request.resource.data.version;
         allow update: if false;
         allow delete: if isAdmin();
       }
