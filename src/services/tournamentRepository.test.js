@@ -38,6 +38,23 @@ test('series definitions keep editable event labels and fixed rules', () => {
   });
 });
 
+test('series encoding keeps public settings without persisting revision twice', () => {
+  expect(encodeSeriesForFirestore({
+    name: '模擬賽',
+    description: '系列',
+    publicCode: ' sim2026 ',
+    isPublic: true,
+    revision: 9,
+    events: []
+  })).toEqual({
+    name: '模擬賽',
+    description: '系列',
+    publicCode: 'SIM2026',
+    isPublic: true,
+    events: []
+  });
+});
+
 test('rounds use a Firestore-safe map and restore the domain array shape', () => {
   const rounds = [
     [{ id: 'round-1-match-1', p1Votes: 3, p2Votes: 0 }],

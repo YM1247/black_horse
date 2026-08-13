@@ -11,6 +11,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  Timestamp,
   writeBatch
 } from 'firebase/firestore';
 import {
@@ -26,6 +27,18 @@ import {
 const EVENT_CODE_PATTERN = /^[A-Z0-9]{4,10}$/;
 const EVENT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const DEFAULT_CLOUD_TOURNAMENT_VISIBILITY = true;
+export const ADMIN_SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+
+export class CloudRevisionConflictError extends Error {
+  constructor({ expectedRevision, actualRevision, tournament }) {
+    super('資料已由其他裝置更新，請重新確認尚未同步的操作。');
+    this.name = 'CloudRevisionConflictError';
+    this.code = 'cloud/revision-conflict';
+    this.expectedRevision = expectedRevision;
+    this.actualRevision = actualRevision;
+    this.tournament = tournament;
+  }
+}
 
 const cleanData = (value) => JSON.parse(JSON.stringify(value));
 
@@ -65,7 +78,9 @@ export const encodeSeriesForFirestore = (series = {}) => cleanData({
     eventCode: normalizeEventCode(event.eventCode),
     judgeCount: Number(event.judgeCount) === 5 ? 5 : 3,
     doubleElimination: event.doubleElimination !== false
-  }))
+  })),
+  ...(series.publicCode ? { publicCode: normalizeEventCode(series.publicCode) } : {}),
+  ...(typeof series.isPublic === 'boolean' ? { isPublic: series.isPublic } : {})
 });
 
 export const normalizeEventCode = (value = '') => value.trim().toUpperCase();
@@ -108,14 +123,15 @@ const requireUser = () => {
   return auth.currentUser;
 };
 
-const createAuditLog = (batch, tournamentRef, user, action, details) => {
+const createAuditLog = (batch, tournamentRef, user, action, details, clientOperationId = '') => {
   const auditRef = doc(collection(tournamentRef, 'auditLogs'));
   batch.set(auditRef, {
     action,
     details: cleanData(details),
     createdAt: serverTimestamp(),
     clientTimestamp: new Date().toISOString(),
-    createdBy: user.uid
+    createdBy: user.uid,
+    ...(clientOperationId ? { clientOperationId } : {})
   });
 };
 
@@ -130,7 +146,13 @@ export const signInAdminWithToken = async (token) => {
     }
     const sessionRef = doc(db, 'adminSessions', user.uid);
     try {
-      await setDoc(sessionRef, { tokenHash, createdAt: serverTimestamp() });
+      // token 輪替後舊 session 會失效；先移除自己的舊文件，避免禁止 update 的 Rules 阻擋重新登入。
+      await deleteDoc(sessionRef).catch(() => {});
+      await setDoc(sessionRef, {
+        tokenHash,
+        createdAt: serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(Date.now() + ADMIN_SESSION_DURATION_MS)
+      });
       await getDocFromServer(sessionRef);
     } catch (error) {
       if (error.code === 'permission-denied') {
@@ -168,7 +190,8 @@ export const subscribeAuth = (callback) => {
       return;
     }
     unsubscribeSession = onSnapshot(doc(db, 'adminSessions', user.uid), snapshot => {
-      callback(snapshot.exists() ? user : null);
+      const expiresAt = snapshot.data()?.expiresAt?.toMillis?.() || 0;
+      callback(snapshot.exists() && expiresAt > Date.now() ? user : null);
     }, () => callback(null));
   });
   return () => {
@@ -192,6 +215,7 @@ export const createCloudTournament = async ({ eventCode, name, tournament }) => 
       eventCode: code,
       name: name.trim() || code,
       isPublic: DEFAULT_CLOUD_TOURNAMENT_VISIBILITY,
+      revision: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       clientUpdatedAt: now,
@@ -202,23 +226,43 @@ export const createCloudTournament = async ({ eventCode, name, tournament }) => 
   return code;
 };
 
-export const saveCloudTournament = async (eventCode, tournament, audit) => {
+export const saveCloudTournament = async (eventCode, tournament, audits, expectedRevision = null) => {
   const code = normalizeEventCode(eventCode);
   if (!validateEventCode(code)) throw new Error('賽事代碼格式錯誤。');
   const user = requireUser();
   const { db } = getFirebaseServices();
   const tournamentRef = doc(db, 'tournaments', code);
-  const batch = writeBatch(db);
-
-  batch.set(tournamentRef, {
-    ...encodeTournamentForFirestore(tournament),
-    eventCode: code,
-    updatedAt: serverTimestamp(),
-    clientUpdatedAt: new Date().toISOString(),
-    updatedBy: user.uid
-  }, { merge: true });
-  createAuditLog(batch, tournamentRef, user, audit.action, audit.details || {});
-  await batch.commit();
+  const auditEntries = (Array.isArray(audits) ? audits : [audits]).filter(Boolean);
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(tournamentRef);
+    if (!snapshot.exists()) throw new Error('找不到指定的雲端賽事。');
+    const actualRevision = Number(snapshot.data().revision) || 0;
+    if (expectedRevision !== null && Number(expectedRevision) !== actualRevision) {
+      throw new CloudRevisionConflictError({
+        expectedRevision: Number(expectedRevision),
+        actualRevision,
+        tournament: decodeTournamentFromFirestore({ id: snapshot.id, ...snapshot.data() })
+      });
+    }
+    const nextRevision = actualRevision + 1;
+    transaction.set(tournamentRef, {
+      ...encodeTournamentForFirestore(tournament),
+      eventCode: code,
+      revision: nextRevision,
+      updatedAt: serverTimestamp(),
+      clientUpdatedAt: new Date().toISOString(),
+      updatedBy: user.uid
+    }, { merge: true });
+    auditEntries.forEach(audit => createAuditLog(
+      transaction,
+      tournamentRef,
+      user,
+      audit.action,
+      audit.details || {},
+      audit.clientOperationId
+    ));
+    return nextRevision;
+  });
 };
 
 export const subscribeTournament = (eventCode, onTournament, onError) => {
@@ -252,13 +296,27 @@ export const subscribeCloudSeries = (seriesId, onSeries, onError) => {
   }, onError);
 };
 
-export const saveCloudSeries = async (series) => {
+export const saveCloudSeries = async (series, expectedRevision = null) => {
   const user = requireUser();
   const { db } = getFirebaseServices();
-  await setDoc(doc(db, 'series', series.id), {
-    ...encodeSeriesForFirestore(series),
-    updatedAt: serverTimestamp(),
-    updatedBy: user.uid
+  const seriesRef = doc(db, 'series', series.id);
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(seriesRef);
+    const actualRevision = snapshot.exists() ? Number(snapshot.data().revision) || 0 : 0;
+    if (expectedRevision !== null && Number(expectedRevision) !== actualRevision) {
+      const error = new Error('系列場次已由其他裝置更新，請重新載入後再試。');
+      error.code = 'cloud/series-revision-conflict';
+      error.actualRevision = actualRevision;
+      throw error;
+    }
+    const nextRevision = actualRevision + 1;
+    transaction.set(seriesRef, {
+      ...encodeSeriesForFirestore(series),
+      revision: nextRevision,
+      updatedAt: serverTimestamp(),
+      updatedBy: user.uid
+    });
+    return nextRevision;
   });
 };
 

@@ -12,7 +12,8 @@ service cloud.firestore {
 
     function adminSessionExists() {
       return signedIn()
-        && exists(/databases/$(database)/documents/adminSessions/$(request.auth.uid));
+        && exists(/databases/$(database)/documents/adminSessions/$(request.auth.uid))
+        && get(/databases/$(database)/documents/adminSessions/$(request.auth.uid)).data.expiresAt > request.time;
     }
 
     function isAdmin() {
@@ -32,9 +33,11 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == uid
         && adminSettingsExist()
-        && request.resource.data.keys().hasOnly(['tokenHash', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['tokenHash', 'createdAt', 'expiresAt'])
         && request.resource.data.tokenHash is string
         && request.resource.data.tokenHash.size() == 64
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
         && request.resource.data.tokenHash
           == get(/databases/$(database)/documents/settings/admin).data.tokenHash;
       allow update: if false;
@@ -47,13 +50,27 @@ service cloud.firestore {
     }
 
     match /series/{seriesId} {
-      allow read, create, update, delete: if isAdmin();
+      allow read, delete: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.revision == 1;
+      allow update: if isAdmin()
+        && (
+          (!resource.data.keys().hasAny(['revision']) && request.resource.data.revision == 1)
+          || (resource.data.keys().hasAny(['revision']) && request.resource.data.revision == resource.data.revision + 1)
+        );
     }
 
     match /tournaments/{eventCode} {
       allow get: if isAdmin() || resource.data.isPublic == true;
       allow list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.revision == 0;
+      allow update: if isAdmin()
+        && (
+          (!resource.data.keys().hasAny(['revision']) && request.resource.data.revision == 1)
+          || (resource.data.keys().hasAny(['revision']) && request.resource.data.revision == resource.data.revision + 1)
+        );
+      allow delete: if isAdmin();
 
       match /auditLogs/{logId} {
         allow read: if isAdmin();

@@ -40,6 +40,12 @@ GitHub Pages
 
 為維持 Spark 免費方案，Phase 2 不依賴 Cloud Functions。重要原則是把配對、計分、排名等規則抽成可測試的領域層，前後台不可各自複製一份規則。賽事資料先保存為單一 Firestore document，以便離線與即時同步整體狀態；若未來規模接近 Firestore 單一文件限制，再將輪次與對戰拆成子集合。
 
+### 多裝置同步
+
+`tournaments/{eventCode}` 與 `series/{seriesId}` 以遞增 `revision` 實作樂觀並行控制。管理端每批操作攜帶讀取時的 revision，repository 在 transaction 中再次比對；若其他裝置已先寫入，舊資料不會覆蓋新版本，畫面會載入最新版並保留本機操作摘要供管理員重新確認。比分等操作各自建立 audit，不再由單一 debounce 紀錄互相覆蓋。
+
+管理端無法連線時立即切成唯讀。暫時性錯誤會依 1、2、4、8、16 秒重試；切換賽事、回首頁與登出前必須先完成同步。
+
 ## 兩敗淘汰規則
 
 - `doubleElimination` 是賽事層級布林設定；舊資料缺少此欄位時視為 `false`。

@@ -5,7 +5,7 @@ import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerR
 import PublicTournamentPage from './PublicTournamentPage';
 import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit';
 import { isFirebaseConfigured } from './firebase';
-import { shouldApplyCloudSnapshot } from './cloudSync';
+import { runWithCloudRetry, shouldApplyCloudSnapshot, summarizePendingOperation } from './cloudSync';
 import FullScreenCloudManager from './FullScreenCloudManager';
 import { buildSeriesStandings, normalizeSeriesDefinition, SERIES } from './series';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
@@ -95,6 +95,58 @@ const normalizeTournamentData = (data = {}) => {
   };
 };
 
+const canReplayCloudOperation = (operation = {}) => [
+  'SCORE_UPDATED',
+  'HISTORICAL_SCORE_UPDATED',
+  'PLAYER_ADDED',
+  'PLAYER_REMOVED',
+  'PLAYER_RENAMED',
+  'JUDGE_COUNT_CHANGED',
+  'DOUBLE_ELIMINATION_CHANGED'
+].includes(operation.action);
+
+const replayCloudOperations = (baseState, operations) => operations.reduce((state, operation) => {
+  const details = operation.details || {};
+  switch (operation.action) {
+    case 'SCORE_UPDATED':
+    case 'HISTORICAL_SCORE_UPDATED': {
+      const roundIndex = Number(details.round) - 1;
+      const exists = state.rounds[roundIndex]?.some(match => match.id === details.matchId);
+      if (!exists) return state;
+      const rounds = updateMatchScore(state.rounds, roundIndex, details.matchId, details.after.p1Votes, details.after.p2Votes);
+      return {
+        ...state,
+        rounds,
+        players: applyDoubleElimination(recalculatePlayerRecords(state.players, rounds), rounds, state.doubleElimination)
+      };
+    }
+    case 'PLAYER_ADDED':
+      return details.player && !state.players.some(player => player.id === details.player.id || player.name === details.player.name)
+        ? { ...state, players: [...state.players, details.player] }
+        : state;
+    case 'PLAYER_REMOVED':
+      return { ...state, players: state.players.filter(player => player.id !== details.playerId) };
+    case 'PLAYER_RENAMED':
+      return {
+        ...state,
+        players: state.players.map(player => player.id === details.playerId ? { ...player, name: details.after } : player),
+        rounds: state.rounds.map(round => round.map(match => ({
+          ...match,
+          p1: match.p1.id === details.playerId ? { ...match.p1, name: details.after } : match.p1,
+          p2: match.p2.id === details.playerId ? { ...match.p2, name: details.after } : match.p2
+        })))
+      };
+    case 'JUDGE_COUNT_CHANGED':
+      return state.phase === 'registration' ? { ...state, judgeCount: details.after } : state;
+    case 'DOUBLE_ELIMINATION_CHANGED':
+      return state.phase === 'registration'
+        ? { ...state, doubleElimination: details.after, players: applyDoubleElimination(state.players, state.rounds, details.after) }
+        : state;
+    default:
+      return state;
+  }
+}, baseState);
+
 export const createEmptyTournament = ({
   judgeCount = DEFAULT_JUDGE_COUNT,
   doubleElimination = DEFAULT_DOUBLE_ELIMINATION
@@ -161,18 +213,43 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [creatingSeriesEventCode, setCreatingSeriesEventCode] = useState('');
   const [seriesMutationStatus, setSeriesMutationStatus] = useState('');
   const [publicQrCode, setPublicQrCode] = useState('');
+  const [pendingOperationCount, setPendingOperationCount] = useState(0);
+  const [lastCloudSuccessAt, setLastCloudSuccessAt] = useState(null);
+  const [cloudRetryMessage, setCloudRetryMessage] = useState('');
+  const [cloudConflict, setCloudConflict] = useState(null);
+  const [conflictSelection, setConflictSelection] = useState({});
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const cloudReadyRef = useRef(false);
   const lastCloudStateRef = useRef(null);
   const pendingCloudStateRef = useRef(null);
   const currentCloudStateRef = useRef(null);
-  const pendingAuditRef = useRef(null);
+  const pendingAuditRef = useRef([]);
   const cloudSyncTimeoutRef = useRef(null);
+  const cloudRevisionRef = useRef(0);
+  const cloudSyncInFlightRef = useRef(false);
+  const cloudSyncRequestedRef = useRef(false);
+  const cloudSyncPromiseRef = useRef(null);
+  const flushCloudSyncRef = useRef(null);
   const closeCloudModalAfterLoadRef = useRef(false);
   currentCloudStateRef.current = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination });
 
   const markCloudAudit = (action, details = {}) => {
-    pendingAuditRef.current = { action, details };
+    const operation = { clientOperationId: createId(), action, details };
+    pendingAuditRef.current = [...pendingAuditRef.current, operation];
+    setPendingOperationCount(pendingAuditRef.current.length);
+    return operation;
   };
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => subscribeAuth(setAdminUser), []);
 
@@ -232,6 +309,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         return;
       }
       lastCloudStateRef.current = serialized;
+      cloudRevisionRef.current = Number(data.revision) || 0;
       if (pendingCloudStateRef.current === serialized) pendingCloudStateRef.current = null;
       cloudReadyRef.current = true;
       setPhase(normalized.phase);
@@ -267,37 +345,94 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     );
   }, [adminUser, activeCloudCode]);
 
-  useEffect(() => {
-    if (!adminUser || !activeCloudCode || !cloudReadyRef.current) return undefined;
+  flushCloudSyncRef.current = async () => {
+    if (!adminUser || !activeCloudCode || !cloudReadyRef.current || cloudConflict || !isOnline) return false;
+    if (cloudSyncInFlightRef.current) {
+      cloudSyncRequestedRef.current = true;
+      return cloudSyncPromiseRef.current;
+    }
     const cloudState = { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination };
     const serialized = JSON.stringify(cloudState);
-    if (serialized === lastCloudStateRef.current) return undefined;
+    if (serialized === lastCloudStateRef.current && pendingAuditRef.current.length === 0) return true;
 
+    const audits = pendingAuditRef.current.length > 0 ? [...pendingAuditRef.current] : [{
+      clientOperationId: createId(),
+      action: 'TOURNAMENT_STATE_UPDATED',
+      details: { phase, currentRoundNum }
+    }];
+    const operationIds = new Set(audits.map(audit => audit.clientOperationId));
+    const expectedRevision = cloudRevisionRef.current;
     pendingCloudStateRef.current = serialized;
+    cloudSyncInFlightRef.current = true;
     setCloudSyncStatus('pending');
-    cloudSyncTimeoutRef.current = window.setTimeout(async () => {
-      const audit = pendingAuditRef.current || {
-        action: 'TOURNAMENT_STATE_UPDATED',
-        details: { phase, currentRoundNum }
-      };
-      pendingAuditRef.current = null;
-      try {
-        await saveCloudTournament(activeCloudCode, cloudState, audit);
-        if (!pendingCloudStateRef.current || pendingCloudStateRef.current === serialized) {
-          lastCloudStateRef.current = serialized;
-          pendingCloudStateRef.current = null;
-        }
-      } catch (error) {
+    setCloudRetryMessage('');
+    cloudSyncPromiseRef.current = runWithCloudRetry(
+      () => saveCloudTournament(activeCloudCode, cloudState, audits, expectedRevision),
+      { onRetry: ({ attempt, delay }) => setCloudRetryMessage(`同步失敗，${delay / 1000} 秒後進行第 ${attempt} 次重試`) }
+    ).then(nextRevision => {
+      cloudRevisionRef.current = nextRevision;
+      pendingAuditRef.current = pendingAuditRef.current.filter(audit => !operationIds.has(audit.clientOperationId));
+      setPendingOperationCount(pendingAuditRef.current.length);
+      if (!pendingCloudStateRef.current || pendingCloudStateRef.current === serialized) {
+        lastCloudStateRef.current = serialized;
+        pendingCloudStateRef.current = null;
+      }
+      setLastCloudSuccessAt(new Date());
+      setCloudRetryMessage('');
+      setCloudSyncStatus('synced');
+      return true;
+    }).catch(error => {
+      if (error.code === 'cloud/revision-conflict' && error.tournament) {
+        const localState = cloudState;
+        const remote = normalizeTournamentData(error.tournament);
+        const remoteSerialized = JSON.stringify(remote);
+        cloudRevisionRef.current = error.actualRevision;
+        lastCloudStateRef.current = remoteSerialized;
+        pendingCloudStateRef.current = null;
+        setPhase(remote.phase);
+        setPlayers(remote.players);
+        setRounds(remote.rounds);
+        setCurrentRoundNum(remote.currentRoundNum);
+        setJudgeCount(remote.judgeCount);
+        setDoubleElimination(remote.doubleElimination);
+        setCloudConflict({
+          expectedRevision: error.expectedRevision,
+          actualRevision: error.actualRevision,
+          localState,
+          remoteState: remote,
+          operations: audits
+        });
+        setConflictSelection(Object.fromEntries(audits.map(audit => [audit.clientOperationId, false])));
+        setCloudError('資料已由其他裝置更新，請檢查尚未同步的操作。');
+      } else {
         lastCloudStateRef.current = null;
         setCloudError(error.message);
-        setCloudSyncStatus('error');
       }
-    }, 400);
+      setCloudSyncStatus('error');
+      return false;
+    }).finally(() => {
+      cloudSyncInFlightRef.current = false;
+      cloudSyncPromiseRef.current = null;
+      if (cloudSyncRequestedRef.current) {
+        cloudSyncRequestedRef.current = false;
+        window.setTimeout(() => flushCloudSyncRef.current?.(), 0);
+      }
+    });
+    return cloudSyncPromiseRef.current;
+  };
+
+  useEffect(() => {
+    if (!adminUser || !activeCloudCode || !cloudReadyRef.current || cloudConflict || !isOnline) return undefined;
+    const serialized = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination });
+    if (serialized === lastCloudStateRef.current && pendingAuditRef.current.length === 0) return undefined;
+    pendingCloudStateRef.current = serialized;
+    setCloudSyncStatus('pending');
+    cloudSyncTimeoutRef.current = window.setTimeout(() => flushCloudSyncRef.current?.(), 400);
     return () => {
       if (cloudSyncTimeoutRef.current) window.clearTimeout(cloudSyncTimeoutRef.current);
       cloudSyncTimeoutRef.current = null;
     };
-  }, [adminUser, activeCloudCode, phase, players, rounds, currentRoundNum, judgeCount, doubleElimination]);
+  }, [adminUser, activeCloudCode, phase, players, rounds, currentRoundNum, judgeCount, doubleElimination, cloudConflict, isOnline]);
 
   const publicTournamentUrl = activeCloudCode
     ? `${window.location.origin}${window.location.pathname}?event=${activeCloudCode}`
@@ -343,26 +478,18 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       window.clearTimeout(cloudSyncTimeoutRef.current);
       cloudSyncTimeoutRef.current = null;
     }
-    const cloudState = { phase, players, rounds, currentRoundNum, judgeCount, doubleElimination };
-    const serialized = JSON.stringify(cloudState);
-    pendingCloudStateRef.current = serialized;
-    setCloudSyncStatus('pending');
-    try {
-      await saveCloudTournament(activeCloudCode, cloudState, audit || pendingAuditRef.current || {
-        action: 'TOURNAMENT_STATE_UPDATED',
-        details: { phase, currentRoundNum }
-      });
-      pendingAuditRef.current = null;
-      lastCloudStateRef.current = serialized;
-      pendingCloudStateRef.current = null;
-      setCloudSyncStatus('synced');
-      return true;
-    } catch (error) {
-      lastCloudStateRef.current = null;
-      setCloudError(error.message);
-      setCloudSyncStatus('error');
+    if (!isOnline) {
+      setCloudError('目前沒有網路連線，恢復連線並完成同步後才能離開賽事。');
       return false;
     }
+    if (audit) markCloudAudit(audit.action, audit.details || {});
+    const firstFlush = await flushCloudSyncRef.current?.();
+    if (!firstFlush || cloudConflict) return false;
+    const currentSerialized = JSON.stringify({ phase, players, rounds, currentRoundNum, judgeCount, doubleElimination });
+    if (lastCloudStateRef.current !== currentSerialized || pendingAuditRef.current.length > 0) {
+      return Boolean(await flushCloudSyncRef.current?.());
+    }
+    return true;
   };
 
   const handleLeaveCloudTournament = async () => {
@@ -428,6 +555,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       });
       cloudReadyRef.current = false;
       pendingCloudStateRef.current = null;
+      pendingAuditRef.current = [];
+      setPendingOperationCount(0);
       closeCloudModalAfterLoadRef.current = true;
       lastCloudStateRef.current = null;
       setPhase(tournament.phase);
@@ -474,6 +603,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       });
       cloudReadyRef.current = false;
       pendingCloudStateRef.current = null;
+      pendingAuditRef.current = [];
+      setPendingOperationCount(0);
       closeCloudModalAfterLoadRef.current = true;
       lastCloudStateRef.current = null;
       setPhase(tournament.phase);
@@ -526,8 +657,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     };
     setSeriesMutationStatus('adding');
     try {
-      await saveCloudSeries(nextSeries);
-      replaceSeriesDefinition(nextSeries);
+      const nextRevision = await saveCloudSeries(nextSeries, series.revision || 0);
+      replaceSeriesDefinition({ ...nextSeries, revision: nextRevision });
       return true;
     } catch (error) {
       setCloudError(error.message);
@@ -554,7 +685,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
           removedPlayers: tournament.players?.length || 0,
           removedRounds: tournament.rounds?.length || 0
         }
-      });
+      }, tournament.revision || 0);
       setConfirmAction(null);
     } catch (error) {
       setCloudError(error.message);
@@ -573,8 +704,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         ...series,
         events: series.events.filter(event => event.id !== eventDefinition.id)
       };
-      await saveCloudSeries(nextSeries);
-      replaceSeriesDefinition(nextSeries);
+      const nextRevision = await saveCloudSeries(nextSeries, series.revision || 0);
+      replaceSeriesDefinition({ ...nextSeries, revision: nextRevision });
       setConfirmAction(null);
     } catch (error) {
       setCloudError(error.message);
@@ -588,10 +719,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     const nextValue = !cloudIsPublic;
     setCloudError('');
     try {
-      await saveCloudTournament(activeCloudCode, { isPublic: nextValue }, {
+      const nextRevision = await saveCloudTournament(activeCloudCode, { isPublic: nextValue }, {
         action: 'PUBLIC_VISIBILITY_CHANGED',
         details: { before: cloudIsPublic, after: nextValue }
-      });
+      }, cloudRevisionRef.current);
+      cloudRevisionRef.current = nextRevision;
       setCloudIsPublic(nextValue);
     } catch (error) {
       setCloudError(error.message);
@@ -616,7 +748,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       return;
     }
     const newPlayer = { id: createId(), name: trimmedName, wins: 0, votes: 0, losses: 0, isWithdrawn: false, isEliminated: false };
-    markCloudAudit('PLAYER_ADDED', { playerId: newPlayer.id, name: newPlayer.name });
+    markCloudAudit('PLAYER_ADDED', { playerId: newPlayer.id, name: newPlayer.name, player: newPlayer });
     setPlayers(prev => [...prev, newPlayer]);
     setNewName('');
     setRosterError('');
@@ -651,7 +783,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       const availableSlots = Math.max(0, MAX_PLAYERS - players.length);
       const acceptedPlayers = newPlayers.slice(0, availableSlots);
       if (acceptedPlayers.length > 0) {
-        markCloudAudit('PLAYERS_IMPORTED', { count: acceptedPlayers.length, names: acceptedPlayers.map(player => player.name) });
+        markCloudAudit('PLAYERS_IMPORTED', { count: acceptedPlayers.length, names: acceptedPlayers.map(player => player.name), players: acceptedPlayers });
         setPlayers(prev => [...prev, ...acceptedPlayers]);
       }
       setRosterError(newPlayers.length > acceptedPlayers.length ? `名單已達 ${MAX_PLAYERS} 人上限，超出的選手未匯入。` : '');
@@ -666,7 +798,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         id: createId(), name: `player-${String(index + 1).padStart(3, '0')}`, wins: 0, votes: 0, losses: 0, isWithdrawn: false, isEliminated: false
       }))
     ];
-    markCloudAudit('TEST_PLAYERS_LOADED', { count: mockPlayers.length });
+    markCloudAudit('TEST_PLAYERS_LOADED', { count: mockPlayers.length, players: mockPlayers });
     setPlayers(mockPlayers);
   };
 
@@ -918,6 +1050,35 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     </div>
   );
 
+  const isEditorReadOnly = Boolean(activeCloudCode && (!isOnline || cloudSyncStatus === 'offline' || cloudConflict));
+
+  const discardConflictOperations = () => {
+    pendingAuditRef.current = [];
+    setPendingOperationCount(0);
+    setCloudConflict(null);
+    setConflictSelection({});
+    setCloudError('');
+    setCloudSyncStatus('synced');
+  };
+
+  const reapplySelectedConflictOperations = () => {
+    if (!cloudConflict) return;
+    const selected = cloudConflict.operations.filter(operation => conflictSelection[operation.clientOperationId] && canReplayCloudOperation(operation));
+    const replayed = replayCloudOperations(cloudConflict.remoteState, selected);
+    pendingAuditRef.current = selected;
+    setPendingOperationCount(selected.length);
+    setPhase(replayed.phase);
+    setPlayers(replayed.players);
+    setRounds(replayed.rounds);
+    setCurrentRoundNum(replayed.currentRoundNum);
+    setJudgeCount(replayed.judgeCount);
+    setDoubleElimination(replayed.doubleElimination);
+    setCloudConflict(null);
+    setConflictSelection({});
+    setCloudError('');
+    setCloudSyncStatus(selected.length > 0 ? 'pending' : 'synced');
+  };
+
   return (
     <div className="min-h-screen font-sans p-4 md:p-8 relative selection:bg-cyan-900 selection:text-white"
          style={{ backgroundColor: COLORS.bg, color: COLORS.textMain }}>
@@ -1000,7 +1161,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                       tournaments={cloudTournaments}
                       standings={selectedSeriesStandings}
                       creatingEventCode={creatingSeriesEventCode}
-                      mutationStatus={seriesMutationStatus}
+                      mutationStatus={isOnline ? seriesMutationStatus : 'offline'}
                       onBack={() => setSelectedSeriesId('')}
                       onOpenEvent={(series, eventDefinition, tournament) => handleSelectCloudTournament(tournament.id, series.id)}
                       onCreateEvent={handleCreateSeriesTournament}
@@ -1150,6 +1311,36 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         </FullScreenCloudManager>
       )}
 
+      {cloudConflict && (
+        <div className="fixed inset-0 z-[80] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cloud-conflict-title">
+          <section className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border-2 p-6 md:p-8" style={{ backgroundColor: COLORS.card, borderColor: COLORS.inkOrange }}>
+            <h2 id="cloud-conflict-title" className="text-2xl font-black text-white">資料已由其他裝置更新</h2>
+            <p className="mt-3 text-sm font-bold leading-relaxed" style={{ color: COLORS.textMuted }}>
+              已載入雲端最新版本（v{cloudConflict.actualRevision}）。請選擇要在最新版上重新套用的本機操作；未選擇的操作會以雲端資料為準。
+            </p>
+            <div className="mt-5 space-y-3">
+              {cloudConflict.operations.map(operation => {
+                const replayable = canReplayCloudOperation(operation);
+                return (
+                  <label key={operation.clientOperationId} className={`flex gap-3 p-4 rounded-xl border ${replayable ? 'cursor-pointer' : 'opacity-60'}`} style={{ borderColor: COLORS.cardBorder }}>
+                    <input type="checkbox" disabled={!replayable} checked={Boolean(conflictSelection[operation.clientOperationId])}
+                      onChange={event => setConflictSelection(current => ({ ...current, [operation.clientOperationId]: event.target.checked }))} />
+                    <span>
+                      <span className="block font-black text-white">{summarizePendingOperation(operation)}</span>
+                      {!replayable && <span className="block text-xs mt-1 text-amber-300">此操作涉及賽程階段，請關閉視窗後依最新資料重新操作。</span>}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="mt-7 flex flex-col-reverse sm:flex-row justify-end gap-3">
+              <button type="button" onClick={discardConflictOperations} className="px-5 py-3 rounded-lg border font-black" style={{ borderColor: COLORS.cardBorder }}>採用雲端最新版</button>
+              <button type="button" onClick={reapplySelectedConflictOperations} className="px-5 py-3 rounded-lg font-black" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>確認重新套用所選操作</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* 全局確認視窗 Modal (Highest Z-index) */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
@@ -1201,6 +1392,21 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
             </span>
           </div>}
         </header>
+
+        {activeCloudCode && (!isOnline || cloudSyncStatus === 'offline' || cloudSyncStatus === 'error' || pendingOperationCount > 0) && (
+          <div role="status" className="max-w-4xl mx-auto mb-6 p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            style={{ backgroundColor: !isOnline || cloudSyncStatus === 'offline' ? '#3a2612' : '#29161a', borderColor: !isOnline || cloudSyncStatus === 'offline' ? COLORS.inkOrange : '#ef4444' }}>
+            <div>
+              <div className="font-black text-white">{!isOnline || cloudSyncStatus === 'offline' ? '目前離線，管理功能已切換為唯讀' : cloudSyncStatus === 'error' ? '雲端同步尚未完成' : `尚有 ${pendingOperationCount} 筆操作等待同步`}</div>
+              <div className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>
+                {cloudRetryMessage || (lastCloudSuccessAt ? `最後成功同步：${lastCloudSuccessAt.toLocaleTimeString('zh-TW')}` : '等待第一次成功同步')}
+              </div>
+            </div>
+            {isOnline && cloudSyncStatus === 'error' && !cloudConflict && <button type="button" onClick={() => flushCloudSyncRef.current?.()} className="px-4 py-2 rounded-lg font-black bg-white text-black">重新同步</button>}
+          </div>
+        )}
+
+        <div aria-disabled={isEditorReadOnly} className={isEditorReadOnly ? 'pointer-events-none opacity-70' : ''}>
 
         {/* Phase 1: Registration */}
         {phase === 'registration' && (
@@ -1555,6 +1761,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
           </div>
         )}
+
+        </div>
 
       </div>
     </div>

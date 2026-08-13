@@ -4,6 +4,9 @@ export const SIMULATION_SERIES = Object.freeze({
   id: 'simulation-series',
   name: '模擬賽',
   description: '各場獨立報名的系列積分賽',
+  publicCode: 'SIM2026',
+  isPublic: true,
+  revision: 0,
   events: Object.freeze([
     Object.freeze({ id: 'aug-19', name: '8/19', eventCode: 'MOCK819', judgeCount: 3, doubleElimination: true }),
     Object.freeze({ id: 'aug-21', name: '8/21', eventCode: 'MOCK821', judgeCount: 3, doubleElimination: true }),
@@ -22,6 +25,9 @@ export const normalizeSeriesDefinition = (data, fallback) => {
     id: data.id || fallback.id,
     name: String(data.name || fallback.name).trim(),
     description: String(data.description || fallback.description).trim(),
+    publicCode: String(data.publicCode || fallback.publicCode || '').trim().toUpperCase(),
+    isPublic: data.isPublic !== false,
+    revision: Number(data.revision) || 0,
     events: events
       .map(event => {
         const eventCode = String(event?.eventCode || '').trim().toUpperCase();

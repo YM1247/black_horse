@@ -94,12 +94,16 @@ npm run deploy
 
 ## 離線與同步
 
-Firestore 在支援的 Chrome、Safari、Firefox 啟用多分頁 IndexedDB 持久快取。離線時的寫入會先顯示在本機並排入佇列，恢復連線後同步；同一文件發生衝突時採 Firestore 的 last-write-wins 行為，因此稽核紀錄會另外保存每次操作。
+Firestore 在支援的 Chrome、Safari、Firefox 啟用多分頁 IndexedDB 持久快取。公開前台可在離線時顯示快取；管理後台失去連線後立即切換為唯讀，恢復連線後才繼續送出操作。
+
+管理 session 保存 `createdAt` 與 `expiresAt`，建立後 24 小時失效。更換 `settings/admin.tokenHash` 後，舊瀏覽器會在登入時先移除自己的失效 session，再使用新 token 建立 session，不需要清除網站資料。
+
+賽事與系列文件具有遞增 `revision`。所有更新都必須由 transaction 將 revision 恰好增加 1；這項限制同時由 repository 與 Firestore Rules 驗證，用來阻止多台裝置以舊快照覆蓋新資料。
 
 Firestore 是現行版本唯一的正式賽事資料來源。後台不再讀寫瀏覽器 `localStorage` 賽事進度或歷史檔案庫；IndexedDB 僅由 Firebase SDK 用來維持離線快取與待同步寫入，不能視為另一份可手動載入的存檔。
 
 系列場次設定保存於 `series/{seriesId}`，只有通過管理 token 的後台可讀寫。新增場次先保存名稱、代碼與三位評審／兩敗淘汰標籤，再由管理員建立對應的 `tournaments/{eventCode}`。清除內容會保留系列設定、賽事名稱、公開狀態和 audit logs；完整刪除則移除賽事文件、其 audit logs 與系列場次設定。
 
-後台操作仍使用 400ms debounce 合併寫入。若本機畫面已有尚待同步的新狀態，訂閱回傳的較舊 snapshot 會被暫時忽略，避免比分、賽制或階段按鈕先變更後又回彈；內容與本機狀態吻合時才視為同步確認。多裝置同時編輯同一賽事仍應避免，最終資料衝突仍遵循 Firestore 的寫入順序。
+後台以 400ms debounce 啟動序列化操作佇列，但每個操作各自保留 audit。若 revision 已落後，transaction 會拒絕寫入；後台載入雲端最新版並顯示本機操作摘要，管理員可逐筆選擇是否重新套用，不採 last-write-wins 靜默覆蓋。
 
 Firestore 不接受陣列直接包含另一層陣列，因此資料庫中的 `rounds` 使用輪次編號 map，例如 `{ "1": Match[], "2": Match[] }`。前後台 repository 會自動轉換，畫面與瑞士制規則層仍使用原本的 `Match[][]`。新建賽事預設三位評審、兩敗淘汰且 `isPublic` 為 `true`，建立後觀眾即可透過賽事代碼讀取。
