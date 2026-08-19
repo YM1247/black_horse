@@ -194,23 +194,49 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                 <h2 className="text-2xl font-black text-[#f1c6a6]">系列積分排名</h2>
                 <span className="text-xs font-bold text-slate-500">只有公開且已完賽場次計分</span>
               </div>
-              <div className="overflow-x-auto rounded-lg border border-slate-800">
-                <table className="w-full min-w-[42rem] text-left border-collapse">
+              <div className="space-y-3 md:hidden" aria-label="手機版系列積分排名">
+                {standings.map(standing => (
+                  <article key={standing.name} className="rounded-xl border border-slate-800 bg-[#11151b] overflow-hidden">
+                    <div className="flex items-start gap-3 p-4 border-b border-slate-800">
+                      <span className="w-9 h-9 shrink-0 rounded-full bg-cyan-950/60 text-[#b6d2d4] flex items-center justify-center font-black">
+                        {standing.displayRank}
+                      </span>
+                      <h3 className="min-w-0 flex-1 font-black text-white text-lg break-words leading-tight">{standing.name}</h3>
+                      <div className="shrink-0 text-right">
+                        <div className="text-[10px] font-black tracking-widest text-slate-500">總積分</div>
+                        <div className="text-2xl font-black text-[#f1c6a6]">{standing.totalPoints}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-px bg-slate-800">
+                      {series.events.map((event, eventIndex) => (
+                        <div key={event.id} className={`bg-[#161920] px-4 py-3 flex items-center justify-between gap-3 ${series.events.length % 2 === 1 && eventIndex === series.events.length - 1 ? 'col-span-2' : ''}`}>
+                          <span className="text-xs font-bold text-slate-500 break-words">{event.name}</span>
+                          <span className="font-black text-slate-200">{standing.eventPoints[event.eventCode] || 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+                {standings.length === 0 && <div className="p-10 text-center border border-dashed border-slate-700 rounded-xl text-slate-500 font-bold">尚無可計分的完賽結果。</div>}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto rounded-lg border border-slate-800" aria-label="桌面版系列積分排名">
+                <table className="w-max min-w-full text-left border-collapse">
                   <thead className="bg-[#0d0f12] text-xs text-slate-500 uppercase tracking-widest">
                     <tr>
-                      <th className="p-3 text-center sticky left-0 z-20 bg-[#0d0f12]">排名</th>
-                      <th className="p-3 sticky left-14 z-20 bg-[#0d0f12]">選手</th>
-                      {series.events.map(event => <th key={event.id} className="p-3 text-center">{event.name}</th>)}
-                      <th className="p-3 text-center text-[#f1c6a6]">總積分</th>
+                      <th className="p-3 text-center sticky left-0 z-20 bg-[#0d0f12] w-12 min-w-12 max-w-12">排名</th>
+                      <th className="p-3 sticky left-12 z-20 bg-[#0d0f12] w-40 min-w-40 max-w-40 border-r border-slate-700 shadow-[8px_0_12px_rgba(0,0,0,0.35)]">選手</th>
+                      {series.events.map(event => <th key={event.id} className="p-3 text-center min-w-[5.5rem]">{event.name}</th>)}
+                      <th className="p-3 text-center text-[#f1c6a6] min-w-24">總積分</th>
                     </tr>
                   </thead>
                   <tbody>
                     {standings.map(standing => (
                       <tr key={standing.name} className="border-t border-slate-800">
-                        <td className="p-3 text-center font-black text-[#b6d2d4] sticky left-0 z-10 bg-[#161920]">{standing.displayRank}</td>
-                        <td className="p-3 font-black text-white sticky left-14 z-10 bg-[#161920]">{standing.name}</td>
-                        {series.events.map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300">{standing.eventPoints[event.eventCode] || 0}</td>)}
-                        <td className="p-3 text-center text-xl font-black text-[#f1c6a6]">{standing.totalPoints}</td>
+                        <td className="p-3 text-center font-black text-[#b6d2d4] sticky left-0 z-10 bg-[#161920] w-12 min-w-12 max-w-12">{standing.displayRank}</td>
+                        <td title={standing.name} className="p-3 font-black text-white sticky left-12 z-10 bg-[#161920] w-40 min-w-40 max-w-40 overflow-hidden break-words leading-tight border-r border-slate-700 shadow-[8px_0_12px_rgba(0,0,0,0.35)]">{standing.name}</td>
+                        {series.events.map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300 min-w-[5.5rem]">{standing.eventPoints[event.eventCode] || 0}</td>)}
+                        <td className="p-3 text-center text-xl font-black text-[#f1c6a6] min-w-24">{standing.totalPoints}</td>
                       </tr>
                     ))}
                     {standings.length === 0 && <tr><td colSpan={series.events.length + 3} className="p-10 text-center text-slate-500 font-bold">尚無可計分的完賽結果。</td></tr>}
