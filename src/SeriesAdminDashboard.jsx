@@ -156,10 +156,10 @@ export default function SeriesAdminDashboard({
                     className="py-2.5 rounded-lg font-black border border-[#f1c6a6] text-[#f1c6a6] disabled:opacity-40">
                     {isClearing ? '清除中…' : '清除內容'}
                   </button>}
-                  <button type="button" disabled={isBusy} onClick={() => onDeleteEvent(series, event, tournament)}
+                  {series.publicCode !== 'BH2627' && <button type="button" disabled={isBusy} onClick={() => onDeleteEvent(series, event, tournament)}
                     className={`${tournament ? '' : 'col-span-2'} py-2.5 rounded-lg font-black border border-red-500/50 text-red-300 disabled:opacity-40`}>
                     {isDeleting ? '刪除中…' : '刪除場次'}
-                  </button>
+                  </button>}
                 </div>
               </article>
             );

@@ -59,9 +59,10 @@ export const normalizeTournamentData = (data = {}) => {
 };
 
 export const createEmptyTournament = ({
+  rulesVersion,
   judgeCount = DEFAULT_JUDGE_COUNT,
   doubleElimination = DEFAULT_DOUBLE_ELIMINATION
-} = {}) => normalizeTournamentData({
+} = {}) => ({ ...normalizeTournamentData({
   phase: 'registration',
   players: [],
   rounds: [],
@@ -72,4 +73,4 @@ export const createEmptyTournament = ({
   runNumber: 1,
   resultLocked: false,
   currentVersion: 0
-});
+}), ...(rulesVersion ? { rulesVersion, qualificationConfig:{}, qualifiedIds:[], playoffSeeds:[], playoffDecisions:{}, bracket:{} } : {}) });

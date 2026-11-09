@@ -321,7 +321,7 @@ export const saveCloudTournament = async (eventCode, tournament, audits, expecte
       clientUpdatedAt: new Date().toISOString(),
       updatedBy: user.uid
     };
-    transaction.set(tournamentRef, tournamentUpdate, { merge: true });
+    transaction.update(tournamentRef, tournamentUpdate);
     transaction.set(summaryRef, {
       ...buildTournamentSummary({ ...snapshot.data(), ...tournamentUpdate }, code),
       updatedAt: serverTimestamp(),
@@ -372,8 +372,8 @@ export const saveTournamentVersion = async (eventCode, tournament, {
     const nextRevision = actualRevision + 1;
     const lockedTournament = {
       ...tournament,
-      phase: 'finished',
-      resultLocked: true,
+      phase: type === 'reseed' ? 'playing' : 'finished',
+      resultLocked: type !== 'reseed',
       runId,
       runNumber: Number(tournament.runNumber || snapshot.data().runNumber) || 1,
       currentVersion: nextVersion
@@ -401,7 +401,7 @@ export const saveTournamentVersion = async (eventCode, tournament, {
       clientUpdatedAt: new Date().toISOString(),
       updatedBy: user.uid
     };
-    transaction.set(tournamentRef, tournamentUpdate, { merge: true });
+    transaction.update(tournamentRef, tournamentUpdate);
     transaction.set(summaryRef, {
       ...buildTournamentSummary({ ...snapshot.data(), ...tournamentUpdate }, code),
       updatedAt: serverTimestamp(),

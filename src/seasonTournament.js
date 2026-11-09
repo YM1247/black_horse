@@ -61,7 +61,9 @@ export function eventRanking(event, final = event.phase === 'finished') {
 export function refreshRecords(event) {
   const players = recalculatePlayerRecords(event.players, event.rounds).map(player => player.seedCredit
     ? { ...player, wins: player.wins + 1, votes: player.votes + 5 } : player);
-  return { ...event, players: applyDoubleElimination(players, event.rounds, event.doubleElimination) };
+  const updated = applyDoubleElimination(players, event.rounds, event.doubleElimination).map(player =>
+    player.revivedRound === event.rounds.length ? { ...player, isEliminated: false } : player);
+  return { ...event, players: updated };
 }
 
 export function nextRoundDecision(event) {

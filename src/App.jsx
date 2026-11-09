@@ -13,6 +13,8 @@ import {
   SUPPORTED_JUDGE_COUNTS
 } from './tournamentState';
 import PublicTournamentPage from './PublicTournamentPage';
+import SeasonAdmin from './SeasonAdmin';
+import { isSeasonEvent, QUALIFIER } from './seasonTournament';
 import PublicSeriesPage from './PublicSeriesPage';
 import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit';
 import { isFirebaseConfigured } from './firebase';
@@ -115,6 +117,8 @@ const getDynamicFontSize = (name, isTreeMode = false) => {
 
 export function TournamentAdminApp({ authenticatedUser = null }) {
   const [initialTournament] = useState(createEmptyTournament);
+  const [seasonEvent,setSeasonEvent] = useState(null);
+  const [newSeasonRules,setNewSeasonRules] = useState(false);
   const [phase, setPhase] = useState(initialTournament.phase); // 'registration', 'playing', 'finished'
   const [players, setPlayers] = useState(initialTournament.players);
   const [rounds, setRounds] = useState(initialTournament.rounds);
@@ -334,6 +338,15 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         setCloudSyncStatus('error');
         return;
       }
+      if (isSeasonEvent(data)) {
+        cloudReadyRef.current = false;
+        setSeasonEvent(data);
+        setActiveCloudName(data.name);
+        setCloudSyncStatus(data.sync?.fromCache ? 'offline' : 'synced');
+        setCloudIsPublic(data.isPublic);
+        return;
+      }
+      setSeasonEvent(null);
       const normalized = normalizeTournamentData(data);
       const serialized = JSON.stringify(normalized);
       const pendingLocalState = pendingCloudStateRef.current || (
@@ -590,8 +603,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     try {
       if (activeCloudCode && !await persistCurrentCloudState()) return;
       const tournament = createEmptyTournament({
-        judgeCount: newCloudJudgeCount,
-        doubleElimination: newCloudDoubleElimination
+        rulesVersion: newSeasonRules ? QUALIFIER : undefined,
+        judgeCount: newSeasonRules ? 3 : newCloudJudgeCount,
+        doubleElimination: newSeasonRules || newCloudDoubleElimination
       });
       const code = await createCloudTournament({
         eventCode: newCloudCode,
@@ -619,6 +633,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setIsCloudModalOpen(false);
       setNewCloudCode(generateEventCode());
       setNewCloudName('');
+      setNewSeasonRules(false);
       setNewCloudJudgeCount(DEFAULT_JUDGE_COUNT);
       setNewCloudDoubleElimination(DEFAULT_DOUBLE_ELIMINATION);
     } catch (error) {
@@ -637,6 +652,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     setCreatingSeriesEventCode(eventDefinition.eventCode);
     try {
       const tournament = createEmptyTournament({
+        rulesVersion: eventDefinition.rulesVersion,
         judgeCount: eventDefinition.judgeCount,
         doubleElimination: eventDefinition.doubleElimination
       });
@@ -724,6 +740,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     setSeriesMutationStatus(`clear:${eventDefinition.eventCode}`);
     try {
       const emptyTournament = createEmptyTournament({
+        rulesVersion: eventDefinition.rulesVersion,
         judgeCount: eventDefinition.judgeCount,
         doubleElimination: eventDefinition.doubleElimination
       });
@@ -1328,6 +1345,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     !isOnline || cloudSyncStatus === 'offline' || cloudSyncStatus === 'loading' || cloudSyncStatus === 'error'
   ));
 
+  if (adminUser && seasonEvent?.id === activeCloudCode && !isCloudModalOpen) {
+    return <SeasonAdmin key={activeCloudCode} tournament={seasonEvent} series={activeSeries} tournaments={seriesTournaments}
+      online={isOnline} versions={cloudVersions} onBack={handleLeaveCloudTournament} onSignOut={handleCloudSignOut}/>;
+  }
   return (
     <div className="min-h-screen font-sans p-4 md:p-8 relative selection:bg-cyan-900 selection:text-white"
          style={{ backgroundColor: COLORS.bg, color: COLORS.textMain }}>
@@ -1491,7 +1512,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                           style={{ borderColor: COLORS.inkOrange }}>
                           <div>
                             <div className="text-xl font-black text-white">{series.name}</div>
-                            <div className="text-xs font-bold mt-2" style={{ color: COLORS.textMuted }}>{series.events.length} 場・3 位評審・兩敗淘汰</div>
+                            <div className="text-xs font-bold mt-2" style={{ color: COLORS.textMuted }}>{series.publicCode === 'BH2627' ? '四場積分賽＋一場最終戰' : series.events.length + ' 場・3 位評審・兩敗淘汰'}</div>
                           </div>
                           <span className="text-sm font-black whitespace-nowrap" style={{ color: COLORS.inkOrange }}>進入管理 →</span>
                         </button>
@@ -1507,8 +1528,12 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                       <input value={newCloudCode} onChange={event => setNewCloudCode(normalizeEventCode(event.target.value))} aria-label="新賽事代碼" className="px-4 py-3 rounded-lg border font-black uppercase" />
                       <button onClick={handleCreateCloudTournament} className="px-5 py-3 rounded-lg font-black" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>建立並進入</button>
                     </div>
+                    <label className="mt-4 flex items-center gap-2"><input type="checkbox" checked={newSeasonRules} onChange={e=>{
+                      setNewSeasonRules(e.target.checked);
+                      if (e.target.checked) { setNewCloudJudgeCount(3); setNewCloudDoubleElimination(true); }
+                    }}/>使用 26-27 積分賽規則（48 人、三位評審）</label>
                     <div className="grid sm:grid-cols-2 gap-4 mt-4">
-                      <fieldset>
+                      <fieldset disabled={newSeasonRules}>
                         <legend className="text-xs font-black mb-2" style={{ color: COLORS.textMuted }}>單場評審人數</legend>
                         <div className="grid grid-cols-2 gap-2">
                           {SUPPORTED_JUDGE_COUNTS.map(count => (
@@ -1521,7 +1546,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                           ))}
                         </div>
                       </fieldset>
-                      <fieldset>
+                      <fieldset disabled={newSeasonRules}>
                         <legend className="text-xs font-black mb-2" style={{ color: COLORS.textMuted }}>淘汰規則</legend>
                         <div className="grid grid-cols-2 gap-2">
                           {[false, true].map(enabled => (

@@ -104,6 +104,7 @@ service cloud.firestore {
             && request.resource.data.currentRoundNum == resource.data.currentRoundNum
             && request.resource.data.judgeCount == resource.data.judgeCount
             && request.resource.data.doubleElimination == resource.data.doubleElimination
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rulesVersion','qualificationConfig','qualifiedIds','playoffSeeds','playoffDecisions','bracket'])
             && request.resource.data.runId == resource.data.runId
             && request.resource.data.runNumber == resource.data.runNumber
             && request.resource.data.currentVersion == resource.data.currentVersion

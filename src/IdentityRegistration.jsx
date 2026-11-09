@@ -27,6 +27,8 @@ export default function IdentityRegistration({ profiles, onPlayer, remaining = 4
         }
         const player = await saveIdentity(row, decision);
         await onPlayer(player);
+        const previous = known.findIndex(p=>p.id===player.id);
+        if (previous>=0) known.splice(previous,1);
         known.push({...row,...player});
         pending = pending.slice(1);
         decision = null;
