@@ -259,6 +259,7 @@ export const createCloudTournament = async ({ eventCode, name, tournament }) => 
     const existing = await transaction.get(tournamentRef);
     if (existing.exists()) throw new Error('此賽事代碼已存在，請更換代碼。');
     const tournamentDocument = {
+      rulesVersion: tournament.rulesVersion || 'legacy-v1',
       ...encodeTournamentForFirestore(tournament),
       eventCode: code,
       name: name.trim() || code,
@@ -281,7 +282,7 @@ export const createCloudTournament = async ({ eventCode, name, tournament }) => 
   return code;
 };
 
-export const saveCloudTournament = async (eventCode, tournament, audits, expectedRevision = null) => {
+export const saveCloudTournament = async (eventCode, tournament, audits, expectedRevision = null, qualificationSources) => {
   const code = normalizeEventCode(eventCode);
   if (!validateEventCode(code)) throw new Error('賽事代碼格式錯誤。');
   const user = requireUser();
@@ -300,20 +301,27 @@ export const saveCloudTournament = async (eventCode, tournament, audits, expecte
         tournament: decodeTournamentFromFirestore({ id: snapshot.id, ...snapshot.data() })
       });
     }
-    const lockedCoreKeys = ['phase', 'players', 'rounds', 'currentRoundNum', 'judgeCount', 'doubleElimination', 'runId', 'runNumber'];
-    const isClearingRun = auditEntries.some(audit => audit.action === 'TOURNAMENT_CLEARED');
-    if (snapshot.data().resultLocked === true && !isClearingRun && lockedCoreKeys.some(key => Object.prototype.hasOwnProperty.call(tournament, key))) {
-      const currentCore = encodeTournamentForFirestore(Object.fromEntries(lockedCoreKeys.map(key => [key, snapshot.data()[key]])));
-      const nextCore = encodeTournamentForFirestore(Object.fromEntries(lockedCoreKeys.map(key => [key, tournament[key]])));
-      if (JSON.stringify(currentCore) !== JSON.stringify(nextCore)) {
-        const error = new Error('賽事結果已鎖定，請使用完賽結果更正功能。');
-        error.code = 'cloud/result-locked';
-        throw error;
+    if (qualificationSources) {
+      for (const [stationCode, revision] of Object.entries(qualificationSources)) {
+        const station = await transaction.get(doc(db, 'tournaments', stationCode));
+        if (!station.exists() || station.data().revision !== revision || station.data().phase !== 'finished') {
+          throw new Error('積分賽結果已更新，請重新確認最終戰資格。');
+        }
       }
+    }
+    const lockedKeys = ['phase', 'players', 'rounds', 'currentRoundNum', 'judgeCount', 'doubleElimination', 'runId', 'runNumber',
+      'rulesVersion', 'qualificationConfig', 'qualificationSources', 'qualifiedIds', 'playoffSeeds', 'playoffDecisions', 'bracket'];
+    const isClearingRun = auditEntries.some(audit => audit.action === 'TOURNAMENT_CLEARED');
+    const encoded = encodeTournamentForFirestore(tournament);
+    if (snapshot.data().resultLocked && !isClearingRun && lockedKeys.some(key =>
+      key in encoded && JSON.stringify(encoded[key]) !== JSON.stringify(snapshot.data()[key]))) {
+      const error = new Error('賽事結果已鎖定，請使用完賽結果更正功能。');
+      error.code = 'cloud/result-locked';
+      throw error;
     }
     const nextRevision = actualRevision + 1;
     const tournamentUpdate = {
-      ...encodeTournamentForFirestore(tournament),
+      ...encoded,
       ...(isClearingRun ? { currentVersionId: '' } : {}),
       eventCode: code,
       revision: nextRevision,
@@ -482,6 +490,18 @@ export const ensureTournamentSummaries = async () => {
     completedAt: serverTimestamp(),
     migratedCount: tournaments.size,
     completedBy: user.uid
+  });
+};
+
+export const ensureCloudSeries = async series => {
+  const user = requireUser();
+  const { db } = getFirebaseServices();
+  const ref = doc(db, 'series', series.id);
+  return runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) {
+      transaction.set(ref, { ...encodeSeriesForFirestore(series), revision: 1, updatedAt: serverTimestamp(), updatedBy: user.uid });
+    }
   });
 };
 

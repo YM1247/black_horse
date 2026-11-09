@@ -1,3 +1,4 @@
+import { BLACK_HORSE } from './series';
 import { buildSeriesStandings, normalizeSeriesDefinition, SIMULATION_SERIES } from './series';
 
 const player = (name, wins, votes, isWithdrawn = false) => ({
@@ -72,4 +73,23 @@ test('withdrawn players remain visible with zero event points', () => {
     tournament('MOCK819', 'finished', [player('Alice', 0, 0, true)])
   ]);
   expect(standings[0]).toMatchObject({ name: 'Alice', totalPoints: 0, eventPoints: { MOCK819: 0 } });
+});
+
+test('黑馬四站以編號採計三站，更正即重算，最終戰不納入', () => {
+  const stations=BLACK_HORSE.events.slice(0,4);
+  const scores=[3,2,1,0];
+  function fixture(event,wins,i) {
+    const losses=wins===0 ? 2 : 3-wins;
+    const player={id:'person',name:i===3?'新打師名':'舊打師名',wins,votes:wins*3};
+    const other={id:'opponent'+i,name:'同名',wins:losses,votes:losses*3};
+    const rounds=Array.from({length:wins+losses},(_,j)=>[{p1:player,p2:other,p1Votes:j<wins?3:0,p2Votes:j<wins?0:3,isDone:true}]);
+    return {id:event.eventCode,rulesVersion:event.rulesVersion,players:[player,other],phase:'finished',rounds};
+  }
+  const events=stations.map((s,i)=>fixture(s,scores[i],i));
+  events.push(fixture(BLACK_HORSE.events[4],3,4));
+  const standing=()=>buildSeriesStandings(BLACK_HORSE,events).find(p=>p.id==='person');
+  expect(standing()).toMatchObject({name:'新打師名',participatedEvents:4,totalPoints:185,countedEvents:stations.slice(0,3).map(s=>s.eventCode)});
+  events[3]=fixture(stations[3],3,3);
+  expect(standing().totalPoints).toBe(255);
+  expect(standing().countedEvents).not.toContain(stations[2].eventCode);
 });

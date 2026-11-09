@@ -37,12 +37,13 @@ vi.mock('./services/tournamentRepository', () => ({
   }
 }));
 
-test('a finished public tournament puts final standings before the bracket and round details', async () => {
+test('a finished public tournament puts final standings before the bracket without duplicate round details', async () => {
   render(<PublicTournamentPage initialCode="MOCK819" />);
 
   expect(await screen.findByRole('heading', { name: '8/19' })).toBeInTheDocument();
   const standings = screen.getByRole('region', { name: '最終排名' });
   const bracket = screen.getByRole('region', { name: '完整瑞士制樹狀圖' });
+  expect(screen.queryByText('逐輪對戰')).not.toBeInTheDocument();
   const roundHeading = screen.getAllByRole('heading', { name: 'ROUND 1' }).at(-1);
 
   expect(standings.compareDocumentPosition(bracket) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

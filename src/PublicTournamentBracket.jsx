@@ -45,10 +45,10 @@ export default function PublicTournamentBracket({ rounds = [] }) {
 
           return (
             <div key={roundIndex} className="flex flex-col gap-6 w-full">
-              <div className="text-center font-black tracking-widest text-xl py-3 rounded-lg border-2 shadow-lg"
+              <h3 className="text-center font-black tracking-widest text-xl py-3 rounded-lg border-2 shadow-lg"
                 style={{ backgroundColor: COLORS.bg, borderColor: COLORS.inkBlue, color: COLORS.inkBlue }}>
                 ROUND {roundIndex + 1}
-              </div>
+              </h3>
 
               <div className="flex flex-col gap-6 flex-1 justify-center">
                 {sortedScores.map(score => {
@@ -74,6 +74,7 @@ export default function PublicTournamentBracket({ rounds = [] }) {
                               style={{ backgroundColor: COLORS.bg, borderColor: isDone ? COLORS.cardBorder : COLORS.textMuted }}>
                               <div className="flex items-center justify-between w-full gap-2">
                                 <div className="flex flex-col items-start w-0 flex-1">
+                                  {match.attackOrder && <small className="text-[#b6d2d4] font-bold">先攻</small>}
                                   <div className="flex items-center gap-2 w-full">
                                     <span className={p1Won ? 'font-black text-white' : 'font-bold'}
                                       style={{ color: p1Won ? '#fff' : (isDone ? COLORS.textMuted : COLORS.textMain), fontSize: getPlayerFontSize(match.p1.name), wordBreak: 'break-word', lineHeight: 1.2 }}>
@@ -89,6 +90,7 @@ export default function PublicTournamentBracket({ rounds = [] }) {
                                 {isDone && <div style={{ color: accentColor }} className="font-mono text-xl font-black w-8 text-center shrink-0">{match.p2Votes}</div>}
 
                                 <div className="flex flex-col items-end w-0 flex-1">
+                                  {match.attackOrder && <small className="text-[#b6d2d4] font-bold">後攻</small>}
                                   <div className="flex items-center justify-end gap-2 w-full">
                                     {p2Won && <span style={{ color: accentColor }} className="text-sm shrink-0">✓</span>}
                                     <span className={`text-right ${p2Won ? 'font-black text-white' : 'font-bold'}`}

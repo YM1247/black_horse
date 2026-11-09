@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { isFirebaseConfigured } from './firebase';
 import { normalizeEventCode, subscribeTournament, validateEventCode } from './services/tournamentRepository';
-import { rankPlayers } from './tournament';
+import { eventRanking, FINAL } from './seasonTournament';
+import PlayoffBracket from './PlayoffBracket';
 import PublicTournamentBracket from './PublicTournamentBracket';
-import { SERIES } from './series';
+import { BLACK_HORSE, SERIES } from './series';
 
 const PHASE_LABELS = {
   registration: '報名中',
@@ -13,34 +14,25 @@ const PHASE_LABELS = {
 
 export function PublicTournamentRanking({ tournament, rankedPlayers, prominent = false }) {
   const isFinished = tournament.phase === 'finished';
-  return (
-    <section
-      aria-label={isFinished ? '最終排名' : '即時排名'}
-      className={`bg-[#161920] border border-slate-700 rounded-2xl p-6 h-fit ${prominent ? 'mb-10' : 'xl:sticky xl:top-6'}`}
-    >
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-5">
-        <h2 className={`${prominent ? 'text-2xl md:text-3xl' : 'text-xl'} font-black text-[#f1c6a6]`}>
-          {isFinished ? '最終排名' : '即時排名'}
-        </h2>
-        {isFinished && <span className="text-xs font-bold text-slate-500">完賽結果與本場積分</span>}
+  const isFinal = tournament.rulesVersion === FINAL;
+  const title = isFinal ? '瑞士制排名' : isFinished ? '最終排名' : '即時排名';
+  return <section aria-label={title} className={'event-board ' + (prominent ? 'mb-8' : '')}>
+    <h2>{title}</h2>
+    <ol>{rankedPlayers.map(player => <li key={player.id}>
+      <span className="place">{player.displayRank}</span>
+      <strong className="stage-name">{player.name}</strong>
+      {isFinished && !isFinal && <b className="event-points">本場積分 {player.rankingPoints}</b>}
+      <div className="record"><span>{player.wins} 勝 {player.losses || 0} 敗 · {player.votes} 票</span>
+        {!player.isWithdrawn && <><span>對手勝率 {(player.opponentWinRate * 100).toFixed(1)}%</span>
+          <span>次級勝率 {(player.opponentsOpponentWinRate * 100).toFixed(1)}%</span></>}
+        {player.seedCredit && <span>種子 · 首輪 1 勝 5 票</span>}
+        {player.isOrganizer && <span>主辦方補位</span>}
+        {player.revivedRound && <span>第 {player.revivedRound} 輪復活</span>}
+        {player.isWithdrawn ? <span>已棄賽</span> : player.isEliminated && <span>兩敗淘汰</span>}
+        {player.needsTiebreaker && <span>並列</span>}
       </div>
-      <div className={prominent ? 'grid md:grid-cols-2 xl:grid-cols-3 gap-3' : 'space-y-3'}>
-        {rankedPlayers.map(player => (
-          <div key={player.id} className={`border border-slate-800 rounded-lg p-4 ${player.isWithdrawn || player.isEliminated ? 'opacity-60' : ''}`}>
-            <div className="flex justify-between gap-3">
-              <span className="font-black min-w-0 break-words">{player.displayRank}. {player.name}</span>
-              <span className="font-black text-[#b6d2d4] shrink-0">{player.wins}W{tournament.doubleElimination ? ` / ${player.losses || 0}L` : ''} / {player.votes}票</span>
-            </div>
-            {isFinished && <div className="text-sm text-[#f1c6a6] font-black mt-2">本場積分 {player.rankingPoints}</div>}
-            {!player.isWithdrawn && <div className="text-[11px] mt-2 text-slate-500">對手勝率 {(player.opponentWinRate * 100).toFixed(1)}%・次級 {(player.opponentsOpponentWinRate * 100).toFixed(1)}%</div>}
-            {player.isEliminated && <div className="text-xs text-amber-300 font-black mt-2">兩敗淘汰</div>}
-            {player.isWithdrawn && <div className="text-xs text-red-300 font-black mt-2">已棄賽</div>}
-            {!player.isEliminated && player.needsTiebreaker && <div className="text-xs text-[#f1c6a6] font-black mt-2">需加賽</div>}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
+    </li>)}</ol>
+  </section>;
 }
 
 export default function PublicTournamentPage({ initialCode = '' }) {
@@ -119,8 +111,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
   }
 
   const rounds = Array.isArray(tournament?.rounds) ? tournament.rounds : [];
-  const players = Array.isArray(tournament?.players) ? tournament.players : [];
-  const rankedPlayers = tournament ? rankPlayers(players, rounds) : [];
+  const rankedPlayers = tournament ? eventRanking(tournament) : [];
   const parentSeries = tournament?.seriesId
     ? SERIES.find(series => series.id === tournament.seriesId)
     : null;
@@ -132,13 +123,13 @@ export default function PublicTournamentPage({ initialCode = '' }) {
           <div>
             {eventCode && <a href={window.location.pathname} className="text-sm font-bold text-slate-500 hover:text-slate-200">← 查詢其他賽事</a>}
             {parentSeries?.publicCode && <a href={`${window.location.pathname}?series=${parentSeries.publicCode}`} className="ml-4 text-sm font-bold text-[#b6d2d4] hover:text-white">查看整個系列賽</a>}
-            <h1 className="text-4xl font-black mt-3">{tournament?.name || '觀眾即時賽況'}</h1>
+            <h1 className="text-4xl font-black mt-3 break-words">{tournament?.name || '觀眾即時賽況'}</h1>
             {tournament && <p className="mt-2 text-slate-400 font-bold">代碼 {eventCode}・{PHASE_LABELS[tournament.phase] || tournament.phase}・{tournament.judgeCount} 位評審・{tournament.doubleElimination ? '兩敗淘汰' : '不淘汰'}</p>}
           </div>
           <form onSubmit={handleLookup} className="flex gap-2">
             <label className="sr-only" htmlFor="public-event-code">賽事代碼</label>
             <input id="public-event-code" value={input} onChange={event => setInput(event.target.value.toUpperCase())}
-              placeholder="輸入賽事代碼" className="px-4 py-3 rounded-lg border border-slate-700 bg-[#161920] font-black uppercase" />
+              placeholder="輸入賽事代碼" className="min-w-0 flex-1 px-4 py-3 rounded-lg border border-slate-700 bg-[#161920] font-black uppercase" />
             <button className="px-5 py-3 rounded-lg bg-[#b6d2d4] text-[#0d0f12] font-black">查詢</button>
           </form>
         </header>
@@ -152,7 +143,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
         )}
         {status === 'loading' && <div className="py-20 text-center text-slate-500 font-bold">正在載入賽事…</div>}
         {status === 'not-found' && <div className="py-20 text-center text-slate-500 font-bold">找不到此賽事。</div>}
-        {status === 'idle' && <div className="py-20 text-center text-slate-500 font-bold">請輸入賽事代碼。</div>}
+        {status === 'idle' && <div className="py-20 text-center text-slate-500 font-bold">請輸入賽事代碼。<a className="block mt-4 underline text-[#b6d2d4]" href={'?series='+BLACK_HORSE.publicCode}>查看{BLACK_HORSE.name}系列賽</a></div>}
 
         {tournament && (
           <>
@@ -160,6 +151,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
               {tournament.sync?.hasPendingWrites ? '資料同步中' : tournament.sync?.fromCache ? '離線快取' : '即時更新中'}・最後更新 {tournament.clientUpdatedAt ? new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW') : '尚未取得'}
             </div>
 
+            {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} />}
             {tournament.phase === 'finished' && (
               <PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} prominent />
             )}
@@ -170,37 +162,13 @@ export default function PublicTournamentPage({ initialCode = '' }) {
                   <h2 className="text-2xl md:text-3xl font-black text-[#b6d2d4]">完整瑞士制樹狀圖</h2>
                   <p className="mt-2 text-sm font-bold text-slate-500">依輪次與勝場分組呈現，比分及戰績會隨後台操作即時更新。</p>
                 </div>
+                {tournament.players?.some(p=>p.seedCredit) && <p className="mb-4 text-slate-300">首輪種子（一勝五票） · {tournament.players.filter(p=>p.seedCredit).map(p=>p.name).join('、')}</p>}
                 <PublicTournamentBracket rounds={rounds} />
               </section>
             )}
 
-            <div className={`grid gap-8 ${tournament.phase === 'finished' ? '' : 'xl:grid-cols-[1fr_22rem]'}`}>
-              <section className="space-y-8">
-                {rounds.length > 0 && <h2 className="text-2xl font-black text-[#f1c6a6]">逐輪對戰</h2>}
-                {rounds.length === 0 && <div className="p-10 border border-dashed border-slate-700 rounded-xl text-center text-slate-500">尚未產生賽程</div>}
-                {rounds.map((matches, roundIndex) => (
-                  <article key={roundIndex} className="bg-[#161920] border border-slate-700 rounded-2xl p-6">
-                    <h2 className="text-2xl font-black mb-5 text-[#b6d2d4]">ROUND {roundIndex + 1}</h2>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {matches.map(match => (
-                        <div key={match.id} className="bg-[#0d0f12] border border-slate-800 rounded-xl p-5">
-                          <div className="flex items-center justify-between gap-3 font-black">
-                            <span className="flex-1">{match.p1.name}</span>
-                            <span className="text-xl text-[#f1c6a6]">{match.p1Votes ?? '—'} : {match.p2Votes ?? '—'}</span>
-                            <span className="flex-1 text-right">{match.p2.name}</span>
-                          </div>
-                          {match.isMCMatch && <div className="text-center text-xs font-bold text-purple-300 mt-3">MC 對戰</div>}
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </section>
-
-              {tournament.phase !== 'finished' && (
-                <PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} />
-              )}
-            </div>
+            {!rounds.length && <p className="p-5 text-slate-400">尚未產生賽程</p>}
+            {tournament.phase !== 'finished' && <PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers}/>}
           </>
         )}
       </div>

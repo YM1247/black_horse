@@ -1,3 +1,13 @@
+import { vi } from 'vitest';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getFirestore as getLiteFirestore, connectFirestoreEmulator as connectLiteEmulator } from 'firebase/firestore/lite';
+import { getFirebaseServices } from '../src/firebase';
+import { saveIdentity } from '../src/services/playerDirectory';
+import { reviewKey } from '../src/playerIdentity';
+import { createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore } from '../src/services/tournamentRepository';
+import { createEmptyTournament } from '../src/tournamentState';
+import { QUALIFIER, nextSwissRound, publicPlayer, scoreSwiss } from '../src/seasonTournament';
+vi.mock('../src/firebase', () => ({ getFirebaseServices: vi.fn(), isFirebaseConfigured: true }));
 import { readFile } from 'node:fs/promises';
 import {
   assertFails,
@@ -172,9 +182,70 @@ test('public spectators can read a match but cannot retrieve or enumerate player
   await seedTournament();
   const admin = testEnvironment.authenticatedContext('admin-user').firestore();
   const visitor = testEnvironment.unauthenticatedContext().firestore();
-  await assertSucceeds(setDoc(doc(admin,'privatePlayers','directory'), {profiles:{a:{realName:'私名',phone:'0900123456',name:'甲'}}}));
+  await assertSucceeds(setDoc(doc(admin,'privatePlayers','a'), {id:'a',realName:'私名',phone:'0900123456',name:'甲'}));
   await assertSucceeds(getDoc(doc(visitor,'tournaments','RULES1')));
-  await assertFails(getDoc(doc(visitor,'privatePlayers','directory')));
+  await assertFails(getDoc(doc(visitor,'privatePlayers','a')));
   await assertFails(getDocs(collection(visitor,'privatePlayers')));
-  await assertFails(setDoc(doc(visitor,'privatePlayers','directory'), {}));
+  await assertSucceeds(setDoc(doc(admin,'privatePlayerIndex','phone-0900123456'),{ids:['a']}));
+  await assertFails(getDoc(doc(visitor,'privatePlayerIndex','phone-0900123456')));
+  await assertFails(setDoc(doc(visitor,'privatePlayers','a'), {}));
+});
+
+test('locked finals protect the bracket; a new version can reopen affected games for scoring', async () => {
+  await seedAdmin();
+  await seedTournament(baseTournament({phase:'finished',resultLocked:true,currentVersion:1,currentVersionId:'run-1-v1',
+    rulesVersion:'final-26-27',bracket:{gold:{isDone:true}},playoffSeeds:['a','b']}));
+  const db=testEnvironment.authenticatedContext('admin-user').firestore();
+  const ref=doc(db,'tournaments','RULES1');
+  await assertFails(updateDoc(ref,{revision:2,bracket:{}}));
+  const batch=writeBatch(db);
+  batch.set(doc(ref,'versions','run-1-v2'),{version:2,runId:'run-1',createdBy:'admin-user',type:'reseed'});
+  batch.update(ref,{revision:2,phase:'playing',resultLocked:false,currentVersion:2,currentVersionId:'run-1-v2',bracket:{}});
+  await assertSucceeds(batch.commit());
+  expect((await getDoc(ref)).data().bracket).toEqual({});
+});
+
+test('private directory transactions serialize concurrent registrations and maintain lookup indexes after a phone change', async () => {
+  await seedAdmin();
+  const app=initializeApp({projectId:PROJECT_ID},'identity-integration');
+  const [host,port]=process.env.FIRESTORE_EMULATOR_HOST.split(':');
+  const db=getLiteFirestore(app);
+  connectLiteEmulator(db,host,Number(port),{mockUserToken:{sub:'admin-user'}});
+  getFirebaseServices.mockReturnValue({app});
+  try {
+    const row={realName:'私人本名',name:'打師名',phone:'0912345678'};
+    const [a,b]=await Promise.all([saveIdentity(row),saveIdentity(row)]);
+    expect(a).toEqual(b);
+    const updated={...row,phone:'0999999999',name:'新打師名'};
+    await expect(saveIdentity(updated)).rejects.toThrow('核對');
+    await saveIdentity(updated,{id:a.id,key:reviewKey([{...row,id:a.id}])});
+    const admin=testEnvironment.authenticatedContext('admin-user').firestore();
+    expect((await getDocs(collection(admin,'privatePlayers'))).size).toBe(1);
+    expect((await getDoc(doc(admin,'privatePlayerIndex','phone-0912345678'))).exists()).toBe(false);
+    expect((await getDoc(doc(admin,'privatePlayerIndex','phone-0999999999'))).data().ids).toEqual([a.id]);
+  } finally { await deleteApp(app); }
+});
+
+test('new qualifier can persist all three rounds, lock a version and expose only its public roster', async () => {
+  await seedAdmin();
+  const admin=testEnvironment.authenticatedContext('admin-user').firestore();
+  getFirebaseServices.mockReturnValue({db:admin,auth:{currentUser:{uid:'admin-user'}}});
+  let state=createEmptyTournament({rulesVersion:QUALIFIER});
+  state.players=Array.from({length:47},(_,i)=>publicPlayer({id:String(i),name:'打師'+i}));
+  const code=await createCloudTournament({eventCode:'SEASON1',name:'積分測試',tournament:state});
+  let revision=0;
+  for(let round=0;round<3;round++){
+    state=nextSwissRound(state);
+    for(const m of state.rounds[round])state=scoreSwiss(state,round,m.id,3);
+    revision=await saveCloudTournament(code,state,{action:'輪次測試'},revision);
+  }
+  const result=await saveTournamentVersion(code,state,{expectedRevision:revision,type:'completed',reason:'完賽'});
+  expect(result.version).toBe(1);
+  const visitor=testEnvironment.unauthenticatedContext().firestore();
+  const data=decodeTournamentFromFirestore((await getDoc(doc(visitor,'tournaments',code))).data());
+  expect(data.rounds).toHaveLength(3);
+  expect(data.phase).toBe('finished');
+  expect(data.rulesVersion).toBe(QUALIFIER);
+  expect(data.players).toHaveLength(48);
+  expect(JSON.stringify(data)).not.toMatch(/realName|phone/);
 });

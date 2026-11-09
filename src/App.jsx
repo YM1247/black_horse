@@ -13,19 +13,19 @@ import {
   SUPPORTED_JUDGE_COUNTS
 } from './tournamentState';
 import PublicTournamentPage from './PublicTournamentPage';
-import SeasonAdmin from './SeasonAdmin';
 import { isSeasonEvent, QUALIFIER } from './seasonTournament';
 import PublicSeriesPage from './PublicSeriesPage';
 import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit';
 import { isFirebaseConfigured } from './firebase';
 import { canLeaveWithoutTournamentWrite, runWithCloudRetry, shouldApplyCloudSnapshot, shouldShowCloudSyncAlert } from './cloudSync';
 import FullScreenCloudManager from './FullScreenCloudManager';
-import { buildSeriesStandings, normalizeSeriesDefinition, SERIES } from './series';
+import { BLACK_HORSE, buildSeriesStandings, normalizeSeriesDefinition, SERIES } from './series';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
 import ResultCorrectionPanel from './ResultCorrectionPanel';
 import {
   createCloudTournament,
   deleteCloudTournament,
+  ensureCloudSeries,
   ensureTournamentSummaries,
   generateEventCode,
   getAdminLoginErrorMessage,
@@ -85,6 +85,8 @@ const useDialogFocusTrap = (active, onDismiss) => {
   }, [active]);
   return containerRef;
 };
+
+const SeasonAdmin = React.lazy(() => import('./SeasonAdmin'));
 
 // 主題色票 (對應黑馬記念圖片)
 const COLORS = {
@@ -272,12 +274,13 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setSeriesDefinitions(SERIES.map(series => normalizeSeriesDefinition(null, series)));
       return undefined;
     }
+    if (isOnline) ensureCloudSeries(BLACK_HORSE).catch(error => setCloudError(error.message));
     const unsubscribers = SERIES.map(fallback => subscribeCloudSeries(fallback.id, data => {
       const normalized = normalizeSeriesDefinition(data, fallback);
       setSeriesDefinitions(current => current.map(series => series.id === normalized.id ? normalized : series));
     }, error => setCloudError(error.message)));
     return () => unsubscribers.forEach(unsubscribe => unsubscribe());
-  }, [adminUser]);
+  }, [adminUser, isOnline]);
 
   useEffect(() => {
     const seriesId = selectedSeriesId || activeSeriesId;
@@ -1346,8 +1349,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   ));
 
   if (adminUser && seasonEvent?.id === activeCloudCode && !isCloudModalOpen) {
-    return <SeasonAdmin key={activeCloudCode} tournament={seasonEvent} series={activeSeries} tournaments={seriesTournaments}
-      online={isOnline} versions={cloudVersions} onBack={handleLeaveCloudTournament} onSignOut={handleCloudSignOut}/>;
+    return <React.Suspense fallback={<p className="p-6">載入賽事後台…</p>}><SeasonAdmin key={activeCloudCode} tournament={seasonEvent} series={activeSeries} tournaments={seriesTournaments}
+      online={isOnline} versions={cloudVersions} audits={cloudAuditLogs} onBack={handleLeaveCloudTournament} onSignOut={handleCloudSignOut}/></React.Suspense>;
   }
   return (
     <div className="min-h-screen font-sans p-4 md:p-8 relative selection:bg-cyan-900 selection:text-white"

@@ -1,8 +1,8 @@
 export const MC_ID = 'MC';
 export const DOUBLE_ELIMINATION_LOSS_LIMIT = 2;
 
-const createId = () => {
-  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+export const createId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 

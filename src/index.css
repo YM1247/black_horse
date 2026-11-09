@@ -1,3 +1,62 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+.event-board, .playoff {
+  min-width: 0;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid #343e48;
+  border-radius: 1rem;
+  background: #161920;
+  color: #e2e8f0;
+}
+.event-board h2, .playoff h2, .season-admin h2 {
+  color: #f1c6a6;
+  font-size: clamp(1.3rem, 2.5vw, 1.8rem);
+  font-weight: 800;
+  margin-bottom: 1rem;
+}
+.event-board li {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: .25rem .65rem;
+  border-top: 1px solid #343e48;
+  padding: .85rem 0;
+  font-variant-numeric: tabular-nums;
+}
+.place { font-weight: 800; color: #b6d2d4; }
+.stage-name, .bout span, .season-admin li, .medalists li { overflow-wrap: anywhere; }
+.event-points { color: #f1c6a6; font-size: .9rem; }
+.record { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: .15rem .9rem; color: #bac5ce; font-size: .85rem; }
+.playoff { margin-bottom: 1.5rem; }
+.playoff-grid, .season-fields { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit,minmax(min(100%, 15rem),1fr)); }
+.playoff article, .season-admin article { border-top: 1px solid #424b55; padding: .8rem 0; }
+.playoff h3, .season-admin h3 { color: #b6d2d4; font-weight: 750; }
+.medalists { display: flex; flex-wrap: wrap; gap: .75rem 2rem; padding-bottom: 1rem; }
+.bout { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: .6rem; padding: .6rem 0; align-items: center; }
+.bout span:last-child { text-align: right; }
+.bout small { display: block; color: #b6d2d4; }
+.season-admin { background: #0d0f12; min-height: 100vh; color: #e2e8f0; padding: clamp(1rem,4vw,3rem) max(1rem,calc((100vw - 66rem)/2)); }
+.season-admin header { border-bottom: 1px solid #424b55; padding-bottom: 1rem; }
+.season-admin h1 { margin-top: 1rem; font-size: 2rem; font-weight: 850; }
+.season-admin header nav, .score-options { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+.season-admin a { text-decoration: underline; color: #b6d2d4; }
+.season-body { display: grid; gap: 1.25rem; min-width: 0; margin-top: 1rem; }
+.season-body > section, .season-review { border: 1px solid #343e48; border-radius: .85rem; background: #161920; padding: clamp(1rem,3vw,1.75rem); min-width: 0; }
+.season-admin input, .season-admin select { display: block; width: 100%; max-width: 26rem; color: #ebedef; background: #0d0f12; padding: .55rem .7rem; border: 1px solid #62727e; border-radius: .35rem; margin: .25rem 0 .6rem; }
+.season-admin label { display: block; margin: .5rem 0; color: #cbd7dc; }
+.season-admin button { min-height: 44px; margin: .2rem; padding: .35rem .85rem; background: #202c34; color: #dae6e9; border: 1px solid #616f79; border-radius: .45rem; }
+.season-admin button:hover:enabled, .season-admin button[aria-pressed="true"] { background: #b6d2d4; color: #0d0f12; }
+.season-admin button:disabled { opacity: .5; }
+.season-admin :focus-visible { outline: 2px solid #f1c6a6; outline-offset: 2px; }
+.season-admin summary { padding: .7rem 0; cursor: pointer; font-weight: bold; color: #b6d2d4; }
+.season-admin [role="alert"] { color: #ffbfac; padding: .6rem; }
+@media (max-width: 420px) {
+  .event-board li { grid-template-columns: 2rem minmax(0,1fr) auto; gap: .25rem .4rem; }
+  .record { grid-column: 1 / -1; }
+}
+@media (min-width: 880px) {
+  .event-board li { grid-template-columns: 2.4rem minmax(10rem,1fr) minmax(18rem,1.5fr) auto; align-items: center; }
+  .record { grid-column: 3; grid-row: 1; }
+  .event-points { grid-column: 4; grid-row: 1; }
+}

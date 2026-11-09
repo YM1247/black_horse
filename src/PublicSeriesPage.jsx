@@ -86,6 +86,13 @@ export default function PublicSeriesPage({ initialCode = '' }) {
     const unsubscribers = events.map(event => subscribeTournament(event.eventCode, tournament => {
       setTournamentsByCode(current => ({ ...current, [event.eventCode]: tournament }));
     }, firebaseError => {
+      if (firebaseError.code === 'permission-denied') {
+        setTournamentsByCode(current => {
+          const remaining = {...current};
+          delete remaining[event.eventCode];
+          return remaining;
+        });
+      }
       setError(firebaseError.code === 'permission-denied'
         ? `場次 ${event.name} 已取消公開。`
         : `場次 ${event.name} 暫時無法更新。`);
