@@ -1,3 +1,4 @@
+import { FINAL } from './seasonTournament';
 import React, { useEffect, useMemo, useState } from 'react';
 import { isFirebaseConfigured } from './firebase';
 import { buildSeriesStandings } from './series';
@@ -196,7 +197,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
               </div>
               <div className="space-y-3 md:hidden" aria-label="手機版系列積分排名">
                 {standings.map(standing => (
-                  <article key={standing.name} className="rounded-xl border border-slate-800 bg-[#11151b] overflow-hidden">
+                  <article key={standing.id || standing.name} className="rounded-xl border border-slate-800 bg-[#11151b] overflow-hidden">
                     <div className="flex items-start gap-3 p-4 border-b border-slate-800">
                       <span className="w-9 h-9 shrink-0 rounded-full bg-cyan-950/60 text-[#b6d2d4] flex items-center justify-center font-black">
                         {standing.displayRank}
@@ -208,10 +209,10 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-px bg-slate-800">
-                      {series.events.map((event, eventIndex) => (
+                      {series.events.filter(e => e.rulesVersion !== FINAL).map((event, eventIndex) => (
                         <div key={event.id} className={`bg-[#161920] px-4 py-3 flex items-center justify-between gap-3 ${series.events.length % 2 === 1 && eventIndex === series.events.length - 1 ? 'col-span-2' : ''}`}>
                           <span className="text-xs font-bold text-slate-500 break-words">{event.name}</span>
-                          <span className="font-black text-slate-200">{standing.eventPoints[event.eventCode] || 0}</span>
+                          <span className="font-black text-slate-200">{standing.eventPoints[event.eventCode] ?? (standing.countedEvents ? '—' : 0)}{standing.countedEvents?.includes(event.eventCode) ? ' 採計' : ''}</span>
                         </div>
                       ))}
                     </div>
@@ -226,16 +227,16 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                     <tr>
                       <th className="p-3 text-center sticky left-0 z-20 bg-[#0d0f12] w-12 min-w-12 max-w-12">排名</th>
                       <th className="p-3 sticky left-12 z-20 bg-[#0d0f12] w-40 min-w-40 max-w-40 border-r border-slate-700 shadow-[8px_0_12px_rgba(0,0,0,0.35)]">選手</th>
-                      {series.events.map(event => <th key={event.id} className="p-3 text-center min-w-[5.5rem]">{event.name}</th>)}
+                      {series.events.filter(e => e.rulesVersion !== FINAL).map(event => <th key={event.id} className="p-3 text-center min-w-[5.5rem]">{event.name}</th>)}
                       <th className="p-3 text-center text-[#f1c6a6] min-w-24">總積分</th>
                     </tr>
                   </thead>
                   <tbody>
                     {standings.map(standing => (
-                      <tr key={standing.name} className="border-t border-slate-800">
+                      <tr key={standing.id || standing.name} className="border-t border-slate-800">
                         <td className="p-3 text-center font-black text-[#b6d2d4] sticky left-0 z-10 bg-[#161920] w-12 min-w-12 max-w-12">{standing.displayRank}</td>
                         <td title={standing.name} className="p-3 font-black text-white sticky left-12 z-10 bg-[#161920] w-40 min-w-40 max-w-40 overflow-hidden break-words leading-tight border-r border-slate-700 shadow-[8px_0_12px_rgba(0,0,0,0.35)]">{standing.name}</td>
-                        {series.events.map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300 min-w-[5.5rem]">{standing.eventPoints[event.eventCode] || 0}</td>)}
+                        {series.events.filter(e => e.rulesVersion !== FINAL).map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300 min-w-[5.5rem]">{standing.eventPoints[event.eventCode] ?? (standing.countedEvents ? '—' : 0)}{standing.countedEvents?.includes(event.eventCode) ? ' 採計' : ''}</td>)}
                         <td className="p-3 text-center text-xl font-black text-[#f1c6a6] min-w-24">{standing.totalPoints}</td>
                       </tr>
                     ))}

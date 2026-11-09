@@ -6,6 +6,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   doc,
+  collection, getDocs,
   getDoc,
   runTransaction,
   setDoc,
@@ -164,4 +165,16 @@ test('admin session expires and token rotation invalidates the old session', asy
     await setDoc(doc(context.firestore(), 'settings', 'admin'), { tokenHash: ROTATED_TOKEN_HASH });
   });
   await assertFails(getDoc(sessionRef));
+});
+
+test('public spectators can read a match but cannot retrieve or enumerate player identities', async () => {
+  await seedAdmin();
+  await seedTournament();
+  const admin = testEnvironment.authenticatedContext('admin-user').firestore();
+  const visitor = testEnvironment.unauthenticatedContext().firestore();
+  await assertSucceeds(setDoc(doc(admin,'privatePlayers','directory'), {profiles:{a:{realName:'私名',phone:'0900123456',name:'甲'}}}));
+  await assertSucceeds(getDoc(doc(visitor,'tournaments','RULES1')));
+  await assertFails(getDoc(doc(visitor,'privatePlayers','directory')));
+  await assertFails(getDocs(collection(visitor,'privatePlayers')));
+  await assertFails(setDoc(doc(visitor,'privatePlayers','directory'), {}));
 });

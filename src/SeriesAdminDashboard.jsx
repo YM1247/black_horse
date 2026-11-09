@@ -1,3 +1,4 @@
+import { FINAL } from './seasonTournament';
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { generateEventCode, normalizeEventCode } from './services/tournamentRepository';
@@ -72,7 +73,7 @@ export default function SeriesAdminDashboard({
             <h3 className="text-3xl font-black text-white">{series.name}</h3>
             <p className="mt-2 text-sm font-bold text-slate-400">{series.description}・已完成 {finishedCount}/{series.events.length} 場</p>
           </div>
-          <div className="text-xs font-black text-[#b6d2d4]">同名選手跨場自動合併積分</div>
+          <div className="text-xs font-black text-[#b6d2d4]">{series.publicCode === 'BH2627' ? '依選手編號採計最佳三站' : '同名選手跨場自動合併積分'}</div>
         </div>
       </section>
 
@@ -107,7 +108,7 @@ export default function SeriesAdminDashboard({
         </div>
       </section>
 
-      <section className="p-5 rounded-xl border bg-[#161920] border-slate-700">
+      {series.publicCode !== 'BH2627' && <section className="p-5 rounded-xl border bg-[#161920] border-slate-700">
         <h4 className="font-black text-lg text-[#f1c6a6]">新增系列場次</h4>
         <p className="mt-1 text-xs font-bold text-slate-500">先新增保留名稱與賽制標籤的場次卡，再從卡片建立實際賽事。</p>
         <form onSubmit={handleAddEvent} className="mt-4 grid sm:grid-cols-[1fr_11rem_auto] gap-3">
@@ -120,7 +121,7 @@ export default function SeriesAdminDashboard({
             {mutationStatus === 'adding' ? '新增中…' : '新增場次'}
           </button>
         </form>
-      </section>
+      </section>}
 
       <section>
         <h4 className="font-black text-lg mb-3 text-[#f1c6a6]">系列場次 ({series.events.length})</h4>
@@ -142,7 +143,7 @@ export default function SeriesAdminDashboard({
                   </span>
                 </div>
                 <div className="mt-5 text-sm font-bold text-slate-400 space-y-1">
-                  <div>3 位評審・兩敗淘汰</div>
+                  <div>{event.judgeCount} 位評審・{event.doubleElimination ? '兩敗淘汰' : '瑞士制＋八強單淘汰'}</div>
                   <div>{tournament ? `${tournament.players?.length ?? tournament.playerCount ?? 0} 位選手・${tournament.isPublic ? '公開' : '未公開'}` : '獨立報名名單'}</div>
                 </div>
                 <div className="mt-auto pt-4 grid grid-cols-2 gap-2">
@@ -178,17 +179,17 @@ export default function SeriesAdminDashboard({
               <tr>
                 <th className="p-3 text-center">排名</th>
                 <th className="p-3">選手</th>
-                {series.events.map(event => <th key={event.id} className="p-3 text-center">{event.name}</th>)}
+                {series.events.filter(e => e.rulesVersion !== FINAL).map(event => <th key={event.id} className="p-3 text-center">{event.name}</th>)}
                 <th className="p-3 text-center">參賽</th>
                 <th className="p-3 text-center text-[#f1c6a6]">總積分</th>
               </tr>
             </thead>
             <tbody>
               {standings.map(standing => (
-                <tr key={standing.name} className="border-t border-slate-800">
+                <tr key={standing.id || standing.name} className="border-t border-slate-800">
                   <td className="p-3 text-center font-black text-[#b6d2d4]">{standing.displayRank}</td>
                   <td className="p-3 font-black text-white">{standing.name}</td>
-                  {series.events.map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300">{standing.eventPoints[event.eventCode] || 0}</td>)}
+                  {series.events.filter(e => e.rulesVersion !== FINAL).map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300">{standing.eventPoints[event.eventCode] ?? (standing.countedEvents ? '—' : 0)}{standing.countedEvents?.includes(event.eventCode) ? ' 採計' : ''}</td>)}
                   <td className="p-3 text-center text-slate-400">{standing.participatedEvents}</td>
                   <td className="p-3 text-center text-xl font-black text-[#f1c6a6]">{standing.totalPoints}</td>
                 </tr>

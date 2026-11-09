@@ -1,3 +1,4 @@
+import { eventRanking, FINAL, QUALIFIER } from './seasonTournament';
 import { rankPlayers } from './tournament';
 
 export const SIMULATION_SERIES = Object.freeze({
@@ -14,7 +15,15 @@ export const SIMULATION_SERIES = Object.freeze({
   ])
 });
 
-export const SERIES = Object.freeze([SIMULATION_SERIES]);
+export const BLACK_HORSE = {
+  id: 'black-horse-26-27', name: '黑馬記念26-27', publicCode: 'BH2627', isPublic: true, revision: 0,
+  description: '四場積分賽取最佳三站，前二十一名取得最終戰資格',
+  events: [...Array.from({ length: 4 }, (_, i) => ({
+    id: 'station-' + (i + 1), name: '第' + (i + 1) + '站積分賽', eventCode: 'BH2627S' + (i + 1),
+    rulesVersion: QUALIFIER, judgeCount: 3, doubleElimination: true
+  })), { id: 'final', name: '最終戰', eventCode: 'BH2627F', rulesVersion: FINAL, judgeCount: 5, doubleElimination: false }]
+};
+export const SERIES = Object.freeze([SIMULATION_SERIES, BLACK_HORSE]);
 
 const normalizePlayerName = (name) => String(name || '').trim();
 
@@ -33,6 +42,7 @@ export const normalizeSeriesDefinition = (data, fallback) => {
         const eventCode = String(event?.eventCode || '').trim().toUpperCase();
         if (!eventCode || !String(event?.name || '').trim()) return null;
         return {
+          ...(event.rulesVersion ? { rulesVersion: event.rulesVersion } : {}),
           id: String(event.id || `event-${eventCode.toLowerCase()}`),
           name: String(event.name).trim(),
           eventCode,
@@ -46,6 +56,7 @@ export const normalizeSeriesDefinition = (data, fallback) => {
 
 export const buildSeriesStandings = (series, tournaments = []) => {
   if (!series?.events?.length) return [];
+  if (series.publicCode === BLACK_HORSE.publicCode || series.events.some(event => event.rulesVersion === QUALIFIER)) return seasonStandings(series, tournaments);
   const tournamentsByCode = new Map(tournaments.map(tournament => [tournament.id || tournament.eventCode, tournament]));
   const blankEventPoints = () => Object.fromEntries(series.events.map(event => [event.eventCode, 0]));
   const standingsByName = new Map();
@@ -95,3 +106,28 @@ export const buildSeriesStandings = (series, tournaments = []) => {
   });
   return standings;
 };
+
+
+function seasonStandings(series, tournaments) {
+  const players = new Map();
+  const events = series.events.filter(event => event.rulesVersion === QUALIFIER);
+  for (const event of events) {
+    const tournament = tournaments.find(t => (t.id || t.eventCode) === event.eventCode);
+    if (!tournament) continue;
+    for (const player of eventRanking(tournament).filter(p => !p.isOrganizer)) {
+      const row = players.get(player.id) || { id: player.id, name: player.name, eventPoints: {}, participatedEvents: 0 };
+      row.name = player.name;
+      row.participatedEvents++;
+      if (tournament.phase === 'finished') row.eventPoints[event.eventCode] = player.rankingPoints;
+      players.set(player.id, row);
+    }
+  }
+  const rows = [...players.values()];
+  for (const row of rows) {
+    row.countedEvents = Object.keys(row.eventPoints).sort((a,b) => row.eventPoints[b] - row.eventPoints[a]).slice(0,3);
+    row.totalPoints = row.countedEvents.reduce((sum, code) => sum + row.eventPoints[code], 0);
+  }
+  rows.sort((a,b) => b.totalPoints - a.totalPoints || a.name.localeCompare(b.name,'zh-TW'));
+  rows.forEach((row,i) => { row.displayRank = i && rows[i-1].totalPoints === row.totalPoints ? rows[i-1].displayRank : i+1; });
+  return rows;
+}

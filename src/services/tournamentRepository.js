@@ -78,6 +78,7 @@ export const encodeSeriesForFirestore = (series = {}) => cleanData({
     name: String(event.name || '').trim(),
     eventCode: normalizeEventCode(event.eventCode),
     judgeCount: Number(event.judgeCount) === 5 ? 5 : 3,
+    ...(event.rulesVersion ? { rulesVersion: event.rulesVersion } : {}),
     doubleElimination: event.doubleElimination !== false
   })),
   ...(series.publicCode ? { publicCode: normalizeEventCode(series.publicCode) } : {}),
@@ -105,7 +106,8 @@ export const buildPublicSeriesProjection = (series = {}, tournaments = []) => {
         name: String(event.name || tournament.name || eventCode).trim(),
         eventCode,
         judgeCount: Number(event.judgeCount) === 5 ? 5 : 3,
-        doubleElimination: event.doubleElimination !== false
+        ...(event.rulesVersion ? { rulesVersion: event.rulesVersion } : {}),
+    doubleElimination: event.doubleElimination !== false
       }];
     })
   });

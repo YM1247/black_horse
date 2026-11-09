@@ -71,6 +71,10 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /privatePlayers/{documentId} {
+      allow read, write: if isAdmin();
+    }
+
     match /tournamentSummaries/{eventCode} {
       allow read, create, update, delete: if isAdmin();
     }
