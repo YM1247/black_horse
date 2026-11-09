@@ -54,7 +54,7 @@ export const buildOpponentHistory = (rounds = []) => {
   return opponents;
 };
 
-const createMatch = (p1, p2, extra = {}) => ({
+export const createMatch = (p1, p2, extra = {}) => ({
   id: createId(),
   p1,
   p2,
@@ -113,7 +113,7 @@ const chooseMcPlayer = (pool, roundNum, opponentHistory, random) => {
   )[0];
 };
 
-export const pairSwissRound = ({ players, rounds = [], roundNum, random = Math.random }) => {
+export const pairSwissRound = ({ players, rounds = [], roundNum, random = Math.random, assignSides = false }) => {
   const opponentHistory = buildOpponentHistory(rounds);
   const pool = players
     .filter(player => !player.isWithdrawn && !player.isEliminated && !player.isMC)
@@ -157,7 +157,14 @@ export const pairSwissRound = ({ players, rounds = [], roundNum, random = Math.r
   }
 
   if (mcMatch) matches.push(mcMatch);
-  return matches;
+  return assignSides ? matches.map(match => assignAttackOrder(match, random)) : matches;
+};
+
+export const assignAttackOrder = (match, random = Math.random) => {
+  const [left, right] = random() < 0.5 ? [match.p1, match.p2] : [match.p2, match.p1];
+  return { ...match, p1: left, p2: right, attackOrder: true,
+    p1WinsSnapshot: left.wins || 0, p2WinsSnapshot: right.wins || 0,
+    p1VotesSnapshot: left.votes || 0, p2VotesSnapshot: right.votes || 0 };
 };
 
 export const updateMatchScore = (rounds, roundIndex, matchId, p1Votes, p2Votes) =>
@@ -229,7 +236,7 @@ export const rankPlayers = (players, rounds) => {
   });
 
   const matchWinRate = (playerId) => {
-    const matches = completedMatches.get(playerId) || 0;
+    const matches = (completedMatches.get(playerId) || 0) + (byId.get(playerId)?.seedCredit ? 1 : 0);
     return matches > 0 ? (byId.get(playerId)?.wins || 0) / matches : 0;
   };
   const opponentWinRate = (playerId) => {
