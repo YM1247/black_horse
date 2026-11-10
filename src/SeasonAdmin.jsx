@@ -367,12 +367,14 @@ export default function SeasonAdmin({
                     });
                   }}
                 />
-                <h3>名單 {event.players.length}／48</h3>
-                <ul>
+                <h3 id="registration-roster" className="mt-6">名單 {event.players.length}／48</h3>
+                <ul aria-labelledby="registration-roster" className="my-3 grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
                   {event.players.map((p) => (
-                    <li key={p.id}>
-                      {p.name}
+                    <li key={p.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-slate-700 py-1">
+                      <span>{p.name}</span>
                       <button
+                        aria-label={`移除 ${p.name}`}
+                        className="whitespace-nowrap"
                         onClick={() =>
                           run(() =>
                             write(
