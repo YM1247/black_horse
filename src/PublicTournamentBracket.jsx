@@ -8,12 +8,12 @@ const COLORS = {
   inkBlueDark: '#85a4a6',
   inkOrange: '#f1c6a6',
   textMain: '#e2e8f0',
-  textMuted: '#64748b'
+  textMuted: '#a0adbf'
 };
 
 const getPlayerFontSize = (name = '') => {
-  if (name.length > 12) return '0.7rem';
-  if (name.length > 8) return '0.8rem';
+  if (name.length > 12) return '0.875rem';
+  if (name.length > 8) return '0.875rem';
   if (name.length > 5) return '0.9rem';
   return '1rem';
 };
@@ -38,14 +38,14 @@ const groupRoundMatches = (matches, roundIndex) => matches.reduce((groups, match
 export default function PublicTournamentBracket({ rounds = [] }) {
   return (
     <div className="w-full" role="region" aria-label="完整瑞士制樹狀圖">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 p-2 items-center">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-8 md:p-2 items-start">
         {rounds.map((matches, roundIndex) => {
           const groups = groupRoundMatches(matches, roundIndex);
           const sortedScores = Object.keys(groups).map(Number).sort((first, second) => second - first);
 
           return (
             <div key={roundIndex} className="flex flex-col gap-6 w-full">
-              <h3 className="text-center font-black tracking-widest text-xl py-3 rounded-lg border-2 shadow-lg"
+              <h3 id={`swiss-round-${roundIndex+1}`} className="text-center font-black tracking-widest text-xl py-3 rounded-lg border-2 shadow-lg"
                 style={{ backgroundColor: COLORS.bg, borderColor: COLORS.inkBlue, color: COLORS.inkBlue }}>
                 ROUND {roundIndex + 1}
               </h3>
@@ -63,14 +63,14 @@ export default function PublicTournamentBracket({ rounds = [] }) {
                         {group.label}
                       </div>
 
-                      <div className="p-3 space-y-3">
+                      <div className="p-2 sm:p-3 space-y-2">
                         {group.matches.map(match => {
                           const isDone = match.p1Votes !== null && match.p1Votes !== undefined;
                           const p1Won = isDone && match.p1Votes > match.p2Votes;
                           const p2Won = isDone && match.p2Votes > match.p1Votes;
 
                           return (
-                            <div key={match.id} className={`rounded-lg border px-4 py-3 ${isDone ? '' : 'border-dashed'}`}
+                            <div key={match.id} className={`rounded-lg border px-2 sm:px-4 py-3 ${isDone ? '' : 'border-dashed'}`}
                               style={{ backgroundColor: COLORS.bg, borderColor: isDone ? COLORS.cardBorder : COLORS.textMuted }}>
                               <div className="flex items-center justify-between w-full gap-2">
                                 <div className="flex flex-col items-start w-0 flex-1">
@@ -85,9 +85,9 @@ export default function PublicTournamentBracket({ rounds = [] }) {
                                   {!match.p1.isMC && <div className="text-[11px] font-bold mt-1 opacity-70 whitespace-nowrap" style={{ color: accentColor }}>{match.p1WinsSnapshot || 0}W {match.p1VotesSnapshot || 0}票</div>}
                                 </div>
 
-                                {isDone && <div style={{ color: accentColor }} className="font-mono text-xl font-black w-8 text-center shrink-0">{match.p1Votes}</div>}
+                                {isDone && <div style={{ color: accentColor }} className="font-mono text-xl font-black w-5 sm:w-8 text-center shrink-0">{match.p1Votes}</div>}
                                 <div style={{ color: group.isFloat ? COLORS.inkOrange : COLORS.inkBlueDark }} className="font-black text-xs px-1 shrink-0">{isDone ? '-' : 'VS'}</div>
-                                {isDone && <div style={{ color: accentColor }} className="font-mono text-xl font-black w-8 text-center shrink-0">{match.p2Votes}</div>}
+                                {isDone && <div style={{ color: accentColor }} className="font-mono text-xl font-black w-5 sm:w-8 text-center shrink-0">{match.p2Votes}</div>}
 
                                 <div className="flex flex-col items-end w-0 flex-1">
                                   {match.attackOrder && <small className="text-[#b6d2d4] font-bold">後攻</small>}

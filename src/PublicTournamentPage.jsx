@@ -16,8 +16,9 @@ export function PublicTournamentRanking({ tournament, rankedPlayers, prominent =
   const isFinished = tournament.phase === 'finished';
   const isFinal = tournament.rulesVersion === FINAL;
   const title = isFinal ? '瑞士制排名' : isFinished ? '最終排名' : '即時排名';
-  return <section aria-label={title} className={'event-board ' + (prominent ? 'mb-8' : '')}>
+  return <section id="event-ranking" aria-label={title} className={'event-board ' + (prominent ? 'mb-8' : '')}>
     <h2>{title}</h2>
+    {rankedPlayers.length === 0 && <p className="text-slate-300">尚無選手排名。</p>}
     <ol>{rankedPlayers.map(player => <li key={player.id}>
       <span className="place">{player.displayRank}</span>
       <strong className="stage-name">{player.name}</strong>
@@ -49,6 +50,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
     const handleOffline = () => setIsOnline(false);
     const handlePopState = () => {
       const code = normalizeEventCode(new URLSearchParams(window.location.search).get('event') || '');
+      if (code === eventCode) return;
       setTournament(null);
       setInput(code);
       setEventCode(validateEventCode(code) ? code : '');
@@ -63,7 +65,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('popstate', handlePopState);
     };
-  }, []);
+  }, [eventCode]);
 
   useEffect(() => {
     document.title = tournament?.name
@@ -92,6 +94,10 @@ export default function PublicTournamentPage({ initialCode = '' }) {
       setError('賽事代碼需為 4–10 位英文字母或數字。');
       return;
     }
+    if (code === eventCode) {
+      setRetryKey(value => value + 1);
+      return;
+    }
     setTournament(null);
     setStatus('loading');
     window.history.pushState({}, '', `${window.location.pathname}?event=${code}`);
@@ -117,13 +123,15 @@ export default function PublicTournamentPage({ initialCode = '' }) {
     : null;
 
   return (
-    <main className="min-h-screen bg-[#0d0f12] text-slate-100 p-4 md:p-8">
+    <main className="spectator-page min-h-screen bg-[#0d0f12] text-slate-100 p-3 sm:p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 border-b border-slate-800 pb-8">
+        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 md:gap-6 mb-4 md:mb-8 border-b border-slate-800 pb-4 md:pb-8">
           <div>
+            <div className="spectator-header-links">
             {eventCode && <a href={window.location.pathname} className="text-sm font-bold text-slate-500 hover:text-slate-200">← 查詢其他賽事</a>}
             {parentSeries?.publicCode && <a href={`${window.location.pathname}?series=${parentSeries.publicCode}`} className="ml-4 text-sm font-bold text-[#b6d2d4] hover:text-white">查看整個系列賽</a>}
-            <h1 className="text-4xl font-black mt-3 break-words">{tournament?.name || '觀眾即時賽況'}</h1>
+            </div>
+            <h1 className="text-3xl md:text-4xl font-black mt-2 break-words">{tournament?.name || '觀眾即時賽況'}</h1>
             {tournament && <p className="mt-2 text-slate-400 font-bold">代碼 {eventCode}・{PHASE_LABELS[tournament.phase] || tournament.phase}・{tournament.judgeCount} 位評審・{tournament.doubleElimination ? '兩敗淘汰' : '不淘汰'}</p>}
           </div>
           <form onSubmit={handleLookup} className="flex gap-2">
@@ -141,7 +149,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
             <button type="button" onClick={() => setRetryKey(value => value + 1)} className="px-4 py-2 rounded-lg border border-amber-400">重試</button>
           </div>
         )}
-        {status === 'loading' && <div className="py-20 text-center text-slate-500 font-bold">正在載入賽事…</div>}
+        {status === 'loading' && <div role="status" className="py-20 text-center text-slate-500 font-bold">正在載入賽事…</div>}
         {status === 'not-found' && <div className="py-20 text-center text-slate-500 font-bold">找不到此賽事。</div>}
         {status === 'idle' && <div className="py-20 text-center text-slate-500 font-bold">請輸入賽事代碼。<a className="block mt-4 underline text-[#b6d2d4]" href={'?series='+BLACK_HORSE.publicCode}>查看{BLACK_HORSE.name}系列賽</a></div>}
 
@@ -151,6 +159,11 @@ export default function PublicTournamentPage({ initialCode = '' }) {
               {tournament.sync?.hasPendingWrites ? '資料同步中' : tournament.sync?.fromCache ? '離線快取' : '即時更新中'}・最後更新 {tournament.clientUpdatedAt ? new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW') : '尚未取得'}
             </div>
 
+            {rounds.length > 0 && <nav aria-label="單場賽況導覽" className="spectator-jumps">
+              {rounds.map((_, i) => <a key={i} href={`#swiss-round-${i+1}`}>第 {i+1} 輪</a>)}
+              <a href="#event-ranking">排名</a>
+              {tournament.playoffSeeds?.length > 0 && <a href="#playoff">八強</a>}
+            </nav>}
             {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} />}
             {tournament.phase === 'finished' && (
               <PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} prominent />

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import PublicTournamentPage from './PublicTournamentPage';
 
@@ -49,4 +49,19 @@ test('a finished public tournament puts final standings before the bracket witho
   expect(standings.compareDocumentPosition(bracket) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(standings.compareDocumentPosition(roundHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(standings).toHaveTextContent('本場積分 100');
+});
+
+
+test('手機輪次與排名連結可回到同一場賽事，保留已載入的比分', async () => {
+  window.history.replaceState({}, '', '/?event=MOCK819');
+  render(<PublicTournamentPage initialCode="MOCK819" />);
+  expect(await screen.findByRole('heading', {name:'8/19'})).toBeInTheDocument();
+  const nav = screen.getByRole('navigation', { name: '單場賽況導覽' });
+  for (const link of nav.querySelectorAll('a')) {
+    expect(document.querySelector(link.hash)).toBeInTheDocument();
+    window.history.replaceState({}, '', '/?event=MOCK819' + link.hash);
+    fireEvent(window, new PopStateEvent('popstate'));
+    expect(screen.getByRole('region', { name: '最終排名' })).toHaveTextContent('Alice');
+  }
+  window.history.replaceState({}, '', '/');
 });

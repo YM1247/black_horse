@@ -65,7 +65,7 @@ export default function SeriesAdminDashboard({
   };
 
   return (
-    <div className="space-y-7">
+    <div className="series-console">
       <section>
         <button type="button" onClick={onBack} className="text-sm font-black text-slate-500 hover:text-slate-200">← 返回雲端管理首頁</button>
         <div className="mt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
@@ -77,8 +77,8 @@ export default function SeriesAdminDashboard({
         </div>
       </section>
 
-      <section className="p-5 rounded-xl border-2 bg-[#131e24] border-[#b6d2d4]">
-        <div className="grid md:grid-cols-[1fr_auto] gap-5 items-center">
+      <section className="series-sharing p-5 rounded-xl border-2 bg-[#131e24] border-[#b6d2d4]">
+        <div className="grid sm:grid-cols-[1fr_auto] lg:grid-cols-1 gap-5 items-center">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h4 className="font-black text-lg text-[#b6d2d4]">公開系列賽頁</h4>
@@ -123,7 +123,7 @@ export default function SeriesAdminDashboard({
         </form>
       </section>}
 
-      <section>
+      <section className="series-events">
         <h4 className="font-black text-lg mb-3 text-[#f1c6a6]">系列場次 ({series.events.length})</h4>
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
           {series.events.map(event => {

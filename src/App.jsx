@@ -98,7 +98,7 @@ const COLORS = {
   inkOrange: '#f1c6a6',
   inkOrangeDark: '#d4a17a',
   textMain: '#e2e8f0',
-  textMuted: '#64748b'
+  textMuted: '#a0adbf'
 };
 
 // Helper: 根據字數動態調整字體大小
@@ -1377,7 +1377,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       `}</style>
 
       {/* 頂部 工具列 */}
-      <div className="absolute top-4 left-4 md:top-8 md:left-8 z-30">
+      <div inert={isCloudModalOpen || Boolean(confirmAction || renamePlayerId)} className="absolute top-4 left-4 md:top-8 md:left-8 z-30">
         <button onClick={activeCloudCode ? handleLeaveCloudTournament : () => setIsCloudModalOpen(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-bold brush-border border"
           style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder, color: COLORS.textMain }}>
@@ -1385,7 +1385,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         </button>
       </div>
 
-      <div className="absolute top-4 right-4 md:top-8 md:right-8 flex flex-wrap justify-end gap-2 z-30 max-w-[75%]">
+      <div inert={isCloudModalOpen || Boolean(confirmAction || renamePlayerId)} className="absolute top-4 right-4 md:top-8 md:right-8 flex flex-wrap justify-end gap-2 z-30 max-w-[75%]">
         <a href={window.location.pathname} target="_blank" rel="noreferrer"
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg transition-all text-sm font-black tracking-widest brush-border border"
           style={{ backgroundColor: COLORS.card, color: COLORS.inkOrange, borderColor: COLORS.inkOrange }}>
@@ -1403,7 +1403,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
       {/* Cloud admin modal */}
       {isCloudModalOpen && isFirebaseConfigured && (
-        <FullScreenCloudManager>
+        <FullScreenCloudManager inert={Boolean(confirmAction || renamePlayerId)}>
             <div className="flex justify-between items-center p-5 border-b" style={{ borderColor: COLORS.cardBorder, backgroundColor: COLORS.card }}>
               <div>
                 <h2 className="text-xl font-black text-white">{selectedSeries ? `${selectedSeries.name}系列賽` : '雲端賽事管理'}</h2>
@@ -1506,6 +1506,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                     </>
                   )}
 
+                  <div className="admin-event-library">
                   {!activeCloudCode && <section className="p-5 rounded-xl border-2" style={{ backgroundColor: '#131e24', borderColor: COLORS.inkOrange }}>
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                       <h3 className="font-black text-lg">系列賽</h3>
@@ -1533,9 +1534,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                   <section className="p-5 rounded-xl border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
                     <h3 className="font-black mb-2">建立新的雲端賽事</h3>
                     <p className="text-xs mb-4 leading-relaxed" style={{ color: COLORS.textMuted }}>建立完成時就會立即保存至 Firestore，之後每次操作都會自動同步，不需要另外存檔。</p>
-                    <div className="grid sm:grid-cols-[1fr_10rem_auto] gap-3">
-                      <input value={newCloudName} onChange={event => setNewCloudName(event.target.value)} placeholder="賽事名稱" className="px-4 py-3 rounded-lg border" />
-                      <input value={newCloudCode} onChange={event => setNewCloudCode(normalizeEventCode(event.target.value))} aria-label="新賽事代碼" className="px-4 py-3 rounded-lg border font-black uppercase" />
+                    <div className="grid sm:grid-cols-[minmax(0,1fr)_7rem_auto] gap-3">
+                      <input value={newCloudName} onChange={event => setNewCloudName(event.target.value)} aria-label="賽事名稱" placeholder="賽事名稱" className="min-w-0 px-4 py-3 rounded-lg border" />
+                      <input value={newCloudCode} onChange={event => setNewCloudCode(normalizeEventCode(event.target.value))} aria-label="新賽事代碼" className="min-w-0 px-4 py-3 rounded-lg border font-black uppercase" />
                       <button onClick={handleCreateCloudTournament} className="px-5 py-3 rounded-lg font-black" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>建立並進入</button>
                     </div>
                     <label className="mt-4 flex items-center gap-2"><input type="checkbox" checked={newSeasonRules} onChange={e=>{
@@ -1573,7 +1574,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                     <p className="text-xs mt-3" style={{ color: COLORS.textMuted }}>建立需要連線以確認代碼唯一；新賽事建立後預設公開，觀眾可立即使用賽事代碼查看。</p>
                   </section>
 
-                  <section>
+                  <section className="lg:col-span-full">
                     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-3">
                       <div>
                         <h3 className="font-black">既有單場賽事 ({visibleStandaloneTournaments.length}/{standaloneTournaments.length})</h3>
@@ -1606,6 +1607,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                       {visibleStandaloneTournaments.length === 0 && <div className="p-8 text-center border border-dashed rounded-xl" style={{ borderColor: COLORS.cardBorder, color: COLORS.textMuted }}>{standaloneTournaments.length ? '沒有符合條件的賽事' : '尚無獨立單場賽事'}</div>}
                     </div>
                   </section>
+                  </div>
                     </>
                   )}
                 </>
@@ -1616,7 +1618,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
       {renamePlayerId && (
         <div ref={renameDialogRef} className="fixed inset-0 z-[75] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="rename-player-title">
-          <form onSubmit={confirmRenamePlayer} className="w-full max-w-md rounded-2xl p-7 border-2" style={{ backgroundColor: COLORS.card, borderColor: COLORS.inkBlue }}>
+          <form onSubmit={confirmRenamePlayer} className="w-full max-w-md rounded-2xl p-7 border-2 max-h-[calc(100dvh-2rem)] overflow-y-auto" style={{ backgroundColor: COLORS.card, borderColor: COLORS.inkBlue }}>
             <h2 id="rename-player-title" className="text-2xl font-black text-white">更改選手姓名</h2>
             <p className="mt-2 text-sm font-bold" style={{ color: COLORS.textMuted }}>已產生的對戰名稱會同步更新；選手 ID 與成績不變。</p>
             <input autoFocus value={renamePlayerName} onChange={event => setRenamePlayerName(event.target.value)} className="w-full mt-5 px-4 py-3 rounded-lg border font-black" aria-label="新的選手姓名" />
@@ -1633,7 +1635,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         <div ref={confirmDialogRef} className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
           role="dialog" aria-modal="true" aria-labelledby="global-confirm-title"
           onKeyDown={event => { if (event.key === 'Escape' && !seriesMutationStatus) setConfirmAction(null); }}>
-          <div className="rounded-2xl p-8 max-w-md w-full shadow-2xl transform transition-all border-2 brush-border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
+          <div className="rounded-2xl p-8 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-2xl transform transition-all border-2 brush-border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
             <div className="flex items-center gap-4 mb-6">
               <AlertTriangle size={32} style={{ color: COLORS.inkOrange }} />
               <h3 id="global-confirm-title" className="text-2xl font-black tracking-widest text-white">
@@ -1665,10 +1667,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         </div>
       )}
 
-      <div className="max-w-full mx-auto relative z-10 ink-splash-bg pt-16 md:pt-0 min-h-[90vh] px-4">
+      <div inert={isCloudModalOpen || Boolean(confirmAction || renamePlayerId)} className="max-w-full mx-auto relative z-10 ink-splash-bg pt-16 md:pt-0 min-h-[90vh] px-4">
         
         {/* Header - 水墨黑馬記念風格 */}
-        <header className="mb-12 text-center space-y-4 pt-4">
+        <header className="legacy-admin-heading mb-8 text-center space-y-4 pt-4">
           <h1 className="text-5xl md:text-6xl font-black tracking-[0.2em] uppercase" style={{ color: COLORS.textMain }}>
             黑馬<span style={{color: COLORS.inkOrange}}>記念</span>
           </h1>
@@ -1689,7 +1691,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
             <div>
               <div className="font-black text-white">{!isOnline || cloudSyncStatus === 'offline' ? '目前離線，管理功能已切換為唯讀' : cloudSyncStatus === 'error' ? '雲端同步尚未完成' : '雲端連線暫時不穩定，正在自動重試'}</div>
               <div className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>
-                {cloudRetryMessage || (lastCloudSuccessAt ? `最後成功同步：${lastCloudSuccessAt.toLocaleTimeString('zh-TW')}` : '等待第一次成功同步')}
+                {cloudError || cloudRetryMessage || (lastCloudSuccessAt ? `最後成功同步：${lastCloudSuccessAt.toLocaleTimeString('zh-TW')}` : '等待第一次成功同步')}
               </div>
             </div>
             {isOnline && cloudSyncStatus === 'error' && <button type="button" onClick={() => flushCloudSyncRef.current?.()} className="px-4 py-2 rounded-lg font-black bg-white text-black">重新同步</button>}
@@ -1700,7 +1702,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
         {/* Phase 1: Registration */}
         {phase === 'registration' && (
-          <div className="grid lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid lg:grid-cols-[minmax(17rem,1fr)_minmax(0,2fr)] gap-8 max-w-[98rem] mx-auto">
             <div className="lg:col-span-1 space-y-6">
               <div className="p-8 rounded-2xl border brush-border shadow-xl" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
                 <h2 className="text-xl font-black flex items-center gap-3 mb-6 tracking-widest" style={{ color: COLORS.inkBlue }}>
@@ -1708,8 +1710,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                 </h2>
                 <form onSubmit={handleAddPlayer} className="space-y-5">
                   <div>
-                    <label className="block text-sm font-bold mb-2 tracking-widest" style={{ color: COLORS.textMuted }}>選手名稱 (NAME)</label>
-                    <input type="text" value={newName} onChange={(e) => { setNewName(e.target.value); setRosterError(''); }} disabled={players.length >= MAX_PLAYERS}
+                    <label htmlFor="legacy-player-name" className="block text-sm font-bold mb-2 tracking-widest" style={{ color: COLORS.textMuted }}>選手名稱 (NAME)</label>
+                    <input id="legacy-player-name" type="text" value={newName} onChange={(e) => { setNewName(e.target.value); setRosterError(''); }} disabled={players.length >= MAX_PLAYERS}
                       className="w-full px-4 py-3 rounded-lg border font-bold text-lg disabled:opacity-40" placeholder={players.length >= MAX_PLAYERS ? '名單已達 32 人上限' : '輸入名字...'} />
                   </div>
                   <button type="submit" disabled={players.length >= MAX_PLAYERS} className="w-full font-black py-4 rounded-xl transition-all text-lg tracking-widest mt-4 brush-border disabled:opacity-40"
@@ -1782,7 +1784,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
               </div>
             </div>
 
-            <div className="lg:col-span-2">
+            <div className="min-w-0">
               <div className="p-8 rounded-2xl border h-full brush-border shadow-xl" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                   <h2 className="text-xl font-black flex items-center gap-3 tracking-widest" style={{ color: COLORS.inkOrange }}>
@@ -1805,12 +1807,12 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                 </div>
                 
                 <div className="overflow-x-auto rounded-xl border" style={{ borderColor: COLORS.cardBorder }}>
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full table-fixed text-left border-collapse">
                     <thead>
                       <tr className="text-xs uppercase tracking-widest border-b" style={{ backgroundColor: '#111318', color: COLORS.textMuted, borderColor: COLORS.cardBorder }}>
-                        <th className="p-4 font-black">#</th>
+                        <th className="p-4 font-black w-16">#</th>
                         <th className="p-4 font-black">選手名 NAME</th>
-                        <th className="p-4 font-black text-right">操作</th>
+                        <th className="p-4 font-black text-right w-40">操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1820,8 +1822,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                         players.map((p, idx) => (
                           <tr key={p.id} className="border-b transition-colors hover:bg-white/5" style={{ borderColor: COLORS.cardBorder }}>
                             <td className="p-4 font-black" style={{ color: COLORS.textMuted }}>{idx + 1}</td>
-                            <td className="p-4 font-black text-lg text-white">{p.name}</td>
-                            <td className="p-4 text-right">
+                            <td className="p-4 font-black text-lg text-white break-words">{p.name}</td>
+                            <td className="p-4 text-right whitespace-nowrap">
                               <button onClick={() => openRenamePlayer(p)} className="mr-4 font-bold text-sm tracking-widest" style={{ color: COLORS.inkBlue }}>改名</button>
                               <button onClick={() => removePlayer(p.id)} className="text-red-400 hover:text-red-300 font-bold text-sm tracking-widest">移除</button>
                             </td>
@@ -1851,10 +1853,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
               </div>
             </div>
 
-            <div className="grid xl:grid-cols-4 gap-8">
+            <div className="legacy-live-layout grid gap-6">
               
               {/* 左側主要賽程區塊 */}
-              <div className="xl:col-span-3 space-y-8"> {/* 佔 3/5 寬度 */}
+              <div className="min-w-0 space-y-8"> {/* 佔 3/5 寬度 */}
                 {viewMode === 'list' && rounds.map((roundMatches, rIdx) => {
                   const isCurrentRound = (rIdx + 1 === currentRoundNum);
                   return (
@@ -1936,8 +1938,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
               </div>
 
               {/* 右側：即時戰績排名 */}
-              <div className="xl:col-span-1"> {/* 佔 1/4 寬度 */}
-                <div className="p-6 rounded-3xl shadow-xl sticky top-6 border brush-border" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
+              <div className="legacy-standings min-w-0"> {/* 佔 1/4 寬度 */}
+                <div className="p-5 rounded-3xl shadow-xl sticky top-6 border brush-border max-h-[calc(100vh-3rem)] overflow-y-auto" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
                   <h3 className="text-xl font-black flex items-center gap-3 border-b pb-4 mb-4 tracking-widest" style={{ color: COLORS.inkOrange, borderColor: COLORS.cardBorder }}>
                     <Trophy size={24} /> 即時排名
                   </h3>
@@ -1945,26 +1947,26 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                     {getRankedPlayersWithTies().map((p) => (
                       <div key={p.id} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${p.isWithdrawn ? 'opacity-40 bg-black/50' : (p.displayRank <= 2 ? 'bg-[#1a1f26]' : 'hover:bg-white/5')} gap-2`}
                            style={{ borderColor: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.cardBorder }}>
-                        <div className="flex items-center gap-4">
-                          <div className={`w-6 text-center font-black text-xl ${p.displayRank <= 2 && !p.isWithdrawn ? '' : 'text-slate-600'} whitespace-nowrap`}
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <div className={`w-6 text-center font-black text-xl ${p.displayRank <= 2 && !p.isWithdrawn ? '' : 'text-slate-400'} whitespace-nowrap`}
                                style={p.displayRank <= 2 && !p.isWithdrawn ? { color: COLORS.inkOrange } : {}}>
                             {p.isWithdrawn ? '棄賽' : p.displayRank}
                           </div>
-                          <div>
-                            <div className="flex items-center gap-1">
-                              <div className="font-black text-white text-base flex items-center">
-                                {p.name}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1">
+                              <div className="font-black text-white text-base flex flex-wrap items-center break-words min-w-0">
+                                <span className="break-words min-w-0">{p.name}</span>
                                 {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>}
                                 {p.isEliminated && <span className="text-sm text-amber-300 ml-2 border border-amber-500/30 px-1 rounded whitespace-nowrap">兩敗淘汰</span>}
                               </div>
                               {!p.isWithdrawn && !p.isEliminated && p.needsTiebreaker && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>需加賽</span>}
                             </div>
-                            {!p.isWithdrawn && <div className="text-[10px] font-bold mt-1 whitespace-nowrap" style={{ color: COLORS.textMuted }}>
+                            {!p.isWithdrawn && <div className="text-xs font-bold mt-1 whitespace-normal" style={{ color: COLORS.textMuted }}>
                               {doubleElimination && `${p.losses || 0} 敗 · `}對手勝率 {(p.opponentWinRate * 100).toFixed(1)}% · 次級 {(p.opponentsOpponentWinRate * 100).toFixed(1)}%
                             </div>}
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           <div className="font-black text-base whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins} W</div>
                           <div className="text-xs font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes} 票</div>
                         </div>
@@ -2112,7 +2114,7 @@ function AdminPortal() {
   };
 
   if (adminUser === undefined) {
-    return <main className="min-h-screen bg-[#0d0f12] text-slate-400 flex items-center justify-center font-bold">正在確認管理權限…</main>;
+    return <main role="status" className="min-h-screen bg-[#0d0f12] text-slate-400 flex items-center justify-center font-bold">正在確認管理權限…</main>;
   }
 
   if (adminUser) return <TournamentAdminApp authenticatedUser={adminUser} />;
@@ -2133,7 +2135,7 @@ function AdminPortal() {
           <input id="portal-admin-token" type="password" value={token} onChange={event => setToken(event.target.value)}
             autoComplete="current-password" placeholder="輸入共用管理 token"
             className="w-full px-4 py-3 rounded-lg border border-slate-700 bg-[#0d0f12]" />
-          <button type="submit" disabled={isSubmitting || !token.trim()} className="w-full mt-4 py-3 rounded-lg bg-[#b6d2d4] text-[#0d0f12] font-black disabled:opacity-40">
+          <button type="submit" disabled={!isFirebaseConfigured || isSubmitting || !token.trim()} className="w-full mt-4 py-3 rounded-lg bg-[#b6d2d4] text-[#0d0f12] font-black disabled:opacity-40">
             {isSubmitting ? '驗證中…' : '登入管理後台'}
           </button>
         </form>

@@ -40,6 +40,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
     const handleOffline = () => setIsOnline(false);
     const handlePopState = () => {
       const code = normalizeEventCode(new URLSearchParams(window.location.search).get('series') || '');
+      if (code === publicCode) return;
       setSeries(null);
       setTournamentsByCode({});
       setInput(code);
@@ -55,7 +56,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('popstate', handlePopState);
     };
-  }, []);
+  }, [publicCode]);
 
   useEffect(() => {
     document.title = series?.name ? `${series.name}｜系列賽排名` : '黑馬記念｜公開系列賽';
@@ -115,6 +116,10 @@ export default function PublicSeriesPage({ initialCode = '' }) {
       setError('系列代碼需為 4–10 位英文字母或數字。');
       return;
     }
+    if (code === publicCode) {
+      setRetryKey(value => value + 1);
+      return;
+    }
     setSeries(null);
     setTournamentsByCode({});
     setStatus('loading');
@@ -134,12 +139,12 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   }
 
   return (
-    <main className="min-h-screen bg-[#0d0f12] text-slate-100 p-4 md:p-8">
+    <main className="spectator-page min-h-screen bg-[#0d0f12] text-slate-100 p-3 sm:p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 border-b border-slate-800 pb-8">
+        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 md:gap-6 mb-4 md:mb-8 border-b border-slate-800 pb-4 md:pb-8">
           <div>
             <a href={window.location.pathname} className="text-sm font-bold text-slate-500 hover:text-slate-200">← 返回公開賽事查詢</a>
-            <h1 className="text-4xl font-black mt-3">{series?.name || '公開系列賽'}</h1>
+            <h1 className="text-3xl md:text-4xl font-black mt-2">{series?.name || '公開系列賽'}</h1>
             {series && <p className="mt-2 text-slate-400 font-bold">{series.description}・系列代碼 {publicCode}</p>}
           </div>
           <form onSubmit={handleLookup} className="flex gap-2">
@@ -157,7 +162,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
           </div>
         )}
         {error && <div role="alert" className="mb-6 p-4 rounded-lg border border-red-500/40 bg-red-950/30 text-red-300 font-bold">{error}</div>}
-        {status === 'loading' && <div className="py-20 text-center text-slate-500 font-bold">正在載入系列賽…</div>}
+        {status === 'loading' && <div role="status" className="py-20 text-center text-slate-500 font-bold">正在載入系列賽…</div>}
         {status === 'not-found' && <div className="py-20 text-center text-slate-500 font-bold">找不到此公開系列賽。</div>}
         {status === 'idle' && <div className="py-20 text-center text-slate-500 font-bold">請輸入系列代碼。</div>}
 
@@ -167,13 +172,16 @@ export default function PublicSeriesPage({ initialCode = '' }) {
               {isUsingCache ? '離線快取' : '即時更新中'}・最後更新 {formatUpdateTime(lastUpdatedAt)}
             </div>
 
-            <section className="mb-8">
+            <nav aria-label="系列賽導覽" className="spectator-jumps">
+              <a href="#series-events">系列場次</a><a href="#series-ranking">積分排名</a>
+            </nav>
+            <section id="series-events" className="mb-8">
               <h2 className="text-2xl font-black text-[#b6d2d4] mb-4">系列場次</h2>
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {series.events.map(event => {
                   const tournament = tournamentsByCode[event.eventCode];
                   return (
-                    <article key={event.id} className="p-5 rounded-2xl border border-slate-700 bg-[#161920]">
+                    <article key={event.id} className="spectator-event p-3 md:p-5 rounded-2xl border border-slate-700 bg-[#161920]">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="text-2xl font-black">{event.name}</h3>
@@ -183,11 +191,11 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                           {tournament ? PHASE_LABELS[tournament.phase] || tournament.phase : '載入中'}
                         </span>
                       </div>
-                      <p className="mt-5 text-sm font-bold text-slate-400">
+                      <p className="mt-2 md:mt-5 text-sm font-bold text-slate-400">
                         {event.judgeCount} 位評審・{event.doubleElimination ? '兩敗淘汰' : '不淘汰'}
                       </p>
                       <a href={`${window.location.pathname}?event=${event.eventCode}`}
-                        className="block mt-5 py-3 rounded-lg text-center font-black bg-[#b6d2d4] text-[#0d0f12]">
+                        className="block mt-2 md:mt-5 py-3 rounded-lg text-center font-black bg-[#b6d2d4] text-[#0d0f12]">
                         查看單場賽況
                       </a>
                     </article>
@@ -197,7 +205,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
               </div>
             </section>
 
-            <section className="p-4 md:p-6 rounded-2xl border border-slate-700 bg-[#161920]">
+            <section id="series-ranking" className="p-3 sm:p-4 md:p-6 rounded-2xl border border-slate-700 bg-[#161920]">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
                 <h2 className="text-2xl font-black text-[#f1c6a6]">系列積分排名</h2>
                 <span className="text-xs font-bold text-slate-500">只有公開且已完賽場次計分</span>
@@ -217,8 +225,8 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                     </div>
                     <div className="grid grid-cols-2 gap-px bg-slate-800">
                       {series.events.filter(e => e.rulesVersion !== FINAL).map((event, eventIndex) => (
-                        <div key={event.id} className={`bg-[#161920] px-4 py-3 flex items-center justify-between gap-3 ${series.events.length % 2 === 1 && eventIndex === series.events.length - 1 ? 'col-span-2' : ''}`}>
-                          <span className="text-xs font-bold text-slate-500 break-words">{event.name}</span>
+                        <div key={event.id} className={`bg-[#161920] px-3 py-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 ${series.events.length % 2 === 1 && eventIndex === series.events.length - 1 ? 'col-span-2' : ''}`}>
+                          <span className="text-xs font-bold text-slate-400 break-words">{event.name}</span>
                           <span className="font-black text-slate-200">{standing.eventPoints[event.eventCode] ?? (standing.countedEvents ? '—' : 0)}{standing.countedEvents?.includes(event.eventCode) ? ' 採計' : ''}</span>
                         </div>
                       ))}

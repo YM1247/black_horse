@@ -56,3 +56,14 @@ test('versions from an older cleared run are view-only', () => {
   expect(screen.getByText('舊場次紀錄・僅供查看')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '回復此版本' })).not.toBeInTheDocument();
 });
+
+test('a pending result save prevents edits and another restore request', () => {
+  renderPanel({
+    busy: true,
+    versions: [{ id: 'prior', runId: 'run-1', version: 0, type: 'completed', reason: '舊版本' }]
+  });
+  expect(screen.getByLabelText('更正 甲 姓名')).toBeDisabled();
+  expect(screen.getByRole('textbox', { name: '更正原因' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '3:0' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '回復此版本' })).toBeDisabled();
+});

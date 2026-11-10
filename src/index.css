@@ -60,3 +60,93 @@
   .record { grid-column: 3; grid-row: 1; }
   .event-points { grid-column: 4; grid-row: 1; }
 }
+
+.admin-event-library, .series-console, .registration-layout, .scoring-layout, .score-workspace {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.registration-list, .score-workspace > *, .series-console > *, .admin-event-library > * { min-width: 0; }
+.roster-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.score-panel, .score-workspace > section:not(.playoff) {
+  border: 1px solid #343e48;
+  border-radius: .85rem;
+  padding: clamp(1rem, 2vw, 1.75rem);
+  background: #161920;
+}
+.season-review { margin-top: 1rem; }
+.spectator-jumps { display: none; }
+@media (min-width: 1024px) {
+  .season-admin { padding: 1.5rem max(1.5rem, calc((100vw - 98rem) / 2)); }
+  .season-admin header { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .25rem 1.5rem; }
+  .season-admin header h1 { margin: 0; overflow-wrap: anywhere; }
+  .season-admin header nav { grid-column: 2; grid-row: 1 / 3; justify-content: flex-end; }
+  .registration-layout { grid-template-columns: minmax(15rem, 1fr) minmax(0, 2.5fr); gap: 2rem; align-items: start; }
+  .registration-layout .season-fields { grid-template-columns: 1fr; gap: 0; }
+  .registration-list { border-inline-start: 1px solid #343e48; padding-inline-start: 1.5rem; }
+  .scoring-layout { grid-template-columns: minmax(0, 2fr) minmax(19rem, 1fr); align-items: start; }
+  .scoring-layout .event-board { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; padding: 1.2rem; }
+  .scoring-layout .event-board li { grid-template-columns: 2.3rem minmax(0,1fr) auto; gap: .2rem .5rem; }
+  .scoring-layout .event-board .record { grid-column: 2 / -1; grid-row: 2; }
+  .scoring-layout .event-points { grid-column: 3; }
+  .round-matches { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1.5rem; }
+  .round-matches article { display: flex; flex-direction: column; }
+  .round-matches .score-options { margin-top: auto; }
+  .score-options { gap: .25rem; }
+  .season-admin .score-options button { margin: 0; padding-inline: .65rem; font-variant-numeric: tabular-nums; }
+  .score-workspace .playoff { margin-bottom: 0; }
+  .series-console { grid-template-columns: minmax(0, 1fr) minmax(16rem, 23%); align-items: start; }
+  .series-console > section { grid-column: 1 / -1; }
+  .series-console .series-events { grid-column: 1; grid-row: 2; }
+  .series-console .series-sharing { grid-column: 2; grid-row: 2; }
+  .admin-event-library { grid-template-columns: repeat(2, minmax(0,1fr)); align-items: start; }
+}
+@media (max-width: 767px) {
+  .spectator-jumps {
+    display: flex; position: sticky; inset-block-start: 0; z-index: 5; background: #0d0f12;
+    border-block: 1px solid #394450; margin-block: .75rem 1rem; justify-content: space-around;
+  }
+  .spectator-jumps a { display: grid; place-items: center; min-height: 44px; flex: 1; color: #b6d2d4; font-weight: 700; }
+  .spectator-jumps a:focus-visible { outline: 2px solid #f1c6a6; outline-offset: -2px; }
+  .spectator-page :is(section[id], h3[id]) { scroll-margin-top: 3.5rem; }
+  .spectator-event { display: grid; grid-template-columns: minmax(0,1fr) auto; column-gap: .75rem; align-items: center; }
+  .spectator-event > div { grid-column: 1 / -1; }
+  .spectator-event h3 { font-size: 1.25rem; overflow-wrap: anywhere; }
+  .spectator-event > a { padding-inline: .75rem; }
+}
+
+.qualification-roster {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: .5rem 1.5rem; margin-top: 1rem;
+}
+.qualification-roster li { border-top: 1px solid #343e48; padding-block: .65rem; min-width: 0; }
+.qualification-roster strong, .qualification-roster span { display: block; }
+.qualification-roster span { color: #b6d2d4; font-size: .875rem; }
+.legacy-live-layout > * { min-width: 0; }
+.legacy-standings { overflow-wrap: anywhere; }
+.legacy-standings button { white-space: nowrap; min-height: 32px; }
+.correction-editor { color: #e2e8f0; overflow-wrap: anywhere; }
+.correction-editor summary { cursor: pointer; }
+.correction-editor summary:focus-visible { outline: 2px solid #f1c6a6; outline-offset: 4px; }
+.correction-editor button, .correction-editor input { min-height: 40px; }
+.correction-layout, .correction-workspace, .correction-sidebar { display: grid; gap: 1.25rem; min-width: 0; }
+.correction-sidebar > section { min-width: 0; }
+.correction-sidebar .grid { grid-template-columns: 1fr; max-height: 18rem; overflow-y: auto; }
+.correction-sidebar .flex-col-reverse { flex-wrap: wrap; }
+.correction-sidebar .flex > div { min-width: 0; }
+.spectator-header-links { display: flex; flex-wrap: wrap; gap: .75rem; }
+.spectator-header-links .ml-4 { margin-left: 0; }
+.spectator-page a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
+.spectator-page a.block { display: flex; }
+.spectator-page button { min-height: 44px; }
+.spectator-page .text-slate-500, .series-console .text-slate-500 { color: #a0adbf; }
+.spectator-page :is(input, button, a):focus-visible { outline: 2px solid #f1c6a6; outline-offset: 2px; }
+@media (min-width: 1024px) {
+  .legacy-live-layout { grid-template-columns: minmax(0, 1fr) minmax(19rem, 24rem); align-items: start; }
+  .legacy-admin-heading h1 { font-size: 2.5rem; }
+  .legacy-admin-heading > p { font-size: .875rem; }
+  .correction-layout { grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr); align-items: start; }
+  .correction-sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; padding: .2rem; }
+  .correction-sidebar > section { padding: 1rem; }
+}
+[role="dialog"] { overflow-wrap: anywhere; }

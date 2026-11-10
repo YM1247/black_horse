@@ -6,7 +6,7 @@ export default function PlayoffBracket({ event, renderScore }) {
   const seed = (player) => event.playoffSeeds.findIndex((p) => p.id === player.id) + 1;
   const medalists = [resultPlayer(bracket.gold), resultPlayer(bracket.gold, false), resultPlayer(bracket.bronze)];
   return (
-    <section className="playoff" aria-label="八強淘汰賽">
+    <section id="playoff" className="playoff" aria-label="八強淘汰賽">
       <h2>八強淘汰賽</h2>
       {medalists.some(Boolean) && (
         <ol className="medalists">
