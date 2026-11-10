@@ -34,6 +34,12 @@
 - 管理後台：`https://ym1247.github.io/black_horse/?admin=1`
 - 指定賽事：`https://ym1247.github.io/black_horse/?event=賽事代碼`
 
+## 本機測試站
+
+在已安裝本專案依賴、Firebase CLI 與可執行 Firestore 模擬器的 Java 環境中，執行 `npm run dev:test`。開啟 [測試後台](http://127.0.0.1:5173/black_horse/?admin=1)，以本機專用 token `swiss-test` 登入，選擇「黑馬記念26-27」即可建立場次。觀眾頁在[測試系列榜](http://127.0.0.1:5173/black_horse/?series=BH2627)。
+
+測試模式的認證、賽事及選手目錄使用本機模擬器。保持終端機開啟；按 Ctrl+C 停止，重開後從空白名單開始。一般的 `npm run dev` 預設連到正式 Firebase。
+
 ## 本機開發
 
 需求：Node.js 20 以上與 npm。

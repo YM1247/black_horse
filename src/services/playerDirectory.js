@@ -1,10 +1,19 @@
-import { collection, doc, getDocs, getFirestore, runTransaction } from 'firebase/firestore/lite';
+import { collection, connectFirestoreEmulator, doc, getDocs, getFirestore, runTransaction } from 'firebase/firestore/lite';
 import { getFirebaseServices } from '../firebase';
 import { createId } from '../tournamentState';
 import { normalizeIdentity, resolveIdentity } from '../playerIdentity';
 
 // Lite performs server reads. Private records never enter the public pages' persistent cache.
-const privateDb = () => getFirestore(getFirebaseServices().app);
+const connectedPreviews = new WeakSet();
+const privateDb = () => {
+  const { app, localPreview } = getFirebaseServices();
+  const db = getFirestore(app);
+  if (localPreview && !connectedPreviews.has(db)) {
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+    connectedPreviews.add(db);
+  }
+  return db;
+};
 const listeners = new Set();
 export function subscribePlayers(onPlayers, onError) {
   let active = true,

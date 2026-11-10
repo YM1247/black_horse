@@ -17,6 +17,7 @@
   "scripts": {
     "start": "vite",
     "dev": "vite",
+    "dev:test": "firebase emulators:exec --project demo-swiss-local --only auth,firestore \"'$npm_node_execpath' scripts/local-preview.mjs\"",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",

@@ -1,14 +1,19 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
-import { getAuth } from 'firebase/auth';
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
 import {
+  connectFirestoreEmulator,
   getFirestore,
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager
 } from 'firebase/firestore';
 
-const firebaseConfig = {
+const localPreview = import.meta.env.DEV && import.meta.env.MODE === 'emulator';
+const firebaseConfig = localPreview ? {
+  apiKey: 'demo-swiss-local', authDomain: 'localhost',
+  projectId: 'demo-swiss-local', appId: '1:123456:web:local'
+} : {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBS1bTKlv56ld8Tf87gjVT9-ZWEUk1ny_I',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'black-horse-7b932.firebaseapp.com',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'black-horse-7b932',
@@ -17,7 +22,7 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:595413568597:web:c1ecfaf6b8ba9c096a18dc'
 };
 
-const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY || '';
+const appCheckSiteKey = localPreview ? '' : import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY || '';
 
 export const isFirebaseConfigured = import.meta.env.MODE !== 'test' && Object.values(firebaseConfig).every(Boolean);
 export const isAppCheckMonitoringEnabled = Boolean(appCheckSiteKey);
@@ -55,6 +60,10 @@ export const getFirebaseServices = () => {
     db = getFirestore(app);
   }
   const auth = getAuth(app);
-  services = { app, appCheck, auth, db };
+  if (localPreview) {
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  }
+  services = { app, appCheck, auth, db, localPreview };
   return services;
 };
