@@ -3,7 +3,7 @@ import { identityMatches, normalizeIdentity, readIdentityCsv, reviewKey } from '
 import { saveIdentity } from './services/playerDirectory';
 
 const blank = { realName: '', phone: '', name: '' };
-export default function IdentityRegistration({ profiles, onPlayer, remaining = 48, onBusyChange }) {
+export default function IdentityRegistration({ profiles, onPlayer, remaining = 48, onBusyChange, singleEntry = false }) {
   const [form, setForm] = useState(blank);
   const [queue, setQueue] = useState([]);
   const [review, setReview] = useState(null);
@@ -52,7 +52,7 @@ export default function IdentityRegistration({ profiles, onPlayer, remaining = 4
     }
   }
   return (
-    <section aria-label="選手身分核對">
+    <section aria-label={singleEntry ? '新增資格席位選手' : '選手身分核對'}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -76,9 +76,9 @@ export default function IdentityRegistration({ profiles, onPlayer, remaining = 4
             </label>
           ))}
         </div>
-        <button disabled={busy || !remaining || Boolean(queue.length)}>登錄選手</button>
+        <button disabled={busy || !remaining || Boolean(queue.length)}>{singleEntry ? '儲存並填入席位' : '登錄選手'}</button>
       </form>
-      <label>
+      {!singleEntry && <label>
         匯入 CSV（本名、電話號碼、打師名）
         <input
           type="file"
@@ -95,7 +95,7 @@ export default function IdentityRegistration({ profiles, onPlayer, remaining = 4
             }
           }}
         />
-      </label>
+      </label>}
       {review && (
         <section role="alert" className="season-review">
           <h3>請核對選手身分</h3>

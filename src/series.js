@@ -18,8 +18,8 @@ export const SIMULATION_SERIES = Object.freeze({
 export const BLACK_HORSE = {
   id: 'black-horse-26-27', name: '黑馬記念26-27', publicCode: 'BH2627', isPublic: true, revision: 0,
   description: '四場積分賽取最佳三站，前二十一名取得最終戰資格',
-  events: [...Array.from({ length: 4 }, (_, i) => ({
-    id: 'station-' + (i + 1), name: '第' + (i + 1) + '站積分賽', eventCode: 'BH2627S' + (i + 1),
+  events: [...['一', '二', '三', '四'].map((number, i) => ({
+    id: 'station-' + (i + 1), name: '積分賽第' + number + '場', eventCode: 'BH2627S' + (i + 1),
     rulesVersion: QUALIFIER, judgeCount: 3, doubleElimination: true
   })), { id: 'final', name: '最終戰', eventCode: 'BH2627F', rulesVersion: FINAL, judgeCount: 5, doubleElimination: false }]
 };

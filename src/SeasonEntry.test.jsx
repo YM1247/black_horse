@@ -48,7 +48,7 @@ vi.mock('./services/tournamentRepository', async (importOriginal) => {
 it('系列卡建立第一站後進入新制報名，離開不會以舊版自動儲存覆寫名單', async () => {
   render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
   fireEvent.click(await screen.findByRole('button', { name: /黑馬記念26-27.*進入管理/ }));
-  fireEvent.click(await screen.findByRole('button', { name: '建立 第1站積分賽' }));
+  fireEvent.click(await screen.findByRole('button', { name: '建立 積分賽第一場' }));
   expect(await screen.findByRole('heading', { name: '選手報名' })).toBeInTheDocument();
   expect(createCloudTournament.mock.calls[0][0].tournament).toMatchObject({
     rulesVersion: QUALIFIER,

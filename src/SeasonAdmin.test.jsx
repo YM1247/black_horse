@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import SeasonAdmin from './SeasonAdmin';
 import { createEmptyTournament } from './tournamentState';
-import { QUALIFIER } from './seasonTournament';
+import { FINAL, QUALIFIER } from './seasonTournament';
 import { saveCloudTournament } from './services/tournamentRepository';
 import { saveIdentity } from './services/playerDirectory';
 
@@ -46,4 +46,24 @@ test('在後台核對改名後，以原編號報名並開始第一輪，公開�
   expect(state.players.map((p) => p.id)).toEqual(['other', 'stable']);
   expect(JSON.stringify(saveCloudTournament.mock.calls)).not.toMatch(/私人本名|0912345678/);
   expect(await screen.findByRole('heading', { name: '瑞士制配對與比分' })).toBeInTheDocument();
+});
+
+test('最終戰可直接新增未參賽選手並填入第二個線上保送席位', async () => {
+  saveCloudTournament.mockClear();
+  saveIdentity.mockResolvedValueOnce({ id: 'new-online', name: '首次參加' });
+  const event = {
+    ...createEmptyTournament({ rulesVersion: FINAL }), id: 'BH2627F', revision: 0,
+    name: '最終戰', qualificationConfig: { online: ['stable', ''], local: 'audition' }
+  };
+  render(<SeasonAdmin tournament={event} tournaments={[]} online versions={[]} />);
+  fireEvent.click(screen.getByRole('button', { name: '新增選手 · 線上保送二' }));
+  const form = within(screen.getByRole('region', { name: '新增資格席位選手' }));
+  fireEvent.change(form.getByLabelText('本名'), { target: { value: '新人本名' } });
+  fireEvent.change(form.getByLabelText('電話號碼'), { target: { value: '0900000001' } });
+  fireEvent.change(form.getByLabelText('打師名'), { target: { value: '首次參加' } });
+  fireEvent.click(screen.getByRole('button', { name: '儲存並填入席位' }));
+  await waitFor(() => expect(saveCloudTournament).toHaveBeenCalledTimes(1));
+  const [, state] = saveCloudTournament.mock.calls[0];
+  expect(state.qualificationConfig).toEqual({ online: ['stable', 'new-online'], local: 'audition' });
+  expect(JSON.stringify(state)).not.toMatch(/新人本名|0900000001/);
 });

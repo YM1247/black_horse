@@ -1,3 +1,4 @@
+import { QUALIFIER } from '../tournamentState';
 import {
   collection,
   deleteDoc,
@@ -501,6 +502,38 @@ export const ensureCloudSeries = async series => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) {
       transaction.set(ref, { ...encodeSeriesForFirestore(series), revision: 1, updatedAt: serverTimestamp(), updatedBy: user.uid });
+      return;
+    }
+
+    const stored = snapshot.data();
+    const events = stored.events || [];
+    const renamed = new Map();
+    for (const [index, station] of series.events.entries()) {
+      if (station.rulesVersion !== QUALIFIER) continue;
+      const oldName = '第' + (index + 1) + '站積分賽';
+      if (events.some(e => e.eventCode === station.eventCode && e.name === oldName)) {
+        renamed.set(station.eventCode, { oldName, name: station.name });
+      }
+    }
+    if (!renamed.size) return;
+    const tournaments = await Promise.all([...renamed.keys()].map(code =>
+      transaction.get(doc(db, 'tournaments', code))
+    ));
+    const stamp = { updatedAt: serverTimestamp(), updatedBy: user.uid };
+    transaction.update(ref, {
+      events: events.map(e => renamed.has(e.eventCode) ? { ...e, name: renamed.get(e.eventCode).name } : e),
+      revision: (stored.revision || 0) + 1, ...stamp
+    });
+    for (const tournament of tournaments) {
+      if (!tournament.exists()) continue;
+      const data = tournament.data();
+      const { oldName, name } = renamed.get(tournament.id);
+      if (data.seriesId !== series.id || data.name !== oldName) continue;
+      const revision = (data.revision || 0) + 1;
+      transaction.update(tournament.ref, { name, revision, ...stamp });
+      transaction.set(doc(db, 'tournamentSummaries', tournament.id), {
+        ...buildTournamentSummary({ ...data, name, revision }, tournament.id), ...stamp
+      });
     }
   });
 };

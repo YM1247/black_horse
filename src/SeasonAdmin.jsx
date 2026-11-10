@@ -105,6 +105,7 @@ export default function SeasonAdmin({
   onSignOut
 }) {
   const [profiles, setProfiles] = useState([]);
+  const [newPlayerSlot, setNewPlayerSlot] = useState(null);
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -176,6 +177,13 @@ export default function SeasonAdmin({
   }
   const configChange = (change) =>
     write({ ...event, qualificationConfig: { ...config, ...change } }, '更新最終戰資格', change);
+  function assignSlot(index, id) {
+    if (event.phase !== 'registration') throw new Error('最終戰已開打。');
+    const slots = [config.online?.[0] || '', config.online?.[1] || '', config.local || ''];
+    if (id && slots.some((other, i) => i !== index && other === id)) throw new Error('這位選手已占另一個資格席位。');
+    slots[index] = id;
+    return configChange(index === 2 ? { local: id } : { online: slots.slice(0, 2) });
+  }
   function confirmQualification() {
     const sources = Object.fromEntries(
       stations.map((station) => {
@@ -285,39 +293,40 @@ export default function SeasonAdmin({
             <h2>{isFinal ? '最終戰資格名單' : '選手報名'}</h2>
             {isFinal ? (
               <>
-                <details>
-                  <summary>登錄新的保送或海選選手</summary>
-                  <IdentityRegistration
-                    onBusyChange={setRegistering}
-                    profiles={profiles}
-                    onPlayer={async () => {}}
-                  />
-                </details>
                 <div className="season-fields">
                   {['線上保送一', '線上保送二', '現場海選'].map((label, i) => (
-                    <label key={label}>
-                      {label}
-                      <select
-                        value={(i === 2 ? config.local : config.online?.[i]) || ''}
-                        onChange={(e) => {
-                          const id = e.target.value;
-                          run(() => {
-                            const slots = [config.online?.[0] || '', config.online?.[1] || ''];
-                            slots[i] = id;
-                            return configChange(i === 2 ? { local: id } : { online: slots });
-                          });
-                        }}
-                      >
-                        <option value="">選擇打師名</option>
-                        {profiles.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}（{p.realName}）
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <div key={label}>
+                      <label>{label}
+                        <select
+                          disabled={registering}
+                          value={(i === 2 ? config.local : config.online?.[i]) || ''}
+                          onChange={e => {
+                            const id = e.target.value;
+                            run(() => assignSlot(i, id));
+                          }}
+                        >
+                          <option value="">選擇打師名</option>
+                          {profiles.map(p => <option key={p.id} value={p.id}>{p.name}（{p.realName}）</option>)}
+                        </select>
+                      </label>
+                      <button type="button" aria-expanded={newPlayerSlot === i} disabled={registering}
+                        onClick={() => setNewPlayerSlot(newPlayerSlot === i ? null : i)}>
+                        {newPlayerSlot === i ? '取消新增' : '新增選手'} · {label}
+                      </button>
+                      {newPlayerSlot === i && (
+                        <IdentityRegistration singleEntry onBusyChange={setRegistering} profiles={profiles}
+                          onPlayer={async player => {
+                            await assignSlot(i, player.id);
+                            setNewPlayerSlot(null);
+                          }}/>
+                      )}
+                    </div>
                   ))}
                 </div>
+                <details>
+                  <summary>其他選手登錄與 CSV 匯入</summary>
+                  <IdentityRegistration onBusyChange={setRegistering} profiles={profiles} onPlayer={async () => {}} />
+                </details>
                 <TieOrder
                   ties={preview.ties}
                   onResolve={(key, ids) =>

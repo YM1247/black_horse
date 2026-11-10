@@ -77,3 +77,15 @@ it('拒絕重複資格，同分跨入圍線須人工裁定', () => {
   expect(final.players.map((p) => p.id)).toContain('24');
   expect(final.players.map((p) => p.id)).not.toContain('23');
 });
+
+it('兩位線上保送都沒有積分賽紀錄時，仍可列入八位種子', () => {
+  const guests = ['guest-a', 'guest-b'].map(id => ({ id, name: id }));
+  const preview = qualification(standings, [...standings, ...guests], {
+    online: guests.map(p => p.id), local: '26'
+  });
+  expect(preview.error).toBe('');
+  expect(preview.players).toHaveLength(24);
+  expect(preview.players.filter(p => p.seedCredit).map(p => p.id)).toEqual([
+    'guest-a', 'guest-b', '1', '2', '3', '4', '5', '6'
+  ]);
+});

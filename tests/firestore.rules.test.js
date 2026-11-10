@@ -4,7 +4,8 @@ import { getFirestore as getLiteFirestore, connectFirestoreEmulator as connectLi
 import { getFirebaseServices } from '../src/firebase';
 import { saveIdentity } from '../src/services/playerDirectory';
 import { reviewKey } from '../src/playerIdentity';
-import { createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore } from '../src/services/tournamentRepository';
+import { BLACK_HORSE } from '../src/series';
+import { ensureCloudSeries, createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore } from '../src/services/tournamentRepository';
 import { createEmptyTournament } from '../src/tournamentState';
 import { QUALIFIER, nextSwissRound, publicPlayer, scoreSwiss } from '../src/seasonTournament';
 vi.mock('../src/firebase', () => ({ getFirebaseServices: vi.fn(), isFirebaseConfigured: true }));
@@ -248,4 +249,26 @@ test('new qualifier can persist all three rounds, lock a version and expose only
   expect(data.rulesVersion).toBe(QUALIFIER);
   expect(data.players).toHaveLength(48);
   expect(JSON.stringify(data)).not.toMatch(/realName|phone/);
+});
+
+test('既有系列與已完賽場次改用中文場名；重新開啟不重複寫入', async () => {
+  await seedAdmin();
+  const db = testEnvironment.authenticatedContext('admin-user').firestore();
+  getFirebaseServices.mockReturnValue({ db, auth: { currentUser: { uid: 'admin-user' } } });
+  const seriesRef = doc(db, 'series', BLACK_HORSE.id);
+  const events = BLACK_HORSE.events.map((event, i) =>
+    i < 4 ? { ...event, name: '第' + (i + 1) + '站積分賽' } : event);
+  await setDoc(seriesRef, { events, revision: 1 });
+  const original = baseTournament({ eventCode: events[0].eventCode, seriesId: BLACK_HORSE.id,
+    name: events[0].name, phase: 'finished', resultLocked: true });
+  await seedTournament(original);
+  await ensureCloudSeries(BLACK_HORSE);
+  await ensureCloudSeries(BLACK_HORSE);
+  const series = (await getDoc(seriesRef)).data();
+  expect(series.revision).toBe(2);
+  expect(series.events.map(e => e.name)).toEqual(['積分賽第一場','積分賽第二場','積分賽第三場','積分賽第四場','最終戰']);
+  expect((await getDoc(doc(db, 'tournaments', original.eventCode))).data()).toMatchObject({
+    ...original, name: '積分賽第一場', revision: 2
+  });
+  expect((await getDoc(doc(db, 'tournamentSummaries', original.eventCode))).data().name).toBe('積分賽第一場');
 });
