@@ -60,3 +60,14 @@ it('系列卡建立第一站後進入新制報名，離開不會以舊版自動�
   expect(await screen.findByRole('heading', { name: '黑馬記念26-27' })).toBeInTheDocument();
   expect(saveCloudTournament).not.toHaveBeenCalled();
 });
+
+it('首頁優先顯示黑馬記念，展開封存系列後仍可進入模擬賽', async () => {
+  render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
+  const active = await screen.findByRole('button', { name: /黑馬記念26-27.*進入管理/ });
+  expect(screen.queryByRole('button', { name: /模擬賽.*進入管理/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox', { name: '顯示已封存系列賽' }));
+  const archived = screen.getByRole('button', { name: /模擬賽.*已封存.*進入管理/ });
+  expect(active.compareDocumentPosition(archived) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(archived);
+  expect(await screen.findByRole('heading', { name: '模擬賽' })).toBeInTheDocument();
+});

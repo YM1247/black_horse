@@ -19,7 +19,7 @@ import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit'
 import { isFirebaseConfigured } from './firebase';
 import { canLeaveWithoutTournamentWrite, runWithCloudRetry, shouldApplyCloudSnapshot, shouldShowCloudSyncAlert } from './cloudSync';
 import FullScreenCloudManager from './FullScreenCloudManager';
-import { BLACK_HORSE, buildSeriesStandings, normalizeSeriesDefinition, SERIES } from './series';
+import { buildSeriesStandings, normalizeSeriesDefinition, SERIES } from './series';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
 import ResultCorrectionPanel from './ResultCorrectionPanel';
 import {
@@ -166,6 +166,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [creatingSeriesEventCode, setCreatingSeriesEventCode] = useState('');
   const [seriesMutationStatus, setSeriesMutationStatus] = useState('');
   const [standaloneSearch, setStandaloneSearch] = useState('');
+  const [showArchivedSeries, setShowArchivedSeries] = useState(false);
   const [showArchivedTournaments, setShowArchivedTournaments] = useState(false);
   const [publicQrCode, setPublicQrCode] = useState('');
   const [pendingOperationCount, setPendingOperationCount] = useState(0);
@@ -274,7 +275,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setSeriesDefinitions(SERIES.map(series => normalizeSeriesDefinition(null, series)));
       return undefined;
     }
-    if (isOnline) ensureCloudSeries(BLACK_HORSE).catch(error => setCloudError(error.message));
+    if (isOnline) Promise.all(SERIES.map(series => ensureCloudSeries(series))).catch(error => setCloudError(error.message));
     const unsubscribers = SERIES.map(fallback => subscribeCloudSeries(fallback.id, data => {
       const normalized = normalizeSeriesDefinition(data, fallback);
       setSeriesDefinitions(current => current.map(series => series.id === normalized.id ? normalized : series));
@@ -1506,15 +1507,21 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                   )}
 
                   {!activeCloudCode && <section className="p-5 rounded-xl border-2" style={{ backgroundColor: '#131e24', borderColor: COLORS.inkOrange }}>
-                    <h3 className="font-black text-lg mb-2">系列賽</h3>
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <h3 className="font-black text-lg">系列賽</h3>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={showArchivedSeries} onChange={event => setShowArchivedSeries(event.target.checked)} />
+                        顯示已封存系列賽
+                      </label>
+                    </div>
                     <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>進入系列賽後可分別管理各場報名與賽程，並查看跨場積分。</p>
                     <div className="grid sm:grid-cols-2 gap-3">
-                      {seriesDefinitions.map(series => (
+                      {seriesDefinitions.filter(series => showArchivedSeries || !series.isArchived).map(series => (
                         <button key={series.id} type="button" onClick={() => { setCloudError(''); setSelectedSeriesId(series.id); }}
                           className="p-5 rounded-xl border text-left hover:bg-white/5 flex items-center justify-between gap-4"
                           style={{ borderColor: COLORS.inkOrange }}>
                           <div>
-                            <div className="text-xl font-black text-white">{series.name}</div>
+                            <div className="text-xl font-black text-white">{series.name}{series.isArchived && <span className="ml-2 text-sm text-slate-400">已封存</span>}</div>
                             <div className="text-xs font-bold mt-2" style={{ color: COLORS.textMuted }}>{series.publicCode === 'BH2627' ? '四場積分賽＋一場最終戰' : series.events.length + ' 場・3 位評審・兩敗淘汰'}</div>
                           </div>
                           <span className="text-sm font-black whitespace-nowrap" style={{ color: COLORS.inkOrange }}>進入管理 →</span>

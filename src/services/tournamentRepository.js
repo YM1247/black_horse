@@ -83,6 +83,7 @@ export const encodeSeriesForFirestore = (series = {}) => cleanData({
     doubleElimination: event.doubleElimination !== false
   })),
   ...(series.publicCode ? { publicCode: normalizeEventCode(series.publicCode) } : {}),
+  ...(typeof series.isArchived === 'boolean' ? { isArchived: series.isArchived } : {}),
   ...(typeof series.isPublic === 'boolean' ? { isPublic: series.isPublic } : {})
 });
 
@@ -515,13 +516,15 @@ export const ensureCloudSeries = async series => {
         renamed.set(station.eventCode, { oldName, name: station.name });
       }
     }
-    if (!renamed.size) return;
+    const archiveDefaultMissing = series.isArchived === true && stored.isArchived === undefined;
+    if (!renamed.size && !archiveDefaultMissing) return;
     const tournaments = await Promise.all([...renamed.keys()].map(code =>
       transaction.get(doc(db, 'tournaments', code))
     ));
     const stamp = { updatedAt: serverTimestamp(), updatedBy: user.uid };
     transaction.update(ref, {
-      events: events.map(e => renamed.has(e.eventCode) ? { ...e, name: renamed.get(e.eventCode).name } : e),
+      ...(archiveDefaultMissing ? { isArchived: true } : {}),
+      ...(renamed.size ? { events: events.map(e => renamed.has(e.eventCode) ? { ...e, name: renamed.get(e.eventCode).name } : e) } : {}),
       revision: (stored.revision || 0) + 1, ...stamp
     });
     for (const tournament of tournaments) {

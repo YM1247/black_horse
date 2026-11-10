@@ -4,7 +4,7 @@ import { getFirestore as getLiteFirestore, connectFirestoreEmulator as connectLi
 import { getFirebaseServices } from '../src/firebase';
 import { saveIdentity } from '../src/services/playerDirectory';
 import { reviewKey } from '../src/playerIdentity';
-import { BLACK_HORSE } from '../src/series';
+import { BLACK_HORSE, SIMULATION_SERIES } from '../src/series';
 import { ensureCloudSeries, createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore } from '../src/services/tournamentRepository';
 import { createEmptyTournament } from '../src/tournamentState';
 import { QUALIFIER, nextSwissRound, publicPlayer, scoreSwiss } from '../src/seasonTournament';
@@ -271,4 +271,16 @@ test('既有系列與已完賽場次改用中文場名；重新開啟不重複�
     ...original, name: '積分賽第一場', revision: 2
   });
   expect((await getDoc(doc(db, 'tournamentSummaries', original.eventCode))).data().name).toBe('積分賽第一場');
+});
+
+test('既有模擬賽封存時保留公開狀態、場次及自訂資料，重開後台不重複寫入', async () => {
+  await seedAdmin();
+  const db = testEnvironment.authenticatedContext('admin-user').firestore();
+  getFirebaseServices.mockReturnValue({ db, auth: { currentUser: { uid: 'admin-user' } } });
+  const ref = doc(db, 'series', SIMULATION_SERIES.id);
+  const existing = { revision: 1, isPublic: true, events: [{ id: 'old', name: '歷史場次', eventCode: 'OLD1' }] };
+  await setDoc(ref, existing);
+  await ensureCloudSeries(SIMULATION_SERIES);
+  await ensureCloudSeries(SIMULATION_SERIES);
+  expect((await getDoc(ref)).data()).toMatchObject({ ...existing, isArchived: true, revision: 2 });
 });

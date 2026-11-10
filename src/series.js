@@ -3,6 +3,7 @@ import { rankPlayers } from './tournament';
 
 export const SIMULATION_SERIES = Object.freeze({
   id: 'simulation-series',
+  isArchived: true,
   name: '模擬賽',
   description: '各場獨立報名的系列積分賽',
   publicCode: 'SIM2026',
@@ -23,7 +24,7 @@ export const BLACK_HORSE = {
     rulesVersion: QUALIFIER, judgeCount: 3, doubleElimination: true
   })), { id: 'final', name: '最終戰', eventCode: 'BH2627F', rulesVersion: FINAL, judgeCount: 5, doubleElimination: false }]
 };
-export const SERIES = Object.freeze([SIMULATION_SERIES, BLACK_HORSE]);
+export const SERIES = Object.freeze([BLACK_HORSE, SIMULATION_SERIES]);
 
 const normalizePlayerName = (name) => String(name || '').trim();
 
@@ -36,6 +37,7 @@ export const normalizeSeriesDefinition = (data, fallback) => {
     description: String(data.description || fallback.description).trim(),
     publicCode: String(data.publicCode || fallback.publicCode || '').trim().toUpperCase(),
     isPublic: data.isPublic !== false,
+    isArchived: data.isArchived ?? Boolean(fallback.isArchived),
     revision: Number(data.revision) || 0,
     events: events
       .map(event => {
