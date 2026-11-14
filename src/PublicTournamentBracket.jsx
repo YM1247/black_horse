@@ -37,7 +37,7 @@ const groupRoundMatches = (matches, roundIndex) => matches.reduce((groups, match
 
 export default function PublicTournamentBracket({ rounds = [], renderScore }) {
   return (
-    <div className="w-full" role="region" aria-label="完整瑞士制樹狀圖">
+    <div className={`w-full ${renderScore ? 'overflow-x-auto' : ''}`} role="region" aria-label="完整瑞士制樹狀圖">
       <div className={`${renderScore ? 'admin-swiss-rounds' : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3'} gap-5 md:gap-8 md:p-2 items-start`}>
         {rounds.map((matches, roundIndex) => {
           const groups = groupRoundMatches(matches, roundIndex);

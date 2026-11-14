@@ -1194,9 +1194,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
   // --- 繪製樹狀圖共用函數 (用於進行中與結算畫面) ---
   const renderBracket = (isReadOnly = false) => (
-    <div className="w-full">
+    <div className="w-full overflow-x-auto">
       {/* 加入 items-center 以達成垂直置中 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10 p-2 items-center">
+      <div className="legacy-swiss-rounds gap-8 relative z-10 p-2 items-start">
         {rounds.map((roundMatches, rIdx) => {
           const groups = roundMatches.reduce((acc, match) => {
             const w1 = match.p1WinsSnapshot || 0; const w2 = match.p2WinsSnapshot || 0;
