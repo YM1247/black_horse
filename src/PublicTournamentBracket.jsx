@@ -35,10 +35,10 @@ const groupRoundMatches = (matches, roundIndex) => matches.reduce((groups, match
   return groups;
 }, {});
 
-export default function PublicTournamentBracket({ rounds = [] }) {
+export default function PublicTournamentBracket({ rounds = [], renderScore }) {
   return (
     <div className="w-full" role="region" aria-label="完整瑞士制樹狀圖">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-8 md:p-2 items-start">
+      <div className={`${renderScore ? 'admin-swiss-rounds' : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3'} gap-5 md:gap-8 md:p-2 items-start`}>
         {rounds.map((matches, roundIndex) => {
           const groups = groupRoundMatches(matches, roundIndex);
           const sortedScores = Object.keys(groups).map(Number).sort((first, second) => second - first);
@@ -70,8 +70,9 @@ export default function PublicTournamentBracket({ rounds = [] }) {
                           const p2Won = isDone && match.p2Votes > match.p1Votes;
 
                           return (
-                            <div key={match.id} className={`rounded-lg border px-2 sm:px-4 py-3 ${isDone ? '' : 'border-dashed'}`}
+                            <div key={match.id} role={renderScore ? 'group' : undefined} aria-label={renderScore ? `第 ${roundIndex + 1} 輪 第 ${matches.indexOf(match) + 1} 場` : undefined} className={`rounded-lg border px-2 sm:px-4 py-3 ${isDone ? '' : 'border-dashed'}`}
                               style={{ backgroundColor: COLORS.bg, borderColor: isDone ? COLORS.cardBorder : COLORS.textMuted }}>
+                              {renderScore && <p className="mb-2 text-center text-sm font-bold text-[#b6d2d4]">第 {matches.indexOf(match) + 1} 場</p>}
                               <div className="flex items-center justify-between w-full gap-2">
                                 <div className="flex flex-col items-start w-0 flex-1">
                                   {match.attackOrder && <small className="text-[#b6d2d4] font-bold">先攻</small>}
@@ -101,6 +102,7 @@ export default function PublicTournamentBracket({ rounds = [] }) {
                                   {!match.p2.isMC && <div className="text-[11px] font-bold mt-1 opacity-70 whitespace-nowrap" style={{ color: accentColor }}>{match.p2WinsSnapshot || 0}W {match.p2VotesSnapshot || 0}票</div>}
                                 </div>
                               </div>
+                              {renderScore && renderScore(match, roundIndex)}
                             </div>
                           );
                         })}

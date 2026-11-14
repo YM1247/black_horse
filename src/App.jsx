@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
-import { Trophy, Users, Swords, UserPlus, Play, Medal, ChevronRight, AlertTriangle, LayoutList, Network, Archive, Trash2, X, Clock, Home, Upload } from 'lucide-react';
+import { Trophy, Users, Swords, UserPlus, Play, Medal, ChevronRight, AlertTriangle, Network, Archive, Trash2, X, Clock, Home, Upload } from 'lucide-react';
 import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 import {
   createEmptyTournament,
@@ -131,7 +131,6 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [runNumber, setRunNumber] = useState(initialTournament.runNumber);
   const [resultLocked, setResultLocked] = useState(initialTournament.resultLocked);
   const [currentVersion, setCurrentVersion] = useState(initialTournament.currentVersion);
-  const [viewMode, setViewMode] = useState('tree'); // 預設改為樹狀圖
 
   // Modal 視窗狀態
   const [confirmAction, setConfirmAction] = useState(null);
@@ -1247,6 +1246,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                               ${isCurrentRound && !isDone && !isReadOnly ? 'ring-2' : ''}`}
                               style={{ backgroundColor: COLORS.bg, borderColor: isDone ? COLORS.cardBorder : COLORS.textMuted, ringColor: accentColor }}>
                               
+                              <p className="mb-2 text-center text-sm font-bold" style={{ color: accentColor }}>第 {roundMatches.indexOf(match) + 1} 場</p>
                               <div className="flex items-center justify-between w-full">
                                 {/* P1 */}
                                 <div className="flex flex-col items-start w-0 flex-1">
@@ -1299,12 +1299,12 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
                               {/* 比分輸入按鈕區塊 (唯讀模式下不顯示) */}
                               {!isReadOnly && ( // 允許 MC 對戰手動輸入比分
-                                  <div className={`grid ${judgeCount === 3 ? 'grid-cols-4' : 'grid-cols-6'} gap-1 mt-3 border-t border-slate-800 pt-3`}>
+                                  <div className="flex flex-wrap justify-center gap-1 mt-3 border-t border-slate-800 pt-3">
                                     {scoreOptions.map((score) => {
                                       const isSelected = match.p1Votes === score.v1 && match.p2Votes === score.v2;
                                       return (
                                         <button key={`${score.v1}-${score.v2}`} onClick={() => handleMatchResult(rIdx, match.id, score.v1, score.v2)}
-                                          className={`py-1.5 text-xs font-black rounded-md transition-all brush-border border ${
+                                          className={`px-2 py-1.5 text-xs font-black rounded-md transition-all brush-border border ${
                                             isSelected 
                                             ? `text-[#0d0f12]` 
                                             : `bg-transparent text-slate-400 border-slate-700 hover:text-white`
@@ -1841,100 +1841,13 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         {/* Phase 2: Playing */}
         {phase === 'playing' && (
           <div className="flex flex-col gap-8">
-            <div className="flex justify-center">
-              <div className="inline-flex flex-wrap justify-center p-1.5 rounded-xl border border-dashed shadow-lg" style={{ backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }}>
-                <button onClick={() => setViewMode('list')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-black text-sm transition-all tracking-widest ${viewMode === 'list' ? 'bg-[#1e293b] text-white' : 'opacity-50 hover:opacity-100'}`}>
-                  <LayoutList size={18} style={{ color: viewMode === 'list' ? COLORS.inkOrange : 'inherit' }} /> 對戰列表
-                </button>
-                <button onClick={() => setViewMode('tree')} className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-black text-sm transition-all tracking-widest ${viewMode === 'tree' ? 'bg-[#1e293b] text-white' : 'opacity-50 hover:opacity-100'}`}>
-                  <Network size={18} style={{ color: viewMode === 'tree' ? COLORS.inkBlue : 'inherit' }} /> 賽況樹狀圖
-                </button>
-                <span className="flex items-center px-5 text-sm font-black tracking-widest" style={{ color: COLORS.inkOrange }}>{judgeCount} 位評審制・{doubleElimination ? '兩敗淘汰' : '不淘汰'}</span>
-              </div>
-            </div>
+            <h2 className="text-xl font-bold text-center">瑞士制樹狀圖與記分<span className="block text-sm mt-2">{judgeCount} 位評審制・{doubleElimination ? '兩敗淘汰' : '不淘汰'}</span></h2>
 
             <div className="legacy-live-layout grid gap-6">
               
               {/* 左側主要賽程區塊 */}
               <div className="min-w-0 space-y-8"> {/* 佔 3/5 寬度 */}
-                {viewMode === 'list' && rounds.map((roundMatches, rIdx) => {
-                  const isCurrentRound = (rIdx + 1 === currentRoundNum);
-                  return (
-                    <div key={rIdx} className={`p-8 rounded-3xl shadow-xl border-2 transition-all brush-border ${isCurrentRound ? 'ring-4 ring-offset-4 ring-offset-[#0d0f12]' : 'opacity-80'}`}
-                         style={{ backgroundColor: COLORS.card, borderColor: isCurrentRound ? COLORS.inkBlue : COLORS.cardBorder, ringColor: COLORS.inkBlueDark }}>
-                      <div className="flex justify-between items-center mb-8 border-b pb-4" style={{ borderColor: COLORS.cardBorder }}>
-                        <h2 className="text-2xl font-black flex items-center gap-3 tracking-widest uppercase" style={{ color: isCurrentRound ? COLORS.inkBlue : COLORS.textMuted }}>
-                          <Swords size={28} />
-                          Round {rIdx + 1}
-                          {rIdx === 0 && <span className="text-xs font-black px-3 py-1 rounded-md ml-3" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>隨機配對</span>}
-                        </h2>
-                      </div>
-                      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {roundMatches.map((match) => {
-                          const isFloat = !match.isMCMatch && (match.p1WinsSnapshot !== match.p2WinsSnapshot);
-                          return (
-                            <div key={match.id} className={`rounded-xl p-5 flex flex-col justify-between relative transition-all border-2 brush-border shadow-md`}
-                                 style={{ backgroundColor: COLORS.bg, borderColor: isFloat ? COLORS.inkOrange : COLORS.cardBorder }}>
-                              {/* {match.isMCMatch && <div className="absolute top-0 right-0 text-[10px] font-black px-3 py-1 rounded-bl-lg z-10 bg-purple-500 text-white shadow-md border-l border-b border-purple-700">對戰魔王</div>} */}
-                              {isFloat && <div className="absolute top-0 left-0 w-full text-[10px] font-black py-1 text-center tracking-widest uppercase z-10" style={{ backgroundColor: COLORS.inkOrange, color: COLORS.bg }}>跨組對戰</div>}
-                              
-                              <div className={`flex justify-between items-center mb-4 ${isFloat ? 'mt-6' : ''}`}>
-                                <div className="flex-1 text-center">
-                                  <div className="font-black text-white" style={{
-                                    fontSize: getDynamicFontSize(match.p1.name, false),
-                                    wordBreak: 'break-word',
-                                    lineHeight: 1.2
-                                  }}>
-                                    {match.p1.name}
-                                  </div>
-                                  {!match.p1.isMC && <div className="inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-black" style={{ backgroundColor: '#1e293b', color: COLORS.inkBlue }}>{match.p1WinsSnapshot}W {match.p1VotesSnapshot}票</div>}
-                                </div>
-                                <div className="px-2 font-black italic text-sm" style={{ color: isFloat ? COLORS.inkOrange : COLORS.inkBlue }}>VS</div>
-                                <div className="flex-1 text-center">
-                                  <div className="font-black text-white" style={{
-                                    fontSize: getDynamicFontSize(match.p2.name, false),
-                                    wordBreak: 'break-word',
-                                    lineHeight: 1.2
-                                  }}>
-                                    {match.p2.name}
-                                  </div>
-                                  {!match.p2.isMC && <div className="inline-block px-2 py-0.5 mt-1 rounded text-[10px] font-black" style={{ backgroundColor: '#1e293b', color: COLORS.inkBlue }}>{match.p2WinsSnapshot}W {match.p2VotesSnapshot}票</div>}
-                                </div>
-                              </div>
-
-                                <div className={`grid ${judgeCount === 3 ? 'grid-cols-4' : 'grid-cols-6'} gap-1 mt-2`}>
-                                  {scoreOptions.map((score) => {
-                                    const isSelected = match.p1Votes === score.v1 && match.p2Votes === score.v2;
-                                    return (
-                                      <button key={`${score.v1}-${score.v2}`} onClick={() => handleMatchResult(rIdx, match.id, score.v1, score.v2)}
-                                        className={`py-1.5 text-xs font-black rounded transition-all border ${
-                                          isSelected ? `bg-[${COLORS.inkBlue}] text-black border-transparent shadow-[0_0_10px_rgba(182,210,212,0.5)]` : `bg-transparent border-slate-700 hover:border-[${COLORS.inkBlue}] text-slate-400 hover:text-[${COLORS.inkBlue}]`
-                                        }`}
-                                        style={isSelected ? { backgroundColor: isFloat ? COLORS.inkOrange : COLORS.inkBlue, color: COLORS.bg } : {}}>
-                                        {score.v1}:{score.v2}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {isCurrentRound && (
-                        <div className="mt-8 pt-6 border-t flex justify-end" style={{ borderColor: COLORS.cardBorder }}>
-                          <button onClick={advanceToNextRound} disabled={isTransitioning || !roundMatches.every(m => m.p1Votes !== null && m.p2Votes !== null)}
-                            className="flex items-center gap-2 px-8 py-3 rounded-xl font-black uppercase tracking-widest transition-all disabled:opacity-30 brush-border"
-                            style={{ backgroundColor: COLORS.inkBlue, color: COLORS.bg }}>
-                            {isTransitioning ? '處理中…' : currentRoundNum === MAX_ROUNDS ? '結算賽事' : '下一輪'} <ChevronRight size={20} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* 模式 2: 樹狀圖視圖 (Bracket View) - 黑馬記念網格版 */}
-                {viewMode === 'tree' && renderBracket(false)}
+                {renderBracket(false)}
               </div>
 
               {/* 右側：即時戰績排名 */}

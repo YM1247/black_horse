@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import PublicTournamentBracket from './PublicTournamentBracket';
 
 const player = (id, name) => ({ id, name, isMC: false });
@@ -39,4 +39,31 @@ test('public bracket renders all Swiss rounds and remains read-only', () => {
   expect(bracket).toHaveTextContent('Carol');
   expect(bracket).toHaveTextContent('VS');
   expect(within(bracket).queryByRole('button')).not.toBeInTheDocument();
+});
+
+import { vi } from 'vitest';
+
+const adminMatch = (id, wins) => ({
+  id, p1: { name: `先攻${id}` }, p2: { name: `後攻${id}` },
+  p1WinsSnapshot: wins, p2WinsSnapshot: wins, p1Votes: null, p2Votes: null
+});
+
+test('後台樹狀圖分組排序後仍保留每輪原始場次編號及記分對象', () => {
+  const rounds = [[], [adminMatch('low', 0), adminMatch('high', 1)]];
+  const onScore = vi.fn();
+  render(<PublicTournamentBracket rounds={rounds} renderScore={(bout, round) => (
+    <button onClick={() => onScore(round, bout.id)}>記分</button>
+  )} />);
+  const groups = screen.getAllByRole('group');
+  expect(groups[0]).toHaveAccessibleName('第 2 輪 第 2 場');
+  expect(groups[1]).toHaveAccessibleName('第 2 輪 第 1 場');
+  fireEvent.click(within(groups[0]).getByRole('button', { name: '記分' }));
+  expect(onScore).toHaveBeenCalledWith(1, 'high');
+});
+
+test('公開樹狀圖不顯示後台場次編號或記分控制', () => {
+  render(<PublicTournamentBracket rounds={[[adminMatch('one', 0)]]} />);
+  expect(screen.queryByRole('group')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  expect(screen.queryByText(/第.*場/)).not.toBeInTheDocument();
 });

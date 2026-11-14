@@ -477,125 +477,96 @@ export default function SeasonAdmin({
                   />
                 )}
                 <section className="score-panel">
-                  <h2>瑞士制配對與比分</h2>
-                  {event.rounds.map((round, index) => (
-                    <details key={index} open={!event.playoffSeeds?.length && index === event.rounds.length - 1}>
-                      <summary>
-                        第 {index + 1} 輪 · {round.length} 場
-                      </summary>
-                      {index === 0 && isFinal && (
-                        <p>
-                          種子首輪各記一勝五票：
-                          {event.players
-                            .filter((p) => p.seedCredit)
-                            .map((p) => p.name)
-                            .join('、')}
-                        </p>
-                      )}
-                      <div className="round-matches">
-                        {round.map((match) => (
-                          <article key={match.id}>
-                            <div className="bout">
-                              <span>
-                                <small>先攻</small>
-                                {match.p1.name}
-                              </span>
-                              <b>
-                                {match.p1Votes ?? '–'} : {match.p2Votes ?? '–'}
-                              </b>
-                              <span>
-                                <small>後攻</small>
-                                {match.p2.name}
-                              </span>
-                            </div>
-                            <ScoreButtons
-                              judges={event.judgeCount}
-                              match={match}
-                              onScore={(left) => editSwiss(index, match, left)}
-                            />
-                          </article>
-                        ))}
-                      </div>
-                    </details>
-                  ))}
+                  <h2>瑞士制樹狀圖與記分</h2>
+                  {isFinal && <p>種子首輪各記一勝五票：{event.players.filter((p) => p.seedCredit).map((p) => p.name).join('、')}</p>}
+                  <PublicTournamentBracket
+                    rounds={event.rounds}
+                    renderScore={(match, index) => (
+                      <ScoreButtons judges={event.judgeCount} match={match} onScore={(left) => editSwiss(index, match, left)} />
+                    )}
+                  />
                 </section>
                 {!finished && !event.playoffSeeds?.length && (
-                  <section>
-                    <details>
-                      <summary>選手棄賽</summary>
-                      {event.players
-                        .filter((p) => !p.isWithdrawn && !p.isEliminated)
-                        .map((p) => (
+                  <>
+                    <div className="round-actions">
+                      {event.rounds.length < 3 && (
+                        <>
+                          {decision.revival?.length > 1 && (
+                            <label>
+                              裁定復活選手
+                              <select value={reviveId} onChange={(e) => setReviveId(e.target.value)}>
+                                <option value="">請選擇</option>
+                                {decision.revival.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                          {decision.revival?.length === 1 && <p>下一輪復活：{decision.revival[0].name}</p>}
+                          {decision.substitute && (
+                            <label>
+                              主辦方補位選手
+                              <input value={substituteName} onChange={(e) => setSubstituteName(e.target.value)} />
+                            </label>
+                          )}
                           <button
-                            key={p.id}
-                            onClick={() => propose(withdrawPlayer(event, p.id), '選手棄賽', { id: p.id })}
-                          >
-                            {p.name} 棄賽
-                          </button>
-                        ))}
-                    </details>
-                    {event.rounds.length < 3 && (
-                      <>
-                        {decision.revival?.length > 1 && (
-                          <label>
-                            裁定復活選手
-                            <select value={reviveId} onChange={(e) => setReviveId(e.target.value)}>
-                              <option value="">請選擇</option>
-                              {decision.revival.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        )}
-                        {decision.revival?.length === 1 && <p>下一輪復活：{decision.revival[0].name}</p>}
-                        {decision.substitute && (
-                          <label>
-                            主辦方補位選手
-                            <input value={substituteName} onChange={(e) => setSubstituteName(e.target.value)} />
-                          </label>
-                        )}
-                        <button
-                          disabled={event.rounds.at(-1).some((m) => !m.isDone)}
-                          onClick={() =>
-                            run(() =>
-                              write(nextSwissRound(event, { reviveId, substituteName }), '產生下一輪', {
-                                reviveId: decision.revival?.length === 1 ? decision.revival[0].id : reviveId,
-                                substituteName
-                              })
-                            )
-                          }
-                        >
-                          產生第 {event.rounds.length + 1} 輪
-                        </button>
-                      </>
-                    )}
-                    {isFinal && roundsDone && (
-                      <>
-                        <TieOrder
-                          ties={playoffSelection(event).ties}
-                          onResolve={(key, ids) =>
-                            run(() =>
-                              write(
-                                { ...event, playoffDecisions: { ...event.playoffDecisions, [key]: ids } },
-                                '八強種子裁定',
-                                { ids }
+                            disabled={event.rounds.at(-1).some((m) => !m.isDone)}
+                            onClick={() =>
+                              run(() =>
+                                write(nextSwissRound(event, { reviveId, substituteName }), '產生下一輪', {
+                                  reviveId: decision.revival?.length === 1 ? decision.revival[0].id : reviveId,
+                                  substituteName
+                                })
                               )
-                            )
-                          }
-                        />
-                        <button
-                          disabled={playoffSelection(event).ties.length > 0}
-                          onClick={() =>
-                            run(() => write(seedPlayoff(event, event.playoffDecisions || {}), '確認八強種子'))
-                          }
-                        >
-                          建立八強籤表
-                        </button>
-                      </>
-                    )}
-                  </section>
+                            }
+                          >
+                            產生第 {event.rounds.length + 1} 輪
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <section>
+                      <details>
+                        <summary>選手棄賽</summary>
+                        {event.players
+                          .filter((p) => !p.isWithdrawn && !p.isEliminated)
+                          .map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => propose(withdrawPlayer(event, p.id), '選手棄賽', { id: p.id })}
+                            >
+                              {p.name} 棄賽
+                            </button>
+                          ))}
+                      </details>
+                      {isFinal && roundsDone && (
+                        <>
+                          <TieOrder
+                            ties={playoffSelection(event).ties}
+                            onResolve={(key, ids) =>
+                              run(() =>
+                                write(
+                                  { ...event, playoffDecisions: { ...event.playoffDecisions, [key]: ids } },
+                                  '八強種子裁定',
+                                  { ids }
+                                )
+                              )
+                            }
+                          />
+                          <button
+                            disabled={playoffSelection(event).ties.length > 0}
+                            onClick={() =>
+                              run(() => write(seedPlayoff(event, event.playoffDecisions || {}), '確認八強種子'))
+                            }
+                          >
+                            建立八強籤表
+                          </button>
+                        </>
+                      )}
+                    </section>
+                  </>
                 )}
                 {!finished && canClose && (
                   <button
@@ -616,10 +587,6 @@ export default function SeasonAdmin({
               </div>
               <PublicTournamentRanking tournament={event} rankedPlayers={ranked} />
             </div>
-            <details>
-              <summary>瑞士制樹狀圖</summary>
-              <PublicTournamentBracket rounds={event.rounds} />
-            </details>
             {finished && versions?.length > 0 && (
               <details>
                 <summary>完賽版本紀錄</summary>

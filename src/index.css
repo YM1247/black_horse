@@ -150,3 +150,13 @@
   .correction-sidebar > section { padding: 1rem; }
 }
 [role="dialog"] { overflow-wrap: anywhere; }
+
+/* Backstage Swiss rounds share the spectator bracket; score controls stay backstage. */
+.admin-swiss-rounds { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
+.score-options { justify-content: center; padding-top: .75rem; }
+.round-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.round-actions > label { flex-basis: 100%; }
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .scoring-layout { grid-template-columns: minmax(0, 1fr); }
+  .scoring-layout .event-board { position: static; max-height: 24rem; }
+}

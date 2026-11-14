@@ -45,7 +45,18 @@ test('在後台核對改名後，以原編號報名並開始第一輪，公開�
   expect(state.rounds[0][0]).toMatchObject({ attackOrder: true });
   expect(state.players.map((p) => p.id)).toEqual(['other', 'stable']);
   expect(JSON.stringify(saveCloudTournament.mock.calls)).not.toMatch(/私人本名|0912345678/);
-  expect(await screen.findByRole('heading', { name: '瑞士制配對與比分' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: '瑞士制樹狀圖與記分' })).toBeInTheDocument();
+  const bout = screen.getByRole('group', { name: '第 1 輪 第 1 場' });
+  expect(within(bout).getAllByRole('button')).toHaveLength(4);
+  const nextRound = screen.getByRole('button', { name: '產生第 2 輪' });
+  expect(nextRound.closest('section')).toBeNull();
+  expect(nextRound.compareDocumentPosition(screen.getByText('選手棄賽')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(nextRound).toBeDisabled();
+  fireEvent.click(within(bout).getByRole('button', { name: '3 : 0' }));
+  await waitFor(() => expect(saveCloudTournament).toHaveBeenCalledTimes(3));
+  expect(saveCloudTournament.mock.calls[2][1].rounds[0][0].p1Votes).toBe(3);
+  await waitFor(() => expect(nextRound).toBeEnabled());
+
 });
 
 test('最終戰可直接新增未參賽選手並填入第二個線上保送席位', async () => {
