@@ -23,13 +23,13 @@ export function PublicTournamentRanking({ tournament, rankedPlayers, prominent =
       <span className="place">{player.displayRank}</span>
       <strong className="stage-name">{player.name}</strong>
       {isFinished && !isFinal && <b className="event-points">本場積分 {player.rankingPoints}</b>}
-      <div className="record"><span>{player.wins} 勝 {player.losses || 0} 敗 · {player.votes} 票</span>
+      <div className="record"><strong className="ranking-record">{player.wins} 勝 {player.losses || 0} 敗</strong><span>{player.votes} 票</span>
         {!player.isWithdrawn && <><span>對手勝率 {(player.opponentWinRate * 100).toFixed(1)}%</span>
           <span>次級勝率 {(player.opponentsOpponentWinRate * 100).toFixed(1)}%</span></>}
         {player.seedCredit && <span>種子 · 首輪 1 勝 5 票</span>}
         {player.isOrganizer && <span>主辦方補位</span>}
         {player.revivedRound && <span>第 {player.revivedRound} 輪復活</span>}
-        {player.isWithdrawn ? <span>已棄賽</span> : player.isEliminated && <span>兩敗淘汰</span>}
+        {player.isWithdrawn && <span>已棄賽</span>}
         {player.needsTiebreaker && <span>並列</span>}
       </div>
     </li>)}</ol>

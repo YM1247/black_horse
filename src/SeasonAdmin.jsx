@@ -486,6 +486,22 @@ export default function SeasonAdmin({
                     )}
                   />
                 </section>
+                {!finished && canClose && (
+                  <button
+                    onClick={() =>
+                      run(() =>
+                        write(
+                          { ...event, phase: 'finished', resultLocked: true },
+                          '完賽鎖定',
+                          {},
+                          { type: 'completed' }
+                        )
+                      )
+                    }
+                  >
+                    結算並鎖定結果
+                  </button>
+                )}
                 {!finished && !event.playoffSeeds?.length && (
                   <>
                     <div className="round-actions">
@@ -568,22 +584,7 @@ export default function SeasonAdmin({
                     </section>
                   </>
                 )}
-                {!finished && canClose && (
-                  <button
-                    onClick={() =>
-                      run(() =>
-                        write(
-                          { ...event, phase: 'finished', resultLocked: true },
-                          '完賽鎖定',
-                          {},
-                          { type: 'completed' }
-                        )
-                      )
-                    }
-                  >
-                    結算並鎖定結果
-                  </button>
-                )}
+
               </div>
               <PublicTournamentRanking tournament={event} rankedPlayers={ranked} />
             </div>

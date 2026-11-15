@@ -160,3 +160,7 @@
   .scoring-layout, .legacy-live-layout { grid-template-columns: minmax(0, 1fr); }
   .scoring-layout .event-board, .legacy-standings > div { position: static; max-height: none; }
 }
+
+.ranking-record { display: inline-block; color: #f1c6a6; font-size: 1.125rem; font-weight: 850; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.record { align-items: center; }
+.event-board .record .ranking-record { flex-basis: 100%; }

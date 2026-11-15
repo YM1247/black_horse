@@ -1870,17 +1870,17 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                               <div className="font-black text-white text-base flex flex-wrap items-center break-words min-w-0">
                                 <span className="break-words min-w-0">{p.name}</span>
                                 {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>}
-                                {p.isEliminated && <span className="text-sm text-amber-300 ml-2 border border-amber-500/30 px-1 rounded whitespace-nowrap">兩敗淘汰</span>}
+
                               </div>
                               {!p.isWithdrawn && !p.isEliminated && p.needsTiebreaker && <span className="text-[10px] px-1.5 py-0.5 rounded font-black tracking-wider whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>需加賽</span>}
                             </div>
                             {!p.isWithdrawn && <div className="text-xs font-bold mt-1 whitespace-normal" style={{ color: COLORS.textMuted }}>
-                              {doubleElimination && `${p.losses || 0} 敗 · `}對手勝率 {(p.opponentWinRate * 100).toFixed(1)}% · 次級 {(p.opponentsOpponentWinRate * 100).toFixed(1)}%
+                              對手勝率 {(p.opponentWinRate * 100).toFixed(1)}% · 次級 {(p.opponentsOpponentWinRate * 100).toFixed(1)}%
                             </div>}
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className="font-black text-base whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins} W</div>
+                          <div className="ranking-record whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins} 勝 {p.losses || 0} 敗</div>
                           <div className="text-xs font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes} 票</div>
                         </div>
                         {!p.isWithdrawn && !p.isEliminated && <div className="flex flex-col gap-1 shrink-0">
@@ -1947,12 +1947,12 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                         </td>
                         <td className="p-5 font-black text-white text-xl">
                           <div className="flex items-center gap-3">
-                            <span style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : 'white' }}>{p.name} {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>} {p.isEliminated && <span className="text-sm text-amber-300 ml-2 border border-amber-500/30 px-1 rounded whitespace-nowrap">兩敗淘汰</span>}</span>
+                            <span style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : 'white' }}>{p.name} {p.isWithdrawn && <span className="text-sm text-red-400 ml-2 border border-red-500/30 px-1 rounded whitespace-nowrap">已棄賽</span>} </span>
                             {!p.isWithdrawn && !p.isEliminated && p.needsTiebreaker && <span className="text-[10px] px-2 py-0.5 rounded-sm uppercase tracking-widest whitespace-nowrap" style={{backgroundColor: COLORS.inkOrange, color: COLORS.bg}}>需加賽</span>}
                           </div>
                         </td>
-                        <td className="p-5 text-center font-black text-2xl whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}>{p.wins}</td>
-                        {doubleElimination && <td className="p-5 text-center font-black text-xl whitespace-nowrap" style={{ color: p.isEliminated ? COLORS.inkOrange : COLORS.textMuted }}>{p.losses || 0}</td>}
+                        <td className="p-5 text-center font-black text-2xl whitespace-nowrap" style={{ color: p.displayRank <= 2 && !p.isWithdrawn ? COLORS.inkOrange : COLORS.inkBlue }}><strong className="ranking-record">{p.wins} 勝</strong></td>
+                        {doubleElimination && <td className="p-5 text-center font-black text-xl whitespace-nowrap" style={{ color: p.isEliminated ? COLORS.inkOrange : COLORS.textMuted }}><strong className="ranking-record">{p.losses || 0} 敗</strong></td>}
                         <td className="p-5 text-center font-black text-lg whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.votes}</td>
                         <td className="p-5 text-center font-black text-2xl whitespace-nowrap" style={{ color: p.rankingPoints > 0 ? COLORS.inkOrange : COLORS.textMuted }}>{p.rankingPoints}</td>
                         <td className="p-5 text-center font-bold whitespace-nowrap" style={{ color: COLORS.textMuted }}>{p.isWithdrawn ? '—' : `${(p.opponentWinRate * 100).toFixed(1)}%`}</td>
