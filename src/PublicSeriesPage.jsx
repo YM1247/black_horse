@@ -1,4 +1,5 @@
 import SeriesEventPoints from './SeriesEventPoints';
+import { PublicBrand, PublicBottomNav, PublicPlayerSearch, publicSeriesName } from './PublicLayout';
 import { FINAL } from './seasonTournament';
 import React, { useEffect, useMemo, useState } from 'react';
 import { isFirebaseConfigured } from './firebase';
@@ -34,7 +35,10 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   const [status, setStatus] = useState(publicCode ? 'loading' : 'idle');
   const [error, setError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  const [playerQuery, setPlayerQuery] = useState('');
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+
+  useEffect(() => { setPlayerQuery(''); }, [publicCode]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -104,6 +108,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
 
   const tournaments = useMemo(() => Object.values(tournamentsByCode).filter(Boolean), [tournamentsByCode]);
   const standings = useMemo(() => buildSeriesStandings(series, tournaments), [series, tournaments]);
+  const visibleStandings = standings.filter(player => player.name.toLocaleLowerCase().includes(playerQuery.trim().toLocaleLowerCase()));
   const isUsingCache = Boolean(series?.sync?.fromCache || tournaments.some(tournament => tournament.sync?.fromCache));
   const lastUpdatedAt = tournaments.reduce((latest, tournament) => {
     const value = tournament.clientUpdatedAt || '';
@@ -128,33 +133,24 @@ export default function PublicSeriesPage({ initialCode = '' }) {
     setPublicCode(code);
   };
 
-  if (!isFirebaseConfigured) {
-    return (
-      <main className="min-h-screen bg-[#0d0f12] text-slate-100 flex items-center justify-center p-6">
-        <section className="max-w-lg w-full bg-[#161920] border border-slate-700 rounded-2xl p-8 text-center">
-          <h1 className="text-3xl font-black mb-4">公開系列賽查詢</h1>
-          <p className="text-slate-400">此部署尚未設定 Firebase，暫時無法查詢雲端系列賽。</p>
-        </section>
-      </main>
-    );
-  }
-
   return (
-    <main className="spectator-page min-h-screen bg-[#0d0f12] text-slate-100 p-3 sm:p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 md:gap-6 mb-4 md:mb-8 border-b border-slate-800 pb-4 md:pb-8">
-          <div>
-            <a href={window.location.pathname} className="text-sm font-bold text-slate-500 hover:text-slate-200">← 返回公開賽事查詢</a>
-            <h1 className="text-3xl md:text-4xl font-black mt-2">{series?.name || '公開系列賽'}</h1>
-            {series && <p className="mt-2 text-slate-400 font-bold">{series.description}・系列代碼 {publicCode}</p>}
-          </div>
-          <form onSubmit={handleLookup} className="flex gap-2">
-            <label className="sr-only" htmlFor="public-series-code">系列代碼</label>
-            <input id="public-series-code" value={input} onChange={event => setInput(event.target.value.toUpperCase())}
-              placeholder="輸入系列代碼" className="min-w-0 px-4 py-3 rounded-lg border border-slate-700 bg-[#161920] font-black uppercase" />
-            <button className="px-5 py-3 rounded-lg bg-[#f1c6a6] text-[#0d0f12] font-black">查詢</button>
+    <main className="spectator-page public-ink">
+      <div className="public-container">
+        <PublicBrand title={publicSeriesName(series) || '公開系列賽查詢'}>
+          {series && <p className="public-event-meta">{series.description}・系列代碼 {publicCode}</p>}
+        </PublicBrand>
+        <div className="public-content">
+        <div className="public-section-links"><a href={window.location.pathname}>返回公開賽事查詢</a></div>
+        <details id="public-lookup" className="public-code-lookup" open={!series}>
+          <summary>查詢其他系列<span>{publicCode}</span></summary>
+          <form onSubmit={handleLookup} className="public-code-form">
+            <label htmlFor="public-series-code">系列代碼</label>
+            <div><input id="public-series-code" value={input} onChange={event => setInput(event.target.value.toUpperCase())}
+              placeholder="輸入系列代碼" autoCapitalize="characters" autoComplete="off" spellCheck={false} />
+            <button disabled={!isFirebaseConfigured}>查詢</button></div>
           </form>
-        </header>
+        </details>
+        {!isFirebaseConfigured && <p className="public-empty" role="status">此部署尚未設定 Firebase，暫時無法查詢雲端系列賽。</p>}
 
         {(!isOnline || isUsingCache) && (
           <div role="alert" className="mb-6 p-4 rounded-xl border border-amber-500/50 bg-amber-950/30 text-amber-200 font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -163,17 +159,17 @@ export default function PublicSeriesPage({ initialCode = '' }) {
           </div>
         )}
         {error && <div role="alert" className="mb-6 p-4 rounded-lg border border-red-500/40 bg-red-950/30 text-red-300 font-bold">{error}</div>}
-        {status === 'loading' && <div role="status" className="py-20 text-center text-slate-500 font-bold">正在載入系列賽…</div>}
+        {status === 'loading' && isFirebaseConfigured && <div role="status" className="public-empty">正在載入系列賽…</div>}
         {status === 'not-found' && <div className="py-20 text-center text-slate-500 font-bold">找不到此公開系列賽。</div>}
         {status === 'idle' && <div className="py-20 text-center text-slate-500 font-bold">請輸入系列代碼。</div>}
 
         {series && (
           <>
-            <div className="mb-6 text-right text-xs font-bold text-slate-500">
+            <div className="public-sync" role="status">
               {isUsingCache ? '離線快取' : '即時更新中'}・最後更新 {formatUpdateTime(lastUpdatedAt)}
             </div>
 
-            <nav aria-label="系列賽導覽" className="spectator-jumps">
+            <nav aria-label="系列賽導覽" className="public-section-links">
               <a href="#series-events">系列場次</a><a href="#series-ranking">積分排名</a>
             </nav>
             <section id="series-events" className="mb-8">
@@ -211,8 +207,9 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                 <h2 className="text-2xl font-black text-[#f1c6a6]">系列積分排名</h2>
                 <span className="text-xs font-bold text-slate-500">只有公開且已完賽場次計分</span>
               </div>
+              <PublicPlayerSearch id="series-player-search" value={playerQuery} onChange={setPlayerQuery} />
               <div className="space-y-3 md:hidden" aria-label="手機版系列積分排名">
-                {standings.map(standing => (
+                {visibleStandings.map(standing => (
                   <article key={standing.id || standing.name} className="rounded-xl border border-slate-800 bg-[#11151b] overflow-hidden">
                     <div className="flex items-start gap-3 p-4 border-b border-slate-800">
                       <span className="w-9 h-9 shrink-0 rounded-full bg-cyan-950/60 text-[#b6d2d4] flex items-center justify-center font-black">
@@ -220,7 +217,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                       </span>
                       <h3 className="min-w-0 flex-1 font-black text-white text-lg break-words leading-tight">{standing.name}</h3>
                       <div className="shrink-0 text-right">
-                        <div className="text-[10px] font-black tracking-widest text-slate-500">總積分</div>
+                        <div className="text-xs font-black tracking-widest text-slate-500">總積分</div>
                         <div className="text-2xl font-black text-[#f1c6a6]">{standing.totalPoints}</div>
                       </div>
                     </div>
@@ -234,7 +231,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                     </div>
                   </article>
                 ))}
-                {standings.length === 0 && <div className="p-10 text-center border border-dashed border-slate-700 rounded-xl text-slate-500 font-bold">尚無可計分的完賽結果。</div>}
+                {visibleStandings.length === 0 && <div className="p-10 text-center border border-dashed border-slate-700 rounded-xl text-slate-500 font-bold">{playerQuery.trim() ? '找不到這位選手，請確認打師名。' : '尚無可計分的完賽結果。'}</div>}
               </div>
 
               <div className="hidden md:block overflow-x-auto rounded-lg border border-slate-800" aria-label="桌面版系列積分排名">
@@ -248,7 +245,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {standings.map(standing => (
+                    {visibleStandings.map(standing => (
                       <tr key={standing.id || standing.name} className="border-t border-slate-800">
                         <td className="p-3 text-center font-black text-[#b6d2d4] sticky left-0 z-10 bg-[#161920] w-12 min-w-12 max-w-12">{standing.displayRank}</td>
                         <td title={standing.name} className="p-3 font-black text-white sticky left-12 z-10 bg-[#161920] w-40 min-w-40 max-w-40 overflow-hidden break-words leading-tight border-r border-slate-700 shadow-[8px_0_12px_rgba(0,0,0,0.35)]">{standing.name}</td>
@@ -256,14 +253,16 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                         <td className="p-3 text-center text-xl font-black text-[#f1c6a6] min-w-24">{standing.totalPoints}</td>
                       </tr>
                     ))}
-                    {standings.length === 0 && <tr><td colSpan={series.events.length + 3} className="p-10 text-center text-slate-500 font-bold">尚無可計分的完賽結果。</td></tr>}
+                    {visibleStandings.length === 0 && <tr><td colSpan={series.events.length + 3} className="p-10 text-center text-slate-500 font-bold">{playerQuery.trim() ? '找不到這位選手，請確認打師名。' : '尚無可計分的完賽結果。'}</td></tr>}
                   </tbody>
                 </table>
               </div>
             </section>
           </>
         )}
+        </div>
       </div>
+      <PublicBottomNav series seriesCode={publicCode || undefined} />
     </main>
   );
 }

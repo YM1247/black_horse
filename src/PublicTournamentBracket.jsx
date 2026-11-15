@@ -37,7 +37,8 @@ const groupRoundMatches = (matches, roundIndex, votesFirst) => matches.reduce((g
   return groups;
 }, {});
 
-export default function PublicTournamentBracket({ rounds = [], renderScore, votesFirst = false }) {
+export default function PublicTournamentBracket({ rounds = [], renderScore, votesFirst = false, publicView = false }) {
+  const colors = publicView ? { bg: '#242728', card: '#2b3132', cardBorder: '#566063', inkBlue: '#b7cbd0', inkBlueDark: '#a8bdc4', inkOrange: '#d2b0b2', textMain: '#eeeae3', textMuted: '#b7cbd0' } : COLORS;
   return (
     <div className={`w-full ${renderScore ? 'overflow-x-auto' : ''}`} role="region" aria-label="完整瑞士制樹狀圖">
       <div className={`${renderScore ? 'admin-swiss-rounds' : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3'} gap-5 md:gap-8 md:p-2 items-start`}>
@@ -48,20 +49,20 @@ export default function PublicTournamentBracket({ rounds = [], renderScore, vote
           return (
             <div key={roundIndex} className="flex flex-col gap-6 w-full">
               <h3 id={`swiss-round-${roundIndex+1}`} className="text-center font-black tracking-widest text-xl py-3 rounded-lg border-2 shadow-lg"
-                style={{ backgroundColor: COLORS.bg, borderColor: COLORS.inkBlue, color: COLORS.inkBlue }}>
+                style={{ backgroundColor: colors.bg, borderColor: colors.inkBlue, color: colors.inkBlue }}>
                 ROUND {roundIndex + 1}
               </h3>
 
               <div className="flex flex-col gap-6 flex-1 justify-center">
                 {sortedScores.map(score => {
                   const group = groups[score];
-                  const accentColor = group.isFloat ? COLORS.inkOrange : COLORS.inkBlue;
+                  const accentColor = group.isFloat ? colors.inkOrange : colors.inkBlue;
 
                   return (
                     <div key={`${roundIndex}-${score}`} className="rounded-xl overflow-hidden border-2 shadow-lg"
-                      style={{ backgroundColor: COLORS.card, borderColor: accentColor }}>
+                      style={{ backgroundColor: colors.card, borderColor: accentColor }}>
                       <div className="font-black text-center py-2 text-lg tracking-widest shadow-md"
-                        style={{ backgroundColor: accentColor, color: COLORS.bg }}>
+                        style={{ backgroundColor: publicView ? colors.card : accentColor, color: publicView ? colors.inkBlue : colors.bg }}>
                         {group.label}
                       </div>
 
@@ -73,14 +74,14 @@ export default function PublicTournamentBracket({ rounds = [], renderScore, vote
 
                           return (
                             <div key={match.id} role={renderScore ? 'group' : undefined} aria-label={renderScore ? `第 ${roundIndex + 1} 輪 第 ${matches.indexOf(match) + 1} 場` : undefined} className={`rounded-lg border px-2 sm:px-4 py-3 ${isDone ? '' : 'border-dashed'}`}
-                              style={{ backgroundColor: COLORS.bg, borderColor: isDone ? COLORS.cardBorder : COLORS.textMuted }}>
+                              style={{ backgroundColor: colors.bg, borderColor: isDone ? colors.cardBorder : colors.textMuted }}>
                               {renderScore && <p className="mb-2 text-center text-sm font-bold text-[#b6d2d4]">第 {matches.indexOf(match) + 1} 場</p>}
                               <div className="flex items-center justify-between w-full gap-2">
                                 <div className="flex flex-col items-start w-0 flex-1">
                                   {match.attackOrder && <small className="text-[#b6d2d4] font-bold">先攻</small>}
                                   <div className="flex items-center gap-2 w-full">
                                     <span className={p1Won ? 'font-black text-white' : 'font-bold'}
-                                      style={{ color: p1Won ? '#fff' : (isDone ? COLORS.textMuted : COLORS.textMain), fontSize: getPlayerFontSize(match.p1.name), wordBreak: 'break-word', lineHeight: 1.2 }}>
+                                      style={{ color: p1Won ? '#fff' : (isDone ? colors.textMuted : colors.textMain), fontSize: getPlayerFontSize(match.p1.name), wordBreak: 'break-word', lineHeight: 1.2 }}>
                                       {match.p1.name}
                                     </span>
                                     {p1Won && <span style={{ color: accentColor }} className="text-sm shrink-0">✓</span>}
@@ -89,7 +90,7 @@ export default function PublicTournamentBracket({ rounds = [], renderScore, vote
                                 </div>
 
                                 {isDone && <div style={{ color: accentColor }} className="font-mono text-xl font-black w-5 sm:w-8 text-center shrink-0">{match.p1Votes}</div>}
-                                <div style={{ color: group.isFloat ? COLORS.inkOrange : COLORS.inkBlueDark }} className="font-black text-xs px-1 shrink-0">{isDone ? '-' : 'VS'}</div>
+                                <div style={{ color: group.isFloat ? colors.inkOrange : colors.inkBlueDark }} className="font-black text-xs px-1 shrink-0">{isDone ? '-' : 'VS'}</div>
                                 {isDone && <div style={{ color: accentColor }} className="font-mono text-xl font-black w-5 sm:w-8 text-center shrink-0">{match.p2Votes}</div>}
 
                                 <div className="flex flex-col items-end w-0 flex-1">
@@ -97,7 +98,7 @@ export default function PublicTournamentBracket({ rounds = [], renderScore, vote
                                   <div className="flex items-center justify-end gap-2 w-full">
                                     {p2Won && <span style={{ color: accentColor }} className="text-sm shrink-0">✓</span>}
                                     <span className={`text-right ${p2Won ? 'font-black text-white' : 'font-bold'}`}
-                                      style={{ color: p2Won ? '#fff' : (isDone ? COLORS.textMuted : COLORS.textMain), fontSize: getPlayerFontSize(match.p2.name), wordBreak: 'break-word', lineHeight: 1.2 }}>
+                                      style={{ color: p2Won ? '#fff' : (isDone ? colors.textMuted : colors.textMain), fontSize: getPlayerFontSize(match.p2.name), wordBreak: 'break-word', lineHeight: 1.2 }}>
                                       {match.p2.name}
                                     </span>
                                   </div>

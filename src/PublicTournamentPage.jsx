@@ -6,6 +6,8 @@ import { AKASHIKI } from './tournamentState';
 import PlayoffBracket from './PlayoffBracket';
 import PublicTournamentBracket from './PublicTournamentBracket';
 import { BLACK_HORSE, SERIES } from './series';
+import { PublicBrand, PublicBottomNav } from './PublicLayout';
+import PublicEventLive from './PublicEventLive';
 
 const PHASE_LABELS = {
   registration: '報名中',
@@ -106,18 +108,6 @@ export default function PublicTournamentPage({ initialCode = '' }) {
     setEventCode(code);
   };
 
-  if (!isFirebaseConfigured) {
-    return (
-      <main className="min-h-screen bg-[#0d0f12] text-slate-100 flex items-center justify-center p-6">
-        <section className="max-w-lg w-full bg-[#161920] border border-slate-700 rounded-2xl p-8 text-center">
-          <h1 className="text-3xl font-black mb-4">公開賽事查詢</h1>
-          <p className="text-slate-400 leading-relaxed">此部署尚未設定 Firebase，暫時無法查詢雲端賽事。</p>
-          <a href={window.location.pathname} className="inline-block mt-6 px-6 py-3 bg-slate-200 text-slate-950 rounded-lg font-black">返回賽事系統</a>
-        </section>
-      </main>
-    );
-  }
-
   const rounds = Array.isArray(tournament?.rounds) ? tournament.rounds : [];
   const rankedPlayers = tournament ? eventRanking(tournament) : [];
   const parentSeries = tournament?.seriesId
@@ -125,24 +115,22 @@ export default function PublicTournamentPage({ initialCode = '' }) {
     : null;
 
   return (
-    <main className="spectator-page min-h-screen bg-[#0d0f12] text-slate-100 p-3 sm:p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 md:gap-6 mb-4 md:mb-8 border-b border-slate-800 pb-4 md:pb-8">
-          <div>
-            <div className="spectator-header-links">
-            {eventCode && <a href={window.location.pathname} className="text-sm font-bold text-slate-500 hover:text-slate-200">← 查詢其他賽事</a>}
-            {parentSeries?.publicCode && <a href={`${window.location.pathname}?series=${parentSeries.publicCode}`} className="ml-4 text-sm font-bold text-[#b6d2d4] hover:text-white">查看整個系列賽</a>}
-            </div>
-            <h1 className="text-3xl md:text-4xl font-black mt-2 break-words">{tournament?.name || '觀眾即時賽況'}</h1>
-            {tournament && <p className="mt-2 text-slate-400 font-bold">代碼 {eventCode}・{PHASE_LABELS[tournament.phase] || tournament.phase}・{tournament.judgeCount} 位評審・{tournament.doubleElimination ? '兩敗淘汰' : '不淘汰'}</p>}
-          </div>
-          <form onSubmit={handleLookup} className="flex gap-2">
-            <label className="sr-only" htmlFor="public-event-code">賽事代碼</label>
-            <input id="public-event-code" value={input} onChange={event => setInput(event.target.value.toUpperCase())}
-              placeholder="輸入賽事代碼" className="min-w-0 flex-1 px-4 py-3 rounded-lg border border-slate-700 bg-[#161920] font-black uppercase" />
-            <button className="px-5 py-3 rounded-lg bg-[#b6d2d4] text-[#0d0f12] font-black">查詢</button>
+    <main className="spectator-page public-ink">
+      <div className="public-container">
+        <PublicBrand title={tournament?.name || '公開賽事查詢'}>
+          {tournament && <p className="public-event-meta">{PHASE_LABELS[tournament.phase] || tournament.phase} · {tournament.judgeCount} 位評審 · {tournament.doubleElimination ? '兩敗淘汰' : '不淘汰'}</p>}
+        </PublicBrand>
+        <div className="public-content">
+        <details id="public-lookup" className="public-code-lookup" open={!tournament}>
+          <summary>查詢其他賽事<span>{eventCode}</span></summary>
+          <form onSubmit={handleLookup} className="public-code-form">
+            <label htmlFor="public-event-code">賽事代碼</label>
+            <div><input id="public-event-code" value={input} onChange={event => setInput(event.target.value.toUpperCase())}
+              placeholder="輸入賽事代碼" autoCapitalize="characters" autoComplete="off" spellCheck={false} />
+            <button disabled={!isFirebaseConfigured}>查詢</button></div>
           </form>
-        </header>
+        </details>
+        {!isFirebaseConfigured && <p role="status" className="public-empty">此部署尚未設定 Firebase，暫時無法查詢雲端賽事。</p>}
 
         {error && <div role="alert" className="mb-6 p-4 rounded-lg border border-red-500/40 bg-red-950/30 text-red-300 font-bold">{error}</div>}
         {tournament && (!isOnline || tournament.sync?.fromCache) && (
@@ -151,42 +139,39 @@ export default function PublicTournamentPage({ initialCode = '' }) {
             <button type="button" onClick={() => setRetryKey(value => value + 1)} className="px-4 py-2 rounded-lg border border-amber-400">重試</button>
           </div>
         )}
-        {status === 'loading' && <div role="status" className="py-20 text-center text-slate-500 font-bold">正在載入賽事…</div>}
-        {status === 'not-found' && <div className="py-20 text-center text-slate-500 font-bold">找不到此賽事。</div>}
-        {status === 'idle' && <div className="py-20 text-center text-slate-500 font-bold">請輸入賽事代碼。<a className="block mt-4 underline text-[#b6d2d4]" href={'?series='+BLACK_HORSE.publicCode}>查看{BLACK_HORSE.name}系列賽</a></div>}
+        {status === 'loading' && isFirebaseConfigured && <div role="status" className="public-empty">正在載入賽事…</div>}
+        {status === 'not-found' && <div className="public-empty">找不到此賽事，請確認代碼或向主辦方取得公開連結。</div>}
+        {status === 'idle' && isFirebaseConfigured && <section className="public-welcome"><h2>查詢今天的對戰與比分</h2><p>輸入賽事代碼，或開啟系列賽選擇場次。</p><a className="public-primary-link" href={'?series='+BLACK_HORSE.publicCode}>查看黑馬記念系列賽</a></section>}
 
         {tournament && (
           <>
-            <div className="flex justify-end mb-4 text-xs font-bold text-slate-500">
+            <div className="public-sync" role="status">
               {tournament.sync?.hasPendingWrites ? '資料同步中' : tournament.sync?.fromCache ? '離線快取' : '即時更新中'}・最後更新 {tournament.clientUpdatedAt ? new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW') : '尚未取得'}
             </div>
 
-            {rounds.length > 0 && <nav aria-label="單場賽況導覽" className="spectator-jumps">
-              {rounds.map((_, i) => <a key={i} href={`#swiss-round-${i+1}`}>第 {i+1} 輪</a>)}
-              <a href="#event-ranking">排名</a>
-              {tournament.playoffSeeds?.length > 0 && <a href="#playoff">{tournament.rulesVersion === AKASHIKI ? '十六強' : '八強'}</a>}
-            </nav>}
+            <div className="public-event-grid">
+              <PublicEventLive tournament={tournament} />
+              <aside><PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} /></aside>
+            </div>
+            <nav className="public-section-links" aria-label="完整賽事資料"><a href="#swiss-bracket">完整瑞士制賽程</a>{tournament.playoffSeeds?.length > 0 && <a href="#playoff">淘汰賽籤表</a>}{parentSeries?.publicCode && <a href={`?series=${parentSeries.publicCode}`}>查看整個系列賽</a>}</nav>
             {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} />}
-            {tournament.phase === 'finished' && (
-              <PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} prominent />
-            )}
 
             {rounds.length > 0 && (
-              <section className="mb-10 bg-[#11151b] border border-slate-700 rounded-2xl p-4 md:p-7">
+              <section id="swiss-bracket" className="public-full-bracket">
                 <div className="mb-6">
                   <h2 className="text-2xl md:text-3xl font-black text-[#b6d2d4]">完整瑞士制樹狀圖</h2>
                   <p className="mt-2 text-sm font-bold text-slate-500">依輪次與{tournament.rulesVersion === AKASHIKI ? '總票數' : '勝場'}分組呈現，比分及戰績會隨後台操作即時更新。</p>
                 </div>
                 {tournament.players?.some(p=>p.seedCredit) && <p className="mb-4 text-slate-300">首輪種子（一勝五票） · {tournament.players.filter(p=>p.seedCredit).map(p=>p.name).join('、')}</p>}
-                <PublicTournamentBracket rounds={rounds} votesFirst={tournament.rulesVersion === AKASHIKI} />
+                <PublicTournamentBracket rounds={rounds} votesFirst={tournament.rulesVersion === AKASHIKI} publicView />
               </section>
             )}
 
-            {!rounds.length && <p className="p-5 text-slate-400">尚未產生賽程</p>}
-            {tournament.phase !== 'finished' && <PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers}/>}
           </>
         )}
+        </div>
       </div>
+      <PublicBottomNav seriesCode={parentSeries?.publicCode} hasEvent={Boolean(tournament)} />
     </main>
   );
 }

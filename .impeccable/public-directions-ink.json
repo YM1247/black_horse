@@ -1,0 +1,30 @@
+{
+  "title": "黑馬記念｜原圖識別・水墨修訂",
+  "question": "Logo 與書法直接使用提供的原圖，只調整顏色；補回水墨背景，移除年份。下圖為實際網頁預覽截圖，賽況仍為示例。",
+  "options": [
+    {
+      "id": "ab-ink-v2",
+      "label": "原圖水墨版",
+      "thesis": "完整保留原始識別，以水墨暈染襯托柔和、易讀的賽況。",
+      "palette": [
+        "#242728",
+        "#eeeae3",
+        "#b7cbd0",
+        "#d18d90"
+      ],
+      "materials": [
+        "原始 Logo 與書法圖",
+        "墨色暈染",
+        "少量暗紅"
+      ],
+      "viewport": "原始識別置頂，搜尋與輪次下方直達對戰、比分與排名。",
+      "risk": "完整原圖保留直式構圖，因此頁首比橫式標題略高。",
+      "comp": ".impeccable/mocks/decision/ab-ink-v2.jpg"
+    }
+  ],
+  "steer": true,
+  "buildPath": {
+    "value": "comp",
+    "toggle": true
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "buildPath": "comp",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/ab-ink-v2.html"
+        ],
+        "createdAt": "2026-11-15T08:40:17.517Z",
+        "reason": "Agent verified browser computed colors: primary text rgb(238,234,227), not detected black; scoped false positive for inherited text in this concept preview only. All primary and secondary colors readable on charcoal."
+      }
+    ]
+  }
+}

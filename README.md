@@ -79,6 +79,7 @@ Bob
 
 ## 文件
 
+- [公開頁面水墨介面與查賽操作](docs/PUBLIC_UI.md)
 - [Phase 1 實作說明](docs/PHASE1.md)
 - [系統架構與演進方向](docs/ARCHITECTURE.md)
 - [Firebase 設定與部署](docs/FIREBASE_SETUP.md)

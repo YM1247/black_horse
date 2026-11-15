@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import PublicSeriesPage from './PublicSeriesPage';
 
@@ -67,4 +67,17 @@ test('public series page shows public events and computes finished-event standin
   expect(aliceCell).toHaveClass('left-12', 'w-40', 'max-w-40', 'break-words');
   expect(aliceCell).toHaveAttribute('title', 'Alice');
   expect(eventHeader).toHaveClass('min-w-[5.5rem]');
+});
+
+test('系列排名可按打師名搜尋，保留原本名次與得分並提示找不到選手', async () => {
+  render(<PublicSeriesPage initialCode="SIM2026" />);
+  expect(await screen.findByRole('cell', { name: 'Alice' })).toBeInTheDocument();
+  const input = screen.getByRole('searchbox', { name: '搜尋打師名' });
+  fireEvent.change(input, { target: { value: 'nobody' } });
+  expect(screen.queryByRole('cell', { name: 'Alice' })).not.toBeInTheDocument();
+  expect(screen.getAllByText('找不到這位選手，請確認打師名。')).toHaveLength(2);
+  fireEvent.change(input, { target: { value: ' ali ' } });
+  const row = screen.getByRole('cell', { name: 'Alice' }).parentElement;
+  expect(row).toHaveTextContent('100');
+  expect(row.firstElementChild).toHaveTextContent('1');
 });

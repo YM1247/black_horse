@@ -1,0 +1,21 @@
+{
+  "approved": true,
+  "kind": "browser-rendered-revised-concept",
+  "source": "ab-ink-v2.html",
+  "screenshot": "ab-ink-v2.jpg",
+  "brand_source": "../../references/black-horse-logo-original.png",
+  "brand_sha256": "be2256985b298c34e361b1244f966d59371904add6afb84e8f3c379dae250aa8",
+  "brand_changes": "CSS color transformation only; original file unchanged; artwork arrangement and aspect ratio preserved",
+  "background": "ink-wash-v2.png",
+  "background_tool": "image_gen__imagegen",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "approved_constraints": [
+    "Use exact supplied logo and calligraphy, color changes only",
+    "More ink wash style",
+    "Remove year numeral from visual"
+  ],
+  "approval": "User explicitly approved implementation and deployment on 2026-11-15"
+}

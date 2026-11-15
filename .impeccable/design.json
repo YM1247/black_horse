@@ -1,0 +1,346 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-15T09:20:30.981391+00:00",
+  "title": "Design System: 黑馬記念公開賽事",
+  "extensions": {
+    "colorMeta": {
+      "charcoal": {
+        "role": "neutral",
+        "displayName": "炭灰",
+        "tonalRamp": [
+          "oklch(15% 0.0047 219.65)",
+          "oklch(26% 0.0047 219.65)",
+          "oklch(38% 0.0047 219.65)",
+          "oklch(49% 0.0047 219.65)",
+          "oklch(61% 0.0047 219.65)",
+          "oklch(72% 0.0047 219.65)",
+          "oklch(84% 0.0047 219.65)",
+          "oklch(95% 0.0047 219.65)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "墨色容器",
+        "tonalRamp": [
+          "oklch(15% 0.0085 208.75)",
+          "oklch(26% 0.0085 208.75)",
+          "oklch(38% 0.0085 208.75)",
+          "oklch(49% 0.0085 208.75)",
+          "oklch(61% 0.0085 208.75)",
+          "oklch(72% 0.0085 208.75)",
+          "oklch(84% 0.0085 208.75)",
+          "oklch(95% 0.0085 208.75)"
+        ]
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "深墨輸入",
+        "tonalRamp": [
+          "oklch(15% 0.0084 208.75)",
+          "oklch(26% 0.0084 208.75)",
+          "oklch(38% 0.0084 208.75)",
+          "oklch(49% 0.0084 208.75)",
+          "oklch(61% 0.0084 208.75)",
+          "oklch(72% 0.0084 208.75)",
+          "oklch(84% 0.0084 208.75)",
+          "oklch(95% 0.0084 208.75)"
+        ]
+      },
+      "personal-slab": {
+        "role": "neutral",
+        "displayName": "個人對戰色塊",
+        "tonalRamp": [
+          "oklch(15% 0.0109 205.79)",
+          "oklch(26% 0.0109 205.79)",
+          "oklch(38% 0.0109 205.79)",
+          "oklch(49% 0.0109 205.79)",
+          "oklch(61% 0.0109 205.79)",
+          "oklch(72% 0.0109 205.79)",
+          "oklch(84% 0.0109 205.79)",
+          "oklch(95% 0.0109 205.79)"
+        ]
+      },
+      "warm-white": {
+        "role": "neutral",
+        "displayName": "暖白",
+        "tonalRamp": [
+          "oklch(15% 0.0103 81.79)",
+          "oklch(26% 0.0103 81.79)",
+          "oklch(38% 0.0103 81.79)",
+          "oklch(49% 0.0103 81.79)",
+          "oklch(61% 0.0103 81.79)",
+          "oklch(72% 0.0103 81.79)",
+          "oklch(84% 0.0103 81.79)",
+          "oklch(95% 0.0103 81.79)"
+        ]
+      },
+      "blue-gray": {
+        "role": "neutral",
+        "displayName": "灰藍",
+        "tonalRamp": [
+          "oklch(15% 0.0228 214.42)",
+          "oklch(26% 0.0228 214.42)",
+          "oklch(38% 0.0228 214.42)",
+          "oklch(49% 0.0228 214.42)",
+          "oklch(61% 0.0228 214.42)",
+          "oklch(72% 0.0228 214.42)",
+          "oklch(84% 0.0228 214.42)",
+          "oklch(95% 0.0228 214.42)"
+        ]
+      },
+      "wine": {
+        "role": "primary",
+        "displayName": "酒紅",
+        "tonalRamp": [
+          "oklch(15% 0.0832 16.47)",
+          "oklch(26% 0.0832 16.47)",
+          "oklch(38% 0.0832 16.47)",
+          "oklch(49% 0.0832 16.47)",
+          "oklch(61% 0.0832 16.47)",
+          "oklch(72% 0.0832 16.47)",
+          "oklch(84% 0.0832 16.47)",
+          "oklch(95% 0.0832 16.47)"
+        ]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "霧線",
+        "tonalRamp": [
+          "oklch(15% 0.0133 217.67)",
+          "oklch(26% 0.0133 217.67)",
+          "oklch(38% 0.0133 217.67)",
+          "oklch(49% 0.0133 217.67)",
+          "oklch(61% 0.0133 217.67)",
+          "oklch(72% 0.0133 217.67)",
+          "oklch(84% 0.0133 217.67)",
+          "oklch(95% 0.0133 217.67)"
+        ]
+      },
+      "field-border": {
+        "role": "neutral",
+        "displayName": "輸入邊界",
+        "tonalRamp": [
+          "oklch(15% 0.0171 212.03)",
+          "oklch(26% 0.0171 212.03)",
+          "oklch(38% 0.0171 212.03)",
+          "oklch(49% 0.0171 212.03)",
+          "oklch(61% 0.0171 212.03)",
+          "oklch(72% 0.0171 212.03)",
+          "oklch(84% 0.0171 212.03)",
+          "oklch(95% 0.0171 212.03)"
+        ]
+      },
+      "action": {
+        "role": "primary",
+        "displayName": "水霧灰藍操作",
+        "tonalRamp": [
+          "oklch(15% 0.0224 211.05)",
+          "oklch(26% 0.0224 211.05)",
+          "oklch(38% 0.0224 211.05)",
+          "oklch(49% 0.0224 211.05)",
+          "oklch(61% 0.0224 211.05)",
+          "oklch(72% 0.0224 211.05)",
+          "oklch(84% 0.0224 211.05)",
+          "oklch(95% 0.0224 211.05)"
+        ]
+      },
+      "action-hover": {
+        "role": "primary",
+        "displayName": "水霧灰藍滑過",
+        "tonalRamp": [
+          "oklch(15% 0.0143 207.87)",
+          "oklch(26% 0.0143 207.87)",
+          "oklch(38% 0.0143 207.87)",
+          "oklch(49% 0.0143 207.87)",
+          "oklch(61% 0.0143 207.87)",
+          "oklch(72% 0.0143 207.87)",
+          "oklch(84% 0.0143 207.87)",
+          "oklch(95% 0.0143 207.87)"
+        ]
+      },
+      "action-ink": {
+        "role": "neutral",
+        "displayName": "操作深字",
+        "tonalRamp": [
+          "oklch(15% 0.0088 208.74)",
+          "oklch(26% 0.0088 208.74)",
+          "oklch(38% 0.0088 208.74)",
+          "oklch(49% 0.0088 208.74)",
+          "oklch(61% 0.0088 208.74)",
+          "oklch(72% 0.0088 208.74)",
+          "oklch(84% 0.0088 208.74)",
+          "oklch(95% 0.0088 208.74)"
+        ]
+      },
+      "link": {
+        "role": "neutral",
+        "displayName": "淺灰藍連結",
+        "tonalRamp": [
+          "oklch(15% 0.0202 212.55)",
+          "oklch(26% 0.0202 212.55)",
+          "oklch(38% 0.0202 212.55)",
+          "oklch(49% 0.0202 212.55)",
+          "oklch(61% 0.0202 212.55)",
+          "oklch(72% 0.0202 212.55)",
+          "oklch(84% 0.0202 212.55)",
+          "oklch(95% 0.0202 212.55)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "page-title": {
+        "displayName": "賽事名稱",
+        "purpose": "手機基準；768px 起增為 1.25rem。"
+      },
+      "headline": {
+        "displayName": "區段標題",
+        "purpose": "當輪、排名等 17px 區段標題。"
+      },
+      "body": {
+        "displayName": "操作正文",
+        "purpose": "中文系統無襯線；輸入保持 16px。"
+      },
+      "personal-score": {
+        "displayName": "個人比分",
+        "purpose": "個人對戰主比分，使用等寬數字。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "sticky-column-edge",
+        "value": "8px 0 12px rgba(0,0,0,0.35)",
+        "purpose": "系列桌面排名的固定選手欄邊緣；不是卡片陰影。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-colors",
+        "value": "color 140ms ease-out, background-color 140ms ease-out",
+        "purpose": "公開互動元素文字與底色變化；減少動態偏好下停用。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "359px"
+      },
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "查詢按鈕",
+      "kind": "button",
+      "description": "淺灰藍主要操作，柔和圓角與可見焦點。",
+      "html": "<button class=\"ds-primary\" type=\"button\">查詢</button>",
+      "css": ".ds-primary{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;min-height:46px;padding:10px 18px;border:0;border-radius:12px;background:#b9cdd1;color:#202627;font-weight:600;cursor:pointer;transition:color 140ms ease-out,background-color 140ms ease-out}.ds-primary:hover{background:#d2dfe1}.ds-primary:focus-visible{outline:2px solid #d18d90;outline-offset:3px;}.ds-primary:disabled{opacity:.55;cursor:not-allowed}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none}}",
+      "refersTo": "button-primary"
+    },
+    {
+      "name": "選手搜尋結果",
+      "kind": "button",
+      "description": "深底細框的選手選擇；名稱可換行。",
+      "html": "<button class=\"ds-player-choice\" type=\"button\">範例打師</button>",
+      "css": ".ds-player-choice{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;min-height:44px;max-width:100%;overflow-wrap:anywhere;padding:8px 14px;border:1px solid #738184;border-radius:12px;background:#303637;color:#eeeae3;cursor:pointer;transition:color 140ms ease-out,background-color 140ms ease-out}.ds-player-choice:hover{background:#455053}.ds-player-choice:focus-visible{outline:2px solid #d18d90;outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-player-choice{transition:none}}"
+    },
+    {
+      "name": "打師名搜尋",
+      "kind": "input",
+      "description": "線條搜尋圖示與單一複合焦點框。",
+      "html": "<label class=\"ds-search\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg><input aria-label=\"搜尋打師名\" type=\"search\" placeholder=\"搜尋打師名\"/></label>",
+      "css": ".ds-search{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;display:flex;align-items:center;gap:10px;min-height:46px;padding:0 14px;border:1px solid #738184;border-radius:12px;background:#303637ed;color:#eeeae3}.ds-search svg{flex-shrink:0}.ds-search input{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;width:100%;min-width:0;min-height:44px;padding:0;border:0;background:transparent;color:#eeeae3;caret-color:#d18d90}.ds-search input::placeholder{color:#c3cecf;opacity:1}.ds-search:focus-within{outline:2px solid #d18d90;outline-offset:2px}.ds-search input:focus-visible{outline:none}",
+      "refersTo": "search-field"
+    },
+    {
+      "name": "輪次導覽",
+      "kind": "nav",
+      "description": "均分寬度、可換行；選取以文字加重及短線表示。",
+      "html": "<nav class=\"ds-rounds\" aria-label=\"單場賽況導覽\"><a href=\"#round-one\" aria-current=\"true\">第 1 輪</a><a href=\"#round-two\">第 2 輪</a><a href=\"#round-three\">第 3 輪</a></nav>",
+      "css": ".ds-rounds{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;display:flex;flex-wrap:wrap;border-bottom:1px solid #566063;background:#242728}.ds-rounds a{position:relative;flex:1;min-height:46px;padding:9px 6px 12px;text-align:center;text-decoration:none;white-space:nowrap;color:#c6cfd0;transition:color 140ms ease-out,background-color 140ms ease-out}.ds-rounds a:hover{color:#fff}.ds-rounds a[aria-current]{color:#eeeae3;font-weight:600}.ds-rounds a[aria-current]::after{content:\"\";position:absolute;height:3px;left:27%;right:27%;bottom:-1px;border-radius:3px;background:#d18d90}.ds-rounds a:focus-visible{outline:2px solid #d18d90;outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-rounds a{transition:none}}",
+      "refersTo": "round-tab"
+    },
+    {
+      "name": "公開底部導覽",
+      "kind": "nav",
+      "description": "固定導覽的三個目的地；展示樣本留在面板流中。",
+      "html": "<nav class=\"ds-bottom\" aria-label=\"公開頁面導覽\"><a href=\"#current-round\" aria-current=\"page\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"M8 21h8m-4-5v5M7 4h10v5a5 5 0 0 1-10 0V4ZM7 6H4v3a4 4 0 0 0 4 4m9-7h3v3a4 4 0 0 1-4 4\"/></svg><span>賽況</span></a><a href=\"#event-ranking\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"M10 6h11M10 12h11M10 18h11M3 4h1v4M3 10h2v2H3v2h2M3 16h2v4H3m0-2h2\"/></svg><span>排名</span></a><a href=\"#series-events\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m12 3 10 5-10 5L2 8l10-5Zm-10 9 10 5 10-5M2 16l10 5 10-5\"/></svg><span>系列</span></a></nav>",
+      "css": ".ds-bottom{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;display:flex;padding:8px 12px;border-top:1px solid #566063;background:#242728}.ds-bottom a{position:relative;flex:1;min-height:48px;display:flex;align-items:center;flex-direction:column;gap:4px;padding:2px 0 6px;color:#d0d8d7;font-size:12px;text-decoration:none;transition:color 140ms ease-out,background-color 140ms ease-out}.ds-bottom a:hover{color:#fff}.ds-bottom a[aria-current]{color:#e4a8ad}.ds-bottom a[aria-current]::after{content:\"\";position:absolute;bottom:0;width:30px;height:2px;border-radius:2px;background:#d18d90}.ds-bottom a:focus-visible{outline:2px solid #d18d90;outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-bottom a{transition:none}}",
+      "refersTo": "bottom-nav"
+    },
+    {
+      "name": "個人對戰",
+      "kind": "custom",
+      "description": "選定打師後的三欄比分色塊；示例名稱與比分僅供展示。",
+      "html": "<article class=\"ds-personal\" aria-label=\"範例對戰\"><div><strong>範例甲</strong><small>先攻</small></div><div class=\"ds-score\"><b>— : —</b><small>等待比分</small></div><div><strong>範例乙</strong><small>後攻</small></div></article>",
+      "css": ".ds-personal{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;display:grid;grid-template-columns:minmax(0,1fr) minmax(75px,1fr) minmax(0,1fr);align-items:center;gap:8px;padding:18px 13px;border-radius:14px;text-align:center;background:#343c3d;color:#eeeae3}.ds-personal>div{min-width:0}.ds-personal strong{display:block;overflow-wrap:anywhere;font-size:clamp(1.25rem,5vw,1.625rem);font-weight:600}.ds-personal small{display:block;font-size:12px;font-weight:400;margin-top:3px;color:#b7cbd0}.ds-score{font-variant-numeric:tabular-nums}.ds-score b{white-space:nowrap;font-size:clamp(1.375rem,5vw,1.75rem);font-weight:500}",
+      "refersTo": "personal-match"
+    },
+    {
+      "name": "當輪對戰列",
+      "kind": "custom",
+      "description": "細底線與固定比分欄；狀態使用完整文字。",
+      "html": "<article class=\"ds-match-row\" aria-label=\"範例對戰列\"><div><strong>範例甲</strong><small>先攻</small></div><b class=\"ds-row-score\">— : —</b><div class=\"ds-opponent\"><strong>範例乙</strong><small>後攻</small></div><small class=\"ds-row-status\">等待比分</small></article>",
+      "css": ".ds-match-row{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;display:grid;grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr) 60px;gap:8px;align-items:center;min-height:53px;padding:10px 0;border-bottom:1px solid #566063;background:#242728;color:#eeeae3}.ds-match-row>div{min-width:0}.ds-match-row strong{display:block;overflow-wrap:anywhere;font-size:15px;font-weight:500}.ds-match-row small{display:block;font-size:12px;font-weight:400;margin-top:3px;color:#b7cbd0}.ds-match-row .ds-row-status{font-size:11px;text-align:right}.ds-row-score{font-size:18px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;text-align:center}.ds-opponent{text-align:center}@media(max-width:359px){.ds-match-row{grid-template-columns:minmax(0,1fr) 53px minmax(0,1fr) 52px;gap:5px}.ds-match-row strong{font-size:14px}}@media(min-width:768px){.ds-match-row{grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr) 64px}}",
+      "refersTo": "data-row"
+    },
+    {
+      "name": "系列場次容器",
+      "kind": "card",
+      "description": "平放深色容器，保留場次資料的層次與前往操作。",
+      "html": "<article class=\"ds-event-card\"><h3>範例場次</h3><p>場次資訊</p><a href=\"#event\">查看單場賽況</a></article>",
+      "css": ".ds-event-card{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;padding:12px;border:1px solid #566063;border-radius:16px;background:#2b3132;color:#eeeae3}.ds-event-card h3{font-size:18px;font-weight:600;margin:0}.ds-event-card p{margin:8px 0;color:#b7cbd0;font-size:14px;font-weight:500}.ds-event-card a{display:block;padding:12px;border-radius:8px;text-align:center;text-decoration:none;background:#b9cdd1;color:#202627;font-weight:600;transition:color 140ms ease-out,background-color 140ms ease-out}.ds-event-card a:hover{background:#d2dfe1}.ds-event-card a:focus-visible{outline:2px solid #d18d90;outline-offset:3px;}@media(min-width:768px){.ds-event-card{padding:20px}.ds-event-card p{margin:20px 0}}@media(prefers-reduced-motion:reduce){.ds-event-card a{transition:none}}",
+      "refersTo": "panel"
+    }
+  ],
+  "narrative": {
+    "northStar": "水墨場邊記分板",
+    "overview": "原圖墨馬與書法建立品牌，安靜的炭灰場地承接即時數據。暖白文字、灰藍資訊與低飽和酒紅保留水墨的柔和感；介面以可辨識的選手、對齊比分和細分隔維持現場查詢的速度。\n\n本文件只約束已實作的公開單場與系列頁，以及共享籤表的公開模式。依據為 `src/public.css`、`src/PublicLayout.jsx`、`src/PublicEventLive.jsx`、`src/PublicTournamentPage.jsx`、`src/PublicSeriesPage.jsx` 與 `src/PublicTournamentBracket.jsx` 的 `publicView` 分支。公開樣式的邊界是 `.public-ink`；後台沿用既有樣式，不繼承此色盤或排版規範。",
+    "keyCharacteristics": [
+      "同一張原始墨馬與書法合圖，搭配獨立水墨背景。",
+      "炭灰底、暖白正文、灰藍次要資訊、少量酒紅狀態。",
+      "輕字重、軟圓角、細分隔，比分使用等寬數字對齊。",
+      "手機單欄延伸，桌面分開賽況與排名；長內容保留底部導覽。"
+    ],
+    "rules": [
+      {
+        "name": "The Public Boundary Rule",
+        "body": "此色盤只在公開頁面及明確啟用的共享元件生效；共享籤表的後台預設色盤仍獨立存在。",
+        "section": "colors"
+      },
+      {
+        "name": "The Original Lettering Rule",
+        "body": "Logo 與「黑馬記念」必須使用同一張原圖；不可重繪、替字、拆分、重排、改筆觸或比例。公開品牌不加「26–27」。",
+        "section": "typography"
+      },
+      {
+        "name": "The Ink Ground Rule",
+        "body": "使用 `public/brand/ink-wash.webp` 提供水墨材質，內容容器保持平實，讓原始筆觸與比分承擔視覺重點。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** 保留原始墨馬與書法合圖，使用現有展示比例與來源資產。",
+      "**Do** 以完整選手名稱、對齊比分、先後攻及進度文字共同呈現對戰。",
+      "**Do** 讓姓名換行，讓長表格在自己的容器內捲動，保留底部安全區與可見焦點。",
+      "**Do** 將公開色盤限制在公開頁與共享元件的公開模式。",
+      "**Do** 以實際同步與完賽狀態驅動提示及勝者樣式。"
+    ],
+    "donts": [
+      "**Don't** 重繪或重排原始 Logo，替換書法文字，改動筆觸或比例，或在公開品牌加上年份數字。",
+      "**Don't** 把公開色盤、字重與組件覆寫推進後台。",
+      "**Don't** 用大面積紅色取代現有克制的選取與焦點提示。",
+      "**Don't** 把合成示意資料、舊概念頁的例外或量測字型猜測當成已實作規範。"
+    ]
+  }
+}

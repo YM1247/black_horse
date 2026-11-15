@@ -1,0 +1,14 @@
+build/
+review/
+questions/
+hook.cache.json
+public-directions.json
+public-directions-soft.json
+regions.json
+references/black-horse-poster-original.png
+mocks/decision/*
+!mocks/decision/ab-ink-v2.html
+!mocks/decision/ab-ink-v2.jpg
+!mocks/decision/ab-ink-v2.json
+!mocks/decision/ink-wash-v2.png
+!mocks/decision/ink-wash-v2.prompt.txt
