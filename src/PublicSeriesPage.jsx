@@ -1,3 +1,4 @@
+import SeriesEventPoints from './SeriesEventPoints';
 import { FINAL } from './seasonTournament';
 import React, { useEffect, useMemo, useState } from 'react';
 import { isFirebaseConfigured } from './firebase';
@@ -227,7 +228,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                       {series.events.filter(e => e.rulesVersion !== FINAL).map((event, eventIndex) => (
                         <div key={event.id} className={`bg-[#161920] px-3 py-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 ${series.events.length % 2 === 1 && eventIndex === series.events.length - 1 ? 'col-span-2' : ''}`}>
                           <span className="text-xs font-bold text-slate-400 break-words">{event.name}</span>
-                          <span className="font-black text-slate-200">{standing.eventPoints[event.eventCode] ?? (standing.countedEvents ? '—' : 0)}{standing.countedEvents?.includes(event.eventCode) ? ' 採計' : ''}</span>
+                          <span className="font-black text-slate-200"><SeriesEventPoints standing={standing} eventCode={event.eventCode} /></span>
                         </div>
                       ))}
                     </div>
@@ -251,7 +252,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                       <tr key={standing.id || standing.name} className="border-t border-slate-800">
                         <td className="p-3 text-center font-black text-[#b6d2d4] sticky left-0 z-10 bg-[#161920] w-12 min-w-12 max-w-12">{standing.displayRank}</td>
                         <td title={standing.name} className="p-3 font-black text-white sticky left-12 z-10 bg-[#161920] w-40 min-w-40 max-w-40 overflow-hidden break-words leading-tight border-r border-slate-700 shadow-[8px_0_12px_rgba(0,0,0,0.35)]">{standing.name}</td>
-                        {series.events.filter(e => e.rulesVersion !== FINAL).map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300 min-w-[5.5rem]">{standing.eventPoints[event.eventCode] ?? (standing.countedEvents ? '—' : 0)}{standing.countedEvents?.includes(event.eventCode) ? ' 採計' : ''}</td>)}
+                        {series.events.filter(e => e.rulesVersion !== FINAL).map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300 min-w-[5.5rem]"><SeriesEventPoints standing={standing} eventCode={event.eventCode} /></td>)}
                         <td className="p-3 text-center text-xl font-black text-[#f1c6a6] min-w-24">{standing.totalPoints}</td>
                       </tr>
                     ))}

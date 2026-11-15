@@ -164,3 +164,7 @@
 .ranking-record { display: inline-block; color: #f1c6a6; font-size: 1.125rem; font-weight: 850; line-height: 1.5; font-variant-numeric: tabular-nums; }
 .record { align-items: center; }
 .event-board .record .ranking-record { flex-basis: 100%; }
+
+.series-event-points { font-variant-numeric: tabular-nums; }
+.series-event-points.is-counted { color: #f1c6a6; font-size: 1.125rem; font-weight: 850; }
+.series-event-points.is-discarded { color: #84909f; font-size: .875rem; font-weight: 500; }

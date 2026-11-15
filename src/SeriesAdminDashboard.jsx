@@ -1,3 +1,4 @@
+import SeriesEventPoints from './SeriesEventPoints';
 import { FINAL } from './seasonTournament';
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
@@ -189,7 +190,7 @@ export default function SeriesAdminDashboard({
                 <tr key={standing.id || standing.name} className="border-t border-slate-800">
                   <td className="p-3 text-center font-black text-[#b6d2d4]">{standing.displayRank}</td>
                   <td className="p-3 font-black text-white">{standing.name}</td>
-                  {series.events.filter(e => e.rulesVersion !== FINAL).map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300">{standing.eventPoints[event.eventCode] ?? (standing.countedEvents ? '—' : 0)}{standing.countedEvents?.includes(event.eventCode) ? ' 採計' : ''}</td>)}
+                  {series.events.filter(e => e.rulesVersion !== FINAL).map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300"><SeriesEventPoints standing={standing} eventCode={event.eventCode} /></td>)}
                   <td className="p-3 text-center text-slate-400">{standing.participatedEvents}</td>
                   <td className="p-3 text-center text-xl font-black text-[#f1c6a6]">{standing.totalPoints}</td>
                 </tr>
