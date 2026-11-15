@@ -6,7 +6,7 @@ export const createId = () => {
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const shuffle = (items, random) => {
+export const shuffle = (items, random = Math.random) => {
   const result = [...items];
   for (let index = result.length - 1; index > 0; index -= 1) {
     const target = Math.floor(random() * (index + 1));
@@ -160,6 +160,24 @@ export const pairSwissRound = ({ players, rounds = [], roundNum, random = Math.r
   return assignSides ? matches.map(match => assignAttackOrder(match, random)) : matches;
 };
 
+// Retain the Black Horse group/floater mechanism, using votes as the group
+// score and the complete Akashiki ranking to order entrants within each group.
+export const pairVoteSwissRound = ({ players, rounds, roundNum, random = Math.random }) => {
+  if (roundNum === 1) return pairSwissRound({ players, rounds, roundNum, random, assignSides: true });
+  const pool = rankPlayers(players, rounds, true).filter(p => !p.isWithdrawn && !p.isEliminated);
+  const history = buildOpponentHistory(rounds);
+  const scores = [...new Set(pool.map(p => p.votes))];
+  const matches = [];
+  let floater = null;
+  for (const [i, score] of scores.entries()) {
+    const group = pool.filter(p => p.votes === score);
+    if (floater) group.unshift(floater);
+    floater = group.length % 2 && i < scores.length - 1 ? group.pop() : null;
+    matches.push(...pairEvenGroup(group, history));
+  }
+  return matches.map(match => assignAttackOrder(match, random));
+};
+
 export const assignAttackOrder = (match, random = Math.random) => {
   const [left, right] = random() < 0.5 ? [match.p1, match.p2] : [match.p2, match.p1];
   return { ...match, p1: left, p2: right, attackOrder: true,
@@ -217,7 +235,7 @@ export const getRankingPoints = (rank) => {
   return RANKING_POINTS_TABLE.find(range => numericRank >= range.from && numericRank <= range.to)?.points || 0;
 };
 
-export const rankPlayers = (players, rounds) => {
+export const rankPlayers = (players, rounds, votesFirst = false) => {
   const activePlayers = players.filter(player => !player.isWithdrawn && !player.isMC).map(player => ({ ...player }));
   const allPlayers = players.filter(player => !player.isMC);
   const byId = new Map(allPlayers.map(player => [player.id, player]));
@@ -254,8 +272,7 @@ export const rankPlayers = (players, rounds) => {
     player.opponentsOpponentWinRate = opponentsOpponentWinRate(player.id);
   });
   activePlayers.sort((a, b) =>
-    b.wins - a.wins ||
-    b.votes - a.votes ||
+    (votesFirst ? b.votes - a.votes || b.wins - a.wins : b.wins - a.wins || b.votes - a.votes) ||
     b.opponentWinRate - a.opponentWinRate ||
     b.opponentsOpponentWinRate - a.opponentsOpponentWinRate
   );

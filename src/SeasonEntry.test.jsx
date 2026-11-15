@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 import { TournamentAdminApp } from './App';
 import { QUALIFIER } from './seasonTournament';
 import { createCloudTournament, saveCloudTournament } from './services/tournamentRepository';
+import { AKASHIKI, AKASHIKI_EVENT } from './tournamentState';
 
 vi.mock('./firebase', () => ({ isFirebaseConfigured: true }));
 vi.mock('./services/playerDirectory', () => ({
@@ -70,4 +71,31 @@ it('首頁優先顯示黑馬記念，展開封存系列後仍可進入模擬賽'
   expect(active.compareDocumentPosition(archived) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(archived);
   expect(await screen.findByRole('heading', { name: '模擬賽' })).toBeInTheDocument();
+});
+
+it('合作賽與系列賽同層，建立單場專屬賽制並可返回首頁再進入', async () => {
+  createCloudTournament.mockClear();
+  saveCloudTournament.mockClear();
+  render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
+  const entry = await screen.findByRole('button', { name: /赤式x黑馬記念合作賽.*進入管理/ });
+  expect(screen.getByRole('button', { name: /黑馬記念26-27.*進入管理/ }).parentElement).toBe(entry.parentElement);
+  fireEvent.click(entry);
+  expect(await screen.findByRole('heading', { name: AKASHIKI_EVENT.name })).toBeInTheDocument();
+  const created = createCloudTournament.mock.calls[0][0];
+  expect(created).toMatchObject({ name: AKASHIKI_EVENT.name, eventCode: 'AKASHIKI', tournament: { rulesVersion: AKASHIKI, judgeCount: 3, doubleElimination: false } });
+  expect(created.tournament).not.toHaveProperty('seriesId');
+  expect(screen.getByRole('heading', { name: '名單 0／32' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '開始第一輪' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: '返回賽事管理' }));
+  expect(await screen.findByRole('button', { name: /赤式x黑馬記念合作賽.*進入管理/ })).toBeInTheDocument();
+  expect(saveCloudTournament).not.toHaveBeenCalled();
+});
+
+it('一般建立表單不能占用合作賽代碼', async () => {
+  createCloudTournament.mockClear();
+  render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
+  fireEvent.change(await screen.findByLabelText('新賽事代碼'), { target: { value: 'AKASHIKI' } });
+  fireEvent.click(screen.getByRole('button', { name: '建立並進入', exact: true }));
+  expect(await screen.findByText(/AKASHIKI 為合作賽專用代碼/)).toBeInTheDocument();
+  expect(createCloudTournament).not.toHaveBeenCalled();
 });

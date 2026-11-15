@@ -18,30 +18,32 @@ const getPlayerFontSize = (name = '') => {
   return '1rem';
 };
 
-const groupRoundMatches = (matches, roundIndex) => matches.reduce((groups, match) => {
-  const p1Wins = match.p1WinsSnapshot || 0;
-  const p2Wins = match.p2WinsSnapshot || 0;
+const groupRoundMatches = (matches, roundIndex, votesFirst) => matches.reduce((groups, match) => {
+  const p1Wins = (votesFirst ? match.p1VotesSnapshot : match.p1WinsSnapshot) || 0;
+  const p2Wins = (votesFirst ? match.p2VotesSnapshot : match.p2WinsSnapshot) || 0;
   const isFloat = !match.isMCMatch && p1Wins !== p2Wins;
   const score = p1Wins + (match.isMCMatch ? p1Wins : p2Wins);
+  const key = votesFirst ? `${Math.max(p1Wins, p2Wins)}:${Math.min(p1Wins, p2Wins)}` : score;
 
-  if (!groups[score]) {
-    groups[score] = {
+  if (!groups[key]) {
+    groups[key] = {
+      score,
       isFloat,
-      label: isFloat ? '跨組對戰' : `${p1Wins} - ${roundIndex - p1Wins}`,
+      label: votesFirst ? isFloat ? `${Math.max(p1Wins, p2Wins)} 票 ↔ ${Math.min(p1Wins, p2Wins)} 票` : `${p1Wins} 票組` : isFloat ? '跨組對戰' : `${p1Wins} - ${roundIndex - p1Wins}`,
       matches: []
     };
   }
-  groups[score].matches.push(match);
+  groups[key].matches.push(match);
   return groups;
 }, {});
 
-export default function PublicTournamentBracket({ rounds = [], renderScore }) {
+export default function PublicTournamentBracket({ rounds = [], renderScore, votesFirst = false }) {
   return (
     <div className={`w-full ${renderScore ? 'overflow-x-auto' : ''}`} role="region" aria-label="完整瑞士制樹狀圖">
       <div className={`${renderScore ? 'admin-swiss-rounds' : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3'} gap-5 md:gap-8 md:p-2 items-start`}>
         {rounds.map((matches, roundIndex) => {
-          const groups = groupRoundMatches(matches, roundIndex);
-          const sortedScores = Object.keys(groups).map(Number).sort((first, second) => second - first);
+          const groups = groupRoundMatches(matches, roundIndex, votesFirst);
+          const sortedScores = Object.keys(groups).sort((first, second) => groups[second].score - groups[first].score);
 
           return (
             <div key={roundIndex} className="flex flex-col gap-6 w-full">

@@ -4,6 +4,7 @@ import { Trophy, Users, Swords, UserPlus, Play, Medal, ChevronRight, AlertTriang
 import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 import {
   createEmptyTournament,
+  AKASHIKI_EVENT,
   createId,
   DEFAULT_DOUBLE_ELIMINATION,
   DEFAULT_JUDGE_COUNT,
@@ -499,7 +500,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const selectedSeries = seriesDefinitions.find(series => series.id === selectedSeriesId) || null;
   const activeSeries = seriesDefinitions.find(series => series.id === activeSeriesId) || null;
   const seriesEventCodes = new Set(seriesDefinitions.flatMap(series => series.events.map(event => event.eventCode)));
-  const standaloneTournaments = cloudTournaments.filter(tournament => !seriesEventCodes.has(tournament.id));
+  const standaloneTournaments = cloudTournaments.filter(tournament => !seriesEventCodes.has(tournament.id) && tournament.id !== AKASHIKI_EVENT.eventCode);
   const visibleStandaloneTournaments = standaloneTournaments.filter(tournament => {
     const keyword = standaloneSearch.trim().toLocaleLowerCase('zh-TW');
     const matchesSearch = !keyword
@@ -604,6 +605,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const handleCreateCloudTournament = async () => {
     setCloudError('');
     try {
+      if (normalizeEventCode(newCloudCode) === AKASHIKI_EVENT.eventCode)
+        throw new Error('AKASHIKI 為合作賽專用代碼，請由「赤式x黑馬記念合作賽」入口建立。');
       if (activeCloudCode && !await persistCurrentCloudState()) return;
       const tournament = createEmptyTournament({
         rulesVersion: newSeasonRules ? QUALIFIER : undefined,
@@ -647,7 +650,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const handleCreateSeriesTournament = async (series, eventDefinition) => {
     const existing = cloudTournaments.find(tournament => tournament.id === eventDefinition.eventCode);
     if (existing) {
-      await handleSelectCloudTournament(existing.id, series.id);
+      await handleSelectCloudTournament(existing.id, series?.id || '');
       return;
     }
 
@@ -664,8 +667,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         name: eventDefinition.name,
         tournament: {
           ...tournament,
-          seriesId: series.id,
-          seriesEventId: eventDefinition.id
+          ...(series ? { seriesId: series.id, seriesEventId: eventDefinition.id } : {})
         }
       });
       cloudReadyRef.current = false;
@@ -683,7 +685,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setRunNumber(tournament.runNumber);
       setResultLocked(tournament.resultLocked);
       setCurrentVersion(tournament.currentVersion);
-      setActiveSeriesId(series.id);
+      setActiveSeriesId(series?.id || '');
       setSelectedSeriesId('');
       setActiveCloudCode(code);
       setIsCloudModalOpen(false);
@@ -1509,13 +1511,13 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                   <div className="admin-event-library">
                   {!activeCloudCode && <section className="p-5 rounded-xl border-2" style={{ backgroundColor: '#131e24', borderColor: COLORS.inkOrange }}>
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                      <h3 className="font-black text-lg">系列賽</h3>
+                      <h3 className="font-black text-lg">系列賽與特殊賽</h3>
                       <label className="flex items-center gap-2 text-sm">
                         <input type="checkbox" checked={showArchivedSeries} onChange={event => setShowArchivedSeries(event.target.checked)} />
                         顯示已封存系列賽
                       </label>
                     </div>
-                    <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>進入系列賽後可分別管理各場報名與賽程，並查看跨場積分。</p>
+                    <p className="text-xs mb-4" style={{ color: COLORS.textMuted }}>選擇系列賽管理各站與跨場積分，或直接進入單場特殊賽。</p>
                     <div className="grid sm:grid-cols-2 gap-3">
                       {seriesDefinitions.filter(series => showArchivedSeries || !series.isArchived).map(series => (
                         <button key={series.id} type="button" onClick={() => { setCloudError(''); setSelectedSeriesId(series.id); }}
@@ -1528,6 +1530,18 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
                           <span className="text-sm font-black whitespace-nowrap" style={{ color: COLORS.inkOrange }}>進入管理 →</span>
                         </button>
                       ))}
+                      <button type="button" disabled={!isOnline || Boolean(creatingSeriesEventCode)}
+                        onClick={() => handleCreateSeriesTournament(null, AKASHIKI_EVENT)}
+                        className="p-5 rounded-xl border text-left hover:bg-white/5 flex items-center justify-between gap-4 disabled:opacity-50"
+                        style={{ borderColor: COLORS.inkOrange }}>
+                        <div>
+                          <div className="text-xl font-black text-white">{AKASHIKI_EVENT.name}</div>
+                          <div className="text-xs font-bold mt-2" style={{ color: COLORS.textMuted }}>單場合作賽・32 人・三輪三票・票數優先・十六強淘汰賽</div>
+                        </div>
+                        <span className="text-sm font-black whitespace-nowrap" style={{ color: COLORS.inkOrange }}>
+                          {creatingSeriesEventCode === AKASHIKI_EVENT.eventCode ? '建立中…' : '進入管理 →'}
+                        </span>
+                      </button>
                     </div>
                   </section>}
 

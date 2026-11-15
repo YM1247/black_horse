@@ -2,6 +2,11 @@ import { applyDoubleElimination, createId } from './tournament';
 
 export const QUALIFIER = 'qualifier-26-27';
 export const FINAL = 'final-26-27';
+export const AKASHIKI = 'Akashiki';
+export const AKASHIKI_EVENT = Object.freeze({
+  name: '赤式x黑馬記念合作賽', eventCode: 'AKASHIKI', rulesVersion: AKASHIKI,
+  judgeCount: 3, doubleElimination: false
+});
 export const MAX_PLAYERS = 32;
 export const SUPPORTED_JUDGE_COUNTS = Object.freeze([3, 5]);
 export const DEFAULT_JUDGE_COUNT = 3;
@@ -45,7 +50,8 @@ export const normalizeTournamentData = (data = {}) => {
   const rounds = normalizeRounds(Array.isArray(data.rounds) ? data.rounds : []);
   const qualifier = data.rulesVersion === QUALIFIER;
   const final = data.rulesVersion === FINAL;
-  const doubleElimination = qualifier || (!final && Boolean(data.doubleElimination));
+  const akashiki = data.rulesVersion === AKASHIKI;
+  const doubleElimination = qualifier || (!final && !akashiki && Boolean(data.doubleElimination));
   const normalizedPlayers = (Array.isArray(data.players) ? data.players : [])
     .map(normalizePlayer)
     .filter(player => player.name);
@@ -55,13 +61,13 @@ export const normalizeTournamentData = (data = {}) => {
       player.revivedRound === rounds.length ? { ...player, isEliminated:false } : player),
     rounds,
     currentRoundNum: Math.max(1, Number(data.currentRoundNum) || 1),
-    judgeCount: qualifier ? 3 : final ? 5 : normalizeJudgeCount(data.judgeCount, inferJudgeCount(rounds)),
+    judgeCount: qualifier || akashiki ? 3 : final ? 5 : normalizeJudgeCount(data.judgeCount, inferJudgeCount(rounds)),
     doubleElimination,
     runId: String(data.runId || createId()),
     runNumber: Math.max(1, Number(data.runNumber) || 1),
     resultLocked: Boolean(data.resultLocked),
     currentVersion: Math.max(0, Number(data.currentVersion) || 0),
-    ...(qualifier || final ? {
+    ...(qualifier || final || akashiki ? {
       rulesVersion: data.rulesVersion,
       qualificationConfig: data.qualificationConfig || {},
       qualificationSources: data.qualificationSources || {},

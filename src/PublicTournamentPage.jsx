@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { isFirebaseConfigured } from './firebase';
 import { normalizeEventCode, subscribeTournament, validateEventCode } from './services/tournamentRepository';
-import { eventRanking, FINAL } from './seasonTournament';
+import { eventRanking, hasPlayoff } from './seasonTournament';
+import { AKASHIKI } from './tournamentState';
 import PlayoffBracket from './PlayoffBracket';
 import PublicTournamentBracket from './PublicTournamentBracket';
 import { BLACK_HORSE, SERIES } from './series';
@@ -14,16 +15,17 @@ const PHASE_LABELS = {
 
 export function PublicTournamentRanking({ tournament, rankedPlayers, prominent = false }) {
   const isFinished = tournament.phase === 'finished';
-  const isFinal = tournament.rulesVersion === FINAL;
+  const isFinal = hasPlayoff(tournament);
   const title = isFinal ? '瑞士制排名' : isFinished ? '最終排名' : '即時排名';
   return <section id="event-ranking" aria-label={title} className={'event-board ' + (prominent ? 'mb-8' : '')}>
     <h2>{title}</h2>
+    {tournament.rulesVersion === AKASHIKI && <p>總票數 → 勝場 → 對手勝率 → 對手的對手勝率</p>}
     {rankedPlayers.length === 0 && <p className="text-slate-300">尚無選手排名。</p>}
     <ol>{rankedPlayers.map(player => <li key={player.id}>
       <span className="place">{player.displayRank}</span>
       <strong className="stage-name">{player.name}</strong>
       {isFinished && !isFinal && <b className="event-points">本場積分 {player.rankingPoints}</b>}
-      <div className="record"><strong className="ranking-record">{player.wins} 勝 {player.losses || 0} 敗</strong><span>{player.votes} 票</span>
+      <div className="record">{tournament.rulesVersion === AKASHIKI && <span>{player.votes} 票</span>}<strong className="ranking-record">{player.wins} 勝 {player.losses || 0} 敗</strong>{tournament.rulesVersion !== AKASHIKI && <span>{player.votes} 票</span>}
         {!player.isWithdrawn && <><span>對手勝率 {(player.opponentWinRate * 100).toFixed(1)}%</span>
           <span>次級勝率 {(player.opponentsOpponentWinRate * 100).toFixed(1)}%</span></>}
         {player.seedCredit && <span>種子 · 首輪 1 勝 5 票</span>}
@@ -162,7 +164,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
             {rounds.length > 0 && <nav aria-label="單場賽況導覽" className="spectator-jumps">
               {rounds.map((_, i) => <a key={i} href={`#swiss-round-${i+1}`}>第 {i+1} 輪</a>)}
               <a href="#event-ranking">排名</a>
-              {tournament.playoffSeeds?.length > 0 && <a href="#playoff">八強</a>}
+              {tournament.playoffSeeds?.length > 0 && <a href="#playoff">{tournament.rulesVersion === AKASHIKI ? '十六強' : '八強'}</a>}
             </nav>}
             {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} />}
             {tournament.phase === 'finished' && (
@@ -173,10 +175,10 @@ export default function PublicTournamentPage({ initialCode = '' }) {
               <section className="mb-10 bg-[#11151b] border border-slate-700 rounded-2xl p-4 md:p-7">
                 <div className="mb-6">
                   <h2 className="text-2xl md:text-3xl font-black text-[#b6d2d4]">完整瑞士制樹狀圖</h2>
-                  <p className="mt-2 text-sm font-bold text-slate-500">依輪次與勝場分組呈現，比分及戰績會隨後台操作即時更新。</p>
+                  <p className="mt-2 text-sm font-bold text-slate-500">依輪次與{tournament.rulesVersion === AKASHIKI ? '總票數' : '勝場'}分組呈現，比分及戰績會隨後台操作即時更新。</p>
                 </div>
                 {tournament.players?.some(p=>p.seedCredit) && <p className="mb-4 text-slate-300">首輪種子（一勝五票） · {tournament.players.filter(p=>p.seedCredit).map(p=>p.name).join('、')}</p>}
-                <PublicTournamentBracket rounds={rounds} />
+                <PublicTournamentBracket rounds={rounds} votesFirst={tournament.rulesVersion === AKASHIKI} />
               </section>
             )}
 

@@ -1,5 +1,6 @@
-import { assignAttackOrder, createMatch } from './tournament';
+import { assignAttackOrder, createMatch, shuffle } from './tournament';
 import { eventRanking, publicPlayer, refreshRecords } from './seasonTournament';
+import { AKASHIKI } from './tournamentState';
 
 // Each tied group that affects the draw needs an explicit permutation.
 // Groups entirely below the cutoff or entirely within the six seeded places do not.
@@ -80,14 +81,20 @@ export const playoffGames = [
   ['bronze', '季軍戰', 's1', 's2'],
   ['gold', '冠軍戰', 's1', 's2']
 ];
+export const akashikiPlayoffGames = [
+  ...Array.from({ length: 8 }, (_, i) => [`r${i + 1}`, `十六強 ${i + 1}`, String(i * 2 + 1), String(i * 2 + 2)]),
+  ...Array.from({ length: 4 }, (_, i) => [`q${i + 1}`, `八強 ${i + 1}`, `r${i * 2 + 1}`, `r${i * 2 + 2}`]),
+  ...playoffGames.slice(4)
+];
+export const gamesFor = (event) => event.rulesVersion === AKASHIKI ? akashikiPlayoffGames : playoffGames;
 export function resultPlayer(match, winner = true) {
   if (!match?.isDone) return null;
   return match.p1Votes > match.p2Votes === winner ? match.p1 : match.p2;
 }
 
-export function buildPlayoff(seeds, existing = {}) {
+export function buildPlayoff(seeds, existing = {}, games = playoffGames) {
   const bracket = {};
-  for (const [key, , first, second] of playoffGames) {
+  for (const [key, , first, second] of games) {
     const entrant = (source) => seeds[Number(source) - 1] || resultPlayer(bracket[source], key !== 'bronze');
     const a = entrant(first),
       b = entrant(second);
@@ -102,36 +109,69 @@ export function buildPlayoff(seeds, existing = {}) {
 }
 
 export function playoffSelection(event, decisions = event.playoffDecisions || {}) {
+  const akashiki = event.rulesVersion === AKASHIKI;
   return resolveOrder(
     eventRanking(event, true).filter((p) => !p.isWithdrawn),
-    8,
-    decisions
+    akashiki ? 16 : 8,
+    decisions,
+    akashiki ? 16 : 0
   );
 }
 
-export function seedPlayoff(event, decisions) {
+export function seedPlayoff(event, decisions = event.playoffDecisions || {}, random = Math.random) {
   if (event.rounds.length !== 3 || event.rounds.flat().some(match => !match.isDone)) throw new Error('瑞士制三輪需先完賽。');
   const selection = playoffSelection(event, decisions);
-  if (selection.players.length !== 8 || selection.ties.length) throw new Error('請先確認八強種子順序。');
-  const seeds = selection.players.map(publicPlayer);
+  const akashiki = event.rulesVersion === AKASHIKI;
+  if (selection.players.length !== (akashiki ? 16 : 8) || selection.ties.length) throw new Error(akashiki ? '請先確認十六強入圍名單與同分裁定。' : '請先確認八強種子順序。');
+  let seeds = selection.players.map(publicPlayer);
+  if (akashiki) {
+    if (event.playoffSeeds?.length === 16) {
+      // Corrections retain the saved draw. Replace only displaced entrants.
+      const byId = new Map(seeds.map(p => [p.id, p]));
+      const replacements = seeds.filter(p => !event.playoffSeeds.some(old => old.id === p.id));
+      seeds = event.playoffSeeds.map(p => byId.get(p.id) || replacements.shift());
+    } else seeds = shuffle(seeds, random);
+  }
   return {
     ...event,
     playoffSeeds: seeds,
     playoffDecisions: decisions,
-    bracket: buildPlayoff(seeds, event.bracket)
+    bracket: buildPlayoff(seeds, event.bracket, gamesFor(event))
   };
 }
 
-export function scorePlayoff(event, key, left) {
-  if (!event.bracket[key] || !Number.isInteger(left) || left < 0 || left > 5) throw new Error('無效的五票比分。');
+export function scorePlayoff(event, key, left, gameIndex) {
+  if (event.rulesVersion === AKASHIKI && key === 'gold') return scoreFinalGame(event, left, gameIndex);
+  const judges = event.rulesVersion === AKASHIKI ? 3 : 5;
+  if (!event.bracket[key] || !Number.isInteger(left) || left < 0 || left > judges) throw new Error(`無效的${judges}票比分。`);
   const updated = {
     ...event.bracket,
-    [key]: { ...event.bracket[key], p1Votes: left, p2Votes: 5 - left, isDone: true }
+    [key]: { ...event.bracket[key], p1Votes: left, p2Votes: judges - left, isDone: true }
   };
-  return { ...event, bracket: buildPlayoff(event.playoffSeeds, updated) };
+  return { ...event, bracket: buildPlayoff(event.playoffSeeds, updated, gamesFor(event)) };
+}
+
+function scoreFinalGame(event, left, gameIndex) {
+  const match = event.bracket?.gold;
+  const games = [...(match?.games || [])];
+  if (!match || !Number.isInteger(left) || left < 0 || left > 3 ||
+      !Number.isInteger(gameIndex) || gameIndex < 0 || gameIndex > 2 || gameIndex > games.length ||
+      (match.isDone && gameIndex >= games.length)) throw new Error('請依序登錄冠軍戰每局的三票比分。');
+  games[gameIndex] = { p1Votes: left, p2Votes: 3 - left };
+  let p1Wins = 0, p2Wins = 0, played = 0;
+  for (const game of games) {
+    if (p1Wins === 2 || p2Wins === 2) break;
+    if (game.p1Votes > game.p2Votes) p1Wins++;
+    else p2Wins++;
+    played++;
+  }
+  return { ...event, bracket: { ...event.bracket, gold: {
+    ...match, games: games.slice(0, played), p1Votes: p1Wins, p2Votes: p2Wins,
+    isDone: p1Wins === 2 || p2Wins === 2
+  } } };
 }
 
 export const displacedGames = (before, after) =>
-  playoffGames
+  gamesFor(before)
     .filter(([key]) => before.bracket?.[key] && before.bracket[key].id !== after.bracket?.[key]?.id)
     .map(([, name]) => name);

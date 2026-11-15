@@ -1,14 +1,17 @@
 import {
   applyDoubleElimination,
   pairSwissRound,
+  pairVoteSwissRound,
   rankPlayers,
   recalculatePlayerRecords,
   updateMatchScore
 } from './tournament';
-import { createId, FINAL, QUALIFIER } from './tournamentState';
+import { AKASHIKI, createId, FINAL, QUALIFIER } from './tournamentState';
 
 export { FINAL, QUALIFIER };
-export const isSeasonEvent = (event) => [QUALIFIER, FINAL].includes(event?.rulesVersion);
+export const isSeasonEvent = (event) => [QUALIFIER, FINAL, AKASHIKI].includes(event?.rulesVersion);
+export const hasPlayoff = (event) => [FINAL, AKASHIKI].includes(event?.rulesVersion);
+export const playerLimit = (event) => event?.rulesVersion === AKASHIKI ? 32 : 48;
 
 export const publicPlayer = ({ id, name }) => ({ id, name, wins: 0, losses: 0, votes: 0 });
 export const organizer = (name = '主辦', id = 'organizer') => ({
@@ -16,13 +19,13 @@ export const organizer = (name = '主辦', id = 'organizer') => ({
   isOrganizer: true
 });
 
-export function registeredPlayers(players, additions) {
+export function registeredPlayers(players, additions, limit = 48) {
   const result = [...players];
   for (const player of additions) {
     if (result.some((item) => item.id === player.id)) throw new Error('這位選手已在本場名單中。');
     result.push(publicPlayer(player));
   }
-  if (result.length > 48) throw new Error('正式選手上限為 48 人。');
+  if (result.length > limit) throw new Error(`正式選手上限為 ${limit} 人。`);
   return result;
 }
 
@@ -35,7 +38,8 @@ export function groupPoints(wins, losses, place, count) {
 }
 
 export function eventRanking(event, final = event.phase === 'finished') {
-  const ranked = rankPlayers(event.players || [], event.rounds || []);
+  const ranked = rankPlayers(event.players || [], event.rounds || [], event.rulesVersion === AKASHIKI);
+  if (event.rulesVersion === AKASHIKI) return ranked.filter(p => !final || !p.isOrganizer).map(p => ({ ...p, rankingPoints: 0 }));
   if (!isSeasonEvent(event)) return ranked;
   const rows = ranked.filter((player) => !final || !player.isOrganizer);
   const groups = new Map();
@@ -95,7 +99,8 @@ export function nextSwissRound(event, { reviveId, substituteName } = {}) {
     throw new Error('請先完成當輪全部比分。');
   let players = [...event.players];
   if (roundNum === 1 && players.length < 2) throw new Error('至少需要兩位選手。');
-  if (roundNum === 1 && players.length > 48) throw new Error('正式選手上限為 48 人。');
+  if (roundNum === 1 && event.rulesVersion === AKASHIKI && players.length !== 32) throw new Error('合作賽需確認 32 位選手後開賽。');
+  if (roundNum === 1 && players.length > playerLimit(event)) throw new Error(`正式選手上限為 ${playerLimit(event)} 人。`);
   if (roundNum === 1 && players.length % 2) players.push(organizer());
   const decision = nextRoundDecision({ ...event, players });
   if (decision.revival) {
@@ -109,7 +114,8 @@ export function nextSwissRound(event, { reviveId, substituteName } = {}) {
     if (!substituteName?.trim()) throw new Error('請指定主辦方補位選手。');
     players.push(organizer(substituteName.trim(), createId()));
   }
-  const matches = pairSwissRound({ players, rounds: event.rounds, roundNum, assignSides: true });
+  const pair = event.rulesVersion === AKASHIKI ? pairVoteSwissRound : pairSwissRound;
+  const matches = pair({ players, rounds: event.rounds, roundNum, assignSides: true });
   const active = players.filter((player) => !player.isWithdrawn && !player.isEliminated);
   if (!matches.length || matches.length * 2 !== active.length || matches.some((match) => match.isMCMatch))
     throw new Error('無法為所有在賽選手建立對戰。');

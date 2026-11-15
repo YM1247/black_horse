@@ -6,7 +6,8 @@ import { saveIdentity } from '../src/services/playerDirectory';
 import { reviewKey } from '../src/playerIdentity';
 import { BLACK_HORSE, SIMULATION_SERIES } from '../src/series';
 import { ensureCloudSeries, createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore } from '../src/services/tournamentRepository';
-import { createEmptyTournament } from '../src/tournamentState';
+import { AKASHIKI, createEmptyTournament } from '../src/tournamentState';
+import { gamesFor, playoffSelection, scorePlayoff, seedPlayoff } from '../src/finalTournament';
 import { QUALIFIER, nextSwissRound, publicPlayer, scoreSwiss } from '../src/seasonTournament';
 vi.mock('../src/firebase', () => ({ getFirebaseServices: vi.fn(), isFirebaseConfigured: true }));
 import { readFile } from 'node:fs/promises';
@@ -249,6 +250,39 @@ test('new qualifier can persist all three rounds, lock a version and expose only
   expect(data.rulesVersion).toBe(QUALIFIER);
   expect(data.players).toHaveLength(48);
   expect(JSON.stringify(data)).not.toMatch(/realName|phone/);
+});
+
+test('合作賽保存十六強與 BO3；鎖定後須建立更正版本，1:1 可重開補局再鎖定', async () => {
+  await seedAdmin();
+  const admin = testEnvironment.authenticatedContext('admin-user').firestore();
+  getFirebaseServices.mockReturnValue({ db: admin, auth: { currentUser: { uid: 'admin-user' } } });
+  let state = { ...createEmptyTournament({ rulesVersion: AKASHIKI }), players: Array.from({ length: 32 }, (_, i) => publicPlayer({ id: String(i), name: '合作選手' + i })) };
+  const code = await createCloudTournament({ eventCode: 'AKASHIKI', name: '赤式x黑馬記念合作賽', tournament: state });
+  let revision = 0;
+  for (let round = 0; round < 3; round++) {
+    state = nextSwissRound(state);
+    for (const match of state.rounds[round]) state = scoreSwiss(state, round, match.id, 3);
+    revision = await saveCloudTournament(code, state, { action: '合作賽瑞士輪' }, revision);
+  }
+  const decisions = Object.fromEntries(playoffSelection(state).ties.map(({ key, group }) => [key, group.map(p => p.id)]));
+  state = seedPlayoff(state, decisions);
+  for (const [key] of gamesFor(state)) if (key !== 'gold') state = scorePlayoff(state, key, 3);
+  state = scorePlayoff(scorePlayoff(state, 'gold', 3, 0), 'gold', 3, 1);
+  let result = await saveTournamentVersion(code, state, { expectedRevision: revision, type: 'completed', reason: '合作賽完賽' });
+  const ref = doc(admin, 'tournaments', code);
+  await assertFails(updateDoc(ref, { revision: result.revision + 1, 'bracket.gold.games': [] }));
+  state = { ...scorePlayoff(state, 'gold', 0, 0), phase: 'playing', resultLocked: false };
+  result = await saveTournamentVersion(code, state, { expectedRevision: result.revision, type: 'reseed', reason: '首局更正需補第三局' });
+  expect((await getDoc(ref)).data()).toMatchObject({ phase: 'playing', resultLocked: false, bracket: { gold: { isDone: false, p1Votes: 1, p2Votes: 1 } } });
+  state = scorePlayoff(state, 'gold', 0, 2);
+  result = await saveTournamentVersion(code, state, { expectedRevision: result.revision, type: 'completed', reason: '補局完賽' });
+  const publicDb = testEnvironment.unauthenticatedContext().firestore();
+  const data = decodeTournamentFromFirestore((await getDoc(doc(publicDb, 'tournaments', code))).data());
+  expect(data).toMatchObject({ rulesVersion: AKASHIKI, phase: 'finished', resultLocked: true, currentVersion: 3 });
+  expect(data.bracket.gold.games).toHaveLength(3);
+  expect(data.playoffSeeds).toHaveLength(16);
+  expect(data.rounds.map(r => r.length)).toEqual([16, 16, 16]);
+  expect(JSON.stringify(data)).not.toMatch(/realName|phone|seriesId/);
 });
 
 test('既有系列與已完賽場次改用中文場名；重新開啟不重複寫入', async () => {
