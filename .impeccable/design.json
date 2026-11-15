@@ -203,6 +203,10 @@
       "personal-score": {
         "displayName": "個人比分",
         "purpose": "個人對戰主比分，使用等寬數字。"
+      },
+      "navigation": {
+        "displayName": "純文字導覽",
+        "purpose": "14px、字重400，僅顯示有內容的目的地；不足兩項時省略。"
       }
     },
     "shadows": [
@@ -273,9 +277,9 @@
     {
       "name": "公開底部導覽",
       "kind": "nav",
-      "description": "固定導覽的三個目的地；展示樣本留在面板流中。",
-      "html": "<nav class=\"ds-bottom\" aria-label=\"公開頁面導覽\"><a href=\"#current-round\" aria-current=\"page\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"M8 21h8m-4-5v5M7 4h10v5a5 5 0 0 1-10 0V4ZM7 6H4v3a4 4 0 0 0 4 4m9-7h3v3a4 4 0 0 1-4 4\"/></svg><span>賽況</span></a><a href=\"#event-ranking\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"M10 6h11M10 12h11M10 18h11M3 4h1v4M3 10h2v2H3v2h2M3 16h2v4H3m0-2h2\"/></svg><span>排名</span></a><a href=\"#series-events\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m12 3 10 5-10 5L2 8l10-5Zm-10 9 10 5 10-5M2 16l10 5 10-5\"/></svg><span>系列</span></a></nav>",
-      "css": ".ds-bottom{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;display:flex;padding:8px 12px;border-top:1px solid #566063;background:#242728}.ds-bottom a{position:relative;flex:1;min-height:48px;display:flex;align-items:center;flex-direction:column;gap:4px;padding:2px 0 6px;color:#d0d8d7;font-size:12px;text-decoration:none;transition:color 140ms ease-out,background-color 140ms ease-out}.ds-bottom a:hover{color:#fff}.ds-bottom a[aria-current]{color:#e4a8ad}.ds-bottom a[aria-current]::after{content:\"\";position:absolute;bottom:0;width:30px;height:2px;border-radius:2px;background:#d18d90}.ds-bottom a:focus-visible{outline:2px solid #d18d90;outline-offset:3px;}@media(prefers-reduced-motion:reduce){.ds-bottom a{transition:none}}",
+      "description": "純文字底部導覽，只顯示有內容的目的地；少於兩項時省略。",
+      "html": "<nav class=\"ds-bottom\" aria-label=\"公開頁面導覽\"><a href=\"#current-round\" aria-current=\"location\">賽況</a><a href=\"#event-ranking\">排名</a></nav>",
+      "css": ".ds-bottom{font-family:-apple-system,BlinkMacSystemFont,\"PingFang TC\",\"Noto Sans TC\",sans-serif;line-height:1.5;display:flex;padding:6px 12px;border-top:1px solid #566063;background:#242728}.ds-bottom a{position:relative;flex:1;min-height:44px;display:flex;align-items:center;justify-content:center;padding:10px 0;color:#d0d8d7;font-size:14px;font-weight:400;text-decoration:none;transition:color 140ms ease-out,background-color 140ms ease-out}.ds-bottom a:hover{color:#fff}.ds-bottom a[aria-current]{color:#e4a8ad}.ds-bottom a[aria-current]::after{content:\"\";position:absolute;bottom:0;width:30px;height:2px;border-radius:2px;background:#d18d90}.ds-bottom a:focus-visible{outline:2px solid #d18d90;outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-bottom a{transition:none}}",
       "refersTo": "bottom-nav"
     },
     {
@@ -299,7 +303,7 @@
       "kind": "card",
       "description": "平放深色容器，保留場次資料的層次與前往操作。",
       "html": "<article class=\"ds-event-card\"><h3>範例場次</h3><p>場次資訊</p><a href=\"#event\">查看單場賽況</a></article>",
-      "css": ".ds-event-card{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;padding:12px;border:1px solid #566063;border-radius:16px;background:#2b3132;color:#eeeae3}.ds-event-card h3{font-size:18px;font-weight:600;margin:0}.ds-event-card p{margin:8px 0;color:#b7cbd0;font-size:14px;font-weight:500}.ds-event-card a{display:block;padding:12px;border-radius:8px;text-align:center;text-decoration:none;background:#b9cdd1;color:#202627;font-weight:600;transition:color 140ms ease-out,background-color 140ms ease-out}.ds-event-card a:hover{background:#d2dfe1}.ds-event-card a:focus-visible{outline:2px solid #d18d90;outline-offset:3px;}@media(min-width:768px){.ds-event-card{padding:20px}.ds-event-card p{margin:20px 0}}@media(prefers-reduced-motion:reduce){.ds-event-card a{transition:none}}",
+      "css": ".ds-event-card{font-family:-apple-system, BlinkMacSystemFont, \"PingFang TC\", \"Noto Sans TC\", sans-serif;font-size:16px;line-height:1.5;padding:12px;border:1px solid #566063;border-radius:16px;background:#2b3132;color:#eeeae3}.ds-event-card h3{font-size:18px;font-weight:600;margin:0}.ds-event-card p{margin:8px 0;color:#b7cbd0;font-size:14px;font-weight:500}.ds-event-card a{display:block;padding:12px;border-radius:12px;text-align:center;text-decoration:none;background:transparent;color:#d4dede;font-weight:500;border:1px solid #738184;transition:color 140ms ease-out,background-color 140ms ease-out}.ds-event-card a:hover{background:#343c3d}.ds-event-card a:focus-visible{outline:2px solid #d18d90;outline-offset:3px;}@media(min-width:768px){.ds-event-card{padding:20px}.ds-event-card p{margin:20px 0}}@media(prefers-reduced-motion:reduce){.ds-event-card a{transition:none}}",
       "refersTo": "panel"
     }
   ],
@@ -327,6 +331,11 @@
         "name": "The Ink Ground Rule",
         "body": "使用 `public/brand/ink-wash.webp` 提供水墨材質，內容容器保持平實，讓原始筆觸與比分承擔視覺重點。",
         "section": "elevation"
+      },
+      {
+        "name": "The Available Actions Rule",
+        "body": "底部導覽使用純文字，未有資料或無法執行的操作不顯示；空排名、單一輪次與重複提示不占用主要查賽流程。",
+        "section": "layout"
       }
     ],
     "dos": [

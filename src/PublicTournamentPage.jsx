@@ -6,7 +6,7 @@ import { AKASHIKI } from './tournamentState';
 import PlayoffBracket from './PlayoffBracket';
 import PublicTournamentBracket from './PublicTournamentBracket';
 import { BLACK_HORSE, SERIES } from './series';
-import { PublicBrand, PublicBottomNav } from './PublicLayout';
+import { PublicBrand, PublicBottomNav, PublicNotice } from './PublicLayout';
 import PublicEventLive from './PublicEventLive';
 
 const PHASE_LABELS = {
@@ -113,31 +113,33 @@ export default function PublicTournamentPage({ initialCode = '' }) {
   const parentSeries = tournament?.seriesId
     ? SERIES.find(series => series.id === tournament.seriesId)
     : null;
+  const hasSchedule = rounds.length > 0 || tournament?.playoffSeeds?.length > 0;
+  const hasRanking = hasSchedule && rankedPlayers.length > 0;
+  const hasBottomNav = hasSchedule && (hasRanking || Boolean(parentSeries?.publicCode));
 
   return (
-    <main className="spectator-page public-ink">
+    <main className={`spectator-page public-ink${hasBottomNav ? '' : ' public-ink--no-nav'}`}>
       <div className="public-container">
         <PublicBrand title={tournament?.name || '公開賽事查詢'}>
           {tournament && <p className="public-event-meta">{PHASE_LABELS[tournament.phase] || tournament.phase} · {tournament.judgeCount} 位評審 · {tournament.doubleElimination ? '兩敗淘汰' : '不淘汰'}</p>}
         </PublicBrand>
         <div className="public-content">
         <details id="public-lookup" className="public-code-lookup" open={!tournament}>
-          <summary>查詢其他賽事<span>{eventCode}</span></summary>
+          <summary>{tournament ? '切換賽事' : '查詢賽事'}</summary>
           <form onSubmit={handleLookup} className="public-code-form">
             <label htmlFor="public-event-code">賽事代碼</label>
             <div><input id="public-event-code" value={input} onChange={event => setInput(event.target.value.toUpperCase())}
               placeholder="輸入賽事代碼" autoCapitalize="characters" autoComplete="off" spellCheck={false} />
-            <button disabled={!isFirebaseConfigured}>查詢</button></div>
+            {isFirebaseConfigured && input.trim() && <button>查詢</button>}</div>
           </form>
         </details>
         {!isFirebaseConfigured && <p role="status" className="public-empty">此部署尚未設定 Firebase，暫時無法查詢雲端賽事。</p>}
 
-        {error && <div role="alert" className="mb-6 p-4 rounded-lg border border-red-500/40 bg-red-950/30 text-red-300 font-bold">{error}</div>}
+        {error && <PublicNotice tone="error">{error}</PublicNotice>}
         {tournament && (!isOnline || tournament.sync?.fromCache) && (
-          <div role="alert" className="mb-6 p-4 rounded-xl border border-amber-500/50 bg-amber-950/30 text-amber-200 font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <span>目前離線，顯示的是快取資料。最後更新：{tournament.clientUpdatedAt ? new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW') : '尚未取得'}</span>
-            <button type="button" onClick={() => setRetryKey(value => value + 1)} className="px-4 py-2 rounded-lg border border-amber-400">重試</button>
-          </div>
+          <PublicNotice tone="offline" onRetry={isOnline ? () => setRetryKey(value => value + 1) : undefined}>
+            目前離線，顯示快取資料。{tournament.clientUpdatedAt && `最後更新：${new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW')}`}
+          </PublicNotice>
         )}
         {status === 'loading' && isFirebaseConfigured && <div role="status" className="public-empty">正在載入賽事…</div>}
         {status === 'not-found' && <div className="public-empty">找不到此賽事，請確認代碼或向主辦方取得公開連結。</div>}
@@ -145,15 +147,18 @@ export default function PublicTournamentPage({ initialCode = '' }) {
 
         {tournament && (
           <>
-            <div className="public-sync" role="status">
-              {tournament.sync?.hasPendingWrites ? '資料同步中' : tournament.sync?.fromCache ? '離線快取' : '即時更新中'}・最後更新 {tournament.clientUpdatedAt ? new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW') : '尚未取得'}
-            </div>
+            {isOnline && !tournament.sync?.fromCache && <div className="public-sync" role="status">
+              {tournament.sync?.hasPendingWrites ? '資料同步中' : '即時更新中'}{tournament.clientUpdatedAt && `・更新 ${new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW')}`}
+            </div>}
 
-            <div className="public-event-grid">
+            <div className={`public-event-grid${hasRanking ? ' has-ranking' : ''}`}>
               <PublicEventLive tournament={tournament} />
-              <aside><PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} /></aside>
+              {hasRanking && <aside><PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} /></aside>}
             </div>
-            <nav className="public-section-links" aria-label="完整賽事資料"><a href="#swiss-bracket">完整瑞士制賽程</a>{tournament.playoffSeeds?.length > 0 && <a href="#playoff">淘汰賽籤表</a>}{parentSeries?.publicCode && <a href={`?series=${parentSeries.publicCode}`}>查看整個系列賽</a>}</nav>
+            {(rounds.length > 0 || (!hasBottomNav && parentSeries?.publicCode)) && <nav className="public-section-links" aria-label="完整賽事資料">
+              {rounds.length > 0 && <a href="#swiss-bracket">完整瑞士制賽程</a>}
+              {!hasBottomNav && parentSeries?.publicCode && <a href={`?series=${parentSeries.publicCode}`}>查看整個系列賽</a>}
+            </nav>}
             {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} />}
 
             {rounds.length > 0 && (
@@ -171,7 +176,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
         )}
         </div>
       </div>
-      <PublicBottomNav seriesCode={parentSeries?.publicCode} hasEvent={Boolean(tournament)} />
+      <PublicBottomNav seriesCode={parentSeries?.publicCode} hasSchedule={hasSchedule} hasRanking={hasRanking} />
     </main>
   );
 }

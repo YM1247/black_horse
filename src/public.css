@@ -5,7 +5,7 @@
   --public-accent: #d18d90;
   --public-line: #566063;
   min-height: 100vh;
-  padding: 0 0 calc(5.5rem + env(safe-area-inset-bottom));
+  padding: 0 0 calc(4rem + env(safe-area-inset-bottom));
   background: #242728;
   color: #eeeae3;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", sans-serif;
@@ -16,7 +16,9 @@
 }
 .public-ink *, .public-ink *::before, .public-ink *::after { box-sizing: border-box; }
 .public-ink ::selection { background: #864b51; color: #fff; }
-.public-container { max-width: 78rem; min-height: 100vh; margin: 0 auto; background: url('/brand/ink-wash.webp') center top / 100% auto no-repeat; }
+.public-container { max-width: 78rem; min-height: calc(100vh - 4rem - env(safe-area-inset-bottom)); margin: 0 auto; background: url('/brand/ink-wash.webp') center top / 100% auto no-repeat; }
+.public-ink--no-nav { padding-bottom: 24px; }
+.public-ink--no-nav .public-container { min-height: calc(100vh - 24px); }
 .public-header { text-align: center; padding-top: 2px; }
 .public-ink .public-brand { display: block; width: 240px; min-height: 0; margin: 0 auto; }
 .public-brand-window { display: block; position: relative; width: 240px; height: 212px; overflow: hidden; }
@@ -63,11 +65,14 @@
 .public-ink .public-round-tabs a { flex: 1; position: relative; min-height: 46px; padding: 9px 6px 12px; font-size: 1rem; white-space: nowrap; color: #c6cfd0; }
 .public-round-tabs a[aria-current] { color: #eeeae3; font-weight: 600; }
 .public-round-tabs a[aria-current]::after { content: ''; position: absolute; height: 3px; left: 27%; right: 27%; bottom: -1px; border-radius: 3px; background: #d18d90; }
-.public-search-hint, .public-empty { color: #b7cbd0; font-size: .875rem; padding: 14px 0; line-height: 1.8; }
+.public-empty { color: #b7cbd0; font-size: .875rem; padding: 14px 0; line-height: 1.8; }
 .public-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .public-section-heading h2 small { font-weight: 400; font-size: .75rem; color: #b7cbd0; margin-left: 10px; }
-.public-clear-player { display: grid; place-items: center; width: 44px; height: 44px; color: #c4d2d4; }
-.public-clear-player svg { width: 18px; height: 18px; }
+.public-ink .public-text-action { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 10px; color: #c4d6da; font-size: .8125rem; font-weight: 400; text-decoration: underline; text-underline-offset: .2em; white-space: nowrap; border: 0; background: transparent; }
+.public-ink .public-text-action:hover { color: #eeeae3; }
+.public-notice { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 12px 14px; margin: 12px 0 20px; border: 1px solid #677276; border-radius: 12px; background: #2b3132; color: #d4dede; font-size: .875rem; line-height: 1.8; }
+.public-notice p { flex: 1 1 16rem; margin: 0; overflow-wrap: anywhere; }
+.public-notice--error { color: #edc5c8; border-color: #9f777c; }
 .public-personal-match { display: grid; grid-template-columns: minmax(0, 1fr) minmax(75px, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; padding: 18px 13px; border-radius: 14px; text-align: center; background: #343c3d; }
 .public-match-player { min-width: 0; }
 .public-match-player strong { display: block; font-weight: 500; overflow-wrap: anywhere; }
@@ -111,9 +116,8 @@
 .public-ink .playoff-entrant.is-winner { color: #e4b5b7; }
 .public-ink .playoff-entrant small { font-size: .75rem; color: #b7cbd0; }
 .public-ink .playoff-source { font-size: .75rem; color: #b7cbd0; }
-.public-ink .public-bottom-nav { position: fixed; inset: auto 0 0; z-index: 20; display: flex; padding: 8px max(12px, calc((100vw - 78rem) / 2)) calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid #566063; background: #242728; }
-.public-ink .public-bottom-nav a { position: relative; flex: 1; min-height: 48px; display: flex; flex-direction: column; gap: 4px; color: #d0d8d7; font-size: .75rem; padding: 2px 0 6px; }
-.public-bottom-nav svg { width: 20px; height: 20px; stroke-width: 1.5; }
+.public-ink .public-bottom-nav { position: fixed; inset: auto 0 0; z-index: 20; display: flex; padding: 6px max(12px, calc((100vw - 78rem) / 2)) calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid #566063; background: #242728; }
+.public-ink .public-bottom-nav a { position: relative; flex: 1; min-height: 44px; display: flex; color: #d0d8d7; font-size: .875rem; font-weight: 400; padding: 10px 0; }
 .public-ink .public-bottom-nav a[aria-current] { color: #e4a8ad; }
 .public-bottom-nav a[aria-current]::after { content: ''; position: absolute; bottom: 0; width: 30px; height: 2px; border-radius: 2px; background: #d18d90; }
 .public-ink :is(section[id],h3[id],details[id]) { scroll-margin-top: 18px; }
@@ -123,8 +127,9 @@
 .public-ink #series-ranking { padding: 20px 14px; }
 .public-ink #series-ranking .public-player-search { margin-bottom: 20px; }
 .public-ink #series-events h3 { font-weight: 600; font-size: 1.125rem; }
-.public-ink #series-events .spectator-event > a { background: #b9cdd1; color: #202627; font-weight: 600; }
-.public-ink #series-events .spectator-event > a:hover { background: #d2dfe1; }
+.public-ink .public-secondary-link { min-height: 44px; border: 1px solid #738184; border-radius: 12px; padding: 9px 14px; background: transparent; color: #d4dede; font-size: .875rem; font-weight: 500; margin-top: 14px; }
+.public-ink .public-secondary-link:hover { background: #343c3d; color: #eeeae3; }
+.public-event-status { font-size: .75rem; font-weight: 400; color: #b7cbd0; padding: 3px 0; white-space: nowrap; }
 .public-ink #series-ranking :is(th,td), .public-ink #series-ranking article .bg-\[\#161920\], .public-ink #series-ranking article .bg-\[\#11151b\] { background: #2b3132; }
 .public-ink #series-ranking th { background: #242728; }
 .public-ink #series-ranking td { border-color: #566063; }
@@ -142,7 +147,7 @@
   .public-event-meta { font-size: .8125rem; }
   .public-code-lookup { max-width: 38rem; }
   .public-sync { margin-bottom: 22px; }
-  .public-event-grid { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 40px; }
+  .public-event-grid.has-ranking { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 40px; }
   .public-event-grid > aside { padding-top: 4px; }
   .public-ink .event-board li { grid-template-columns: 26px minmax(0,1fr) auto; }
   .public-ink .event-board .record { grid-column: 2 / -1; }

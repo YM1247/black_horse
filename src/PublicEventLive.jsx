@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
 import { gamesFor } from './finalTournament';
 import { AKASHIKI } from './tournamentState';
 import { PublicPlayerSearch } from './PublicLayout';
@@ -43,25 +42,27 @@ export default function PublicEventLive({ tournament }) {
   const personal = playoff || (selectedMatch ? { match: selectedMatch, label: `第 ${index + 1} 輪` } : null);
   const visibleMatches = term && !selectedId ? matches.filter(match => [match.p1?.name, match.p2?.name].some(name => name?.toLocaleLowerCase().includes(term))) : matches;
 
+  if (!rounds.length && !tournament.playoffSeeds?.length) return <section id="current-round" className="public-live" aria-label="當輪賽況"><p className="public-empty">賽程尚未公布，開賽後會即時更新。</p></section>;
+
   return <section className="public-live" id="current-round" aria-label="當輪賽況">
-    <PublicPlayerSearch value={query} onChange={value => { setQuery(value); setSelectedId(''); }}>
+    {players.length > 0 && <PublicPlayerSearch value={query} onChange={value => { setQuery(value); setSelectedId(''); }}>
       {term && !selectedId && <div className="public-search-results" role="region" aria-label="選手搜尋結果">
         <p role="status">{suggestions.length ? `找到 ${suggestions.length} 位選手，選擇後查看對戰` : '找不到這位選手，請確認打師名。'}</p>
         <ul>{suggestions.map(player => <li key={player.id}><button type="button" onClick={() => { setSelectedId(player.id); setQuery(player.name); }}>{player.name}</button></li>)}</ul>
       </div>}
-    </PublicPlayerSearch>
-    {rounds.length > 0 && <nav aria-label="單場賽況導覽" className="public-round-tabs">
+    </PublicPlayerSearch>}
+    {(rounds.length > 1 || tournament.playoffSeeds?.length > 0) && <nav aria-label="單場賽況導覽" className="public-round-tabs">
       {rounds.map((_, i) => <a key={i} href="#current-round" aria-current={index === i ? 'true' : undefined} onClick={() => setRoundChoice(i)}>第 {i + 1} 輪</a>)}
       {tournament.playoffSeeds?.length > 0 && <a href="#playoff">{tournament.rulesVersion === AKASHIKI ? '十六強' : '八強'}</a>}
     </nav>}
     {selected ? <section className="public-personal" aria-label="你的對戰">
-      <div className="public-section-heading"><h2>你的對戰{personal && <small>{personal.label}</small>}</h2><button type="button" className="public-clear-player" onClick={() => { setSelectedId(''); setQuery(''); }} aria-label="清除選手選擇"><X aria-hidden="true" /></button></div>
+      <div className="public-section-heading"><h2>你的對戰{personal && <small>{personal.label}</small>}</h2><button type="button" className="public-text-action" onClick={() => { setSelectedId(''); setQuery(''); }} aria-label="清除選手選擇">清除</button></div>
       {personal ? <PublicMatch match={personal.match} prominent label={`${selected.name}的對戰`} unit={playoff?.key === 'gold' && tournament.rulesVersion === AKASHIKI ? '局（BO3）' : undefined} />
         : <p className="public-empty">{selected.name}在第 {index + 1} 輪尚無對戰。{selected.isWithdrawn ? '此選手已棄賽。' : selected.seedCredit && index === 0 ? '首輪種子記一勝五票。' : '請查看其他輪次或排名。'}</p>}
-    </section> : <p className="public-search-hint">搜尋並選擇打師名，快速查看自己的對戰。</p>}
-    <section className="public-current-matches" aria-label="本輪對戰"><h2>{rounds.length ? `第 ${index + 1} 輪對戰` : '本輪對戰'}</h2>
+    </section> : null}
+    {rounds.length > 0 && <section className="public-current-matches" aria-label="本輪對戰"><h2>第 {index + 1} 輪對戰</h2>
       {visibleMatches.map((match, i) => <PublicMatch key={match.id} match={match} label={`第 ${index + 1} 輪對戰 ${i + 1}`} />)}
       {!visibleMatches.length && <p className="public-empty">{rounds.length ? '本輪沒有符合搜尋的對戰。' : '尚未產生賽程'}</p>}
-    </section>
+    </section>}
   </section>;
 }

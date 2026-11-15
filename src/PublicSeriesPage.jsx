@@ -1,5 +1,5 @@
 import SeriesEventPoints from './SeriesEventPoints';
-import { PublicBrand, PublicBottomNav, PublicPlayerSearch, publicSeriesName } from './PublicLayout';
+import { PublicBrand, PublicBottomNav, PublicPlayerSearch, PublicNotice, publicSeriesName } from './PublicLayout';
 import { FINAL } from './seasonTournament';
 import React, { useEffect, useMemo, useState } from 'react';
 import { isFirebaseConfigured } from './firebase';
@@ -109,6 +109,9 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   const tournaments = useMemo(() => Object.values(tournamentsByCode).filter(Boolean), [tournamentsByCode]);
   const standings = useMemo(() => buildSeriesStandings(series, tournaments), [series, tournaments]);
   const visibleStandings = standings.filter(player => player.name.toLocaleLowerCase().includes(playerQuery.trim().toLocaleLowerCase()));
+  const hasEvents = Boolean(series?.events?.length);
+  const hasRanking = standings.length > 0 && Boolean(series?.events?.some(event => event.rulesVersion !== FINAL && tournamentsByCode[event.eventCode]?.phase === 'finished'));
+  const hasBottomNav = hasEvents && hasRanking;
   const isUsingCache = Boolean(series?.sync?.fromCache || tournaments.some(tournament => tournament.sync?.fromCache));
   const lastUpdatedAt = tournaments.reduce((latest, tournament) => {
     const value = tournament.clientUpdatedAt || '';
@@ -134,44 +137,37 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   };
 
   return (
-    <main className="spectator-page public-ink">
+    <main className={`spectator-page public-ink${hasBottomNav ? '' : ' public-ink--no-nav'}`}>
       <div className="public-container">
         <PublicBrand title={publicSeriesName(series) || '公開系列賽查詢'}>
-          {series && <p className="public-event-meta">{series.description}・系列代碼 {publicCode}</p>}
+          {series && <p className="public-event-meta">{series.description}</p>}
         </PublicBrand>
         <div className="public-content">
         <div className="public-section-links"><a href={window.location.pathname}>返回公開賽事查詢</a></div>
         <details id="public-lookup" className="public-code-lookup" open={!series}>
-          <summary>查詢其他系列<span>{publicCode}</span></summary>
+          <summary>{series ? '切換系列' : '查詢系列'}</summary>
           <form onSubmit={handleLookup} className="public-code-form">
             <label htmlFor="public-series-code">系列代碼</label>
             <div><input id="public-series-code" value={input} onChange={event => setInput(event.target.value.toUpperCase())}
               placeholder="輸入系列代碼" autoCapitalize="characters" autoComplete="off" spellCheck={false} />
-            <button disabled={!isFirebaseConfigured}>查詢</button></div>
+            {isFirebaseConfigured && input.trim() && <button>查詢</button>}</div>
           </form>
         </details>
         {!isFirebaseConfigured && <p className="public-empty" role="status">此部署尚未設定 Firebase，暫時無法查詢雲端系列賽。</p>}
 
-        {(!isOnline || isUsingCache) && (
-          <div role="alert" className="mb-6 p-4 rounded-xl border border-amber-500/50 bg-amber-950/30 text-amber-200 font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <span>目前離線，畫面可能是快取資料。最後更新：{formatUpdateTime(lastUpdatedAt)}</span>
-            <button type="button" onClick={() => setRetryKey(value => value + 1)} className="px-4 py-2 rounded-lg border border-amber-400">重試</button>
-          </div>
-        )}
-        {error && <div role="alert" className="mb-6 p-4 rounded-lg border border-red-500/40 bg-red-950/30 text-red-300 font-bold">{error}</div>}
+        {series && (!isOnline || isUsingCache) && <PublicNotice tone="offline" onRetry={isOnline ? () => setRetryKey(value => value + 1) : undefined}>
+          目前離線，顯示快取資料。{lastUpdatedAt && `最後更新：${formatUpdateTime(lastUpdatedAt)}`}
+        </PublicNotice>}
+        {error && <PublicNotice tone="error">{error}</PublicNotice>}
         {status === 'loading' && isFirebaseConfigured && <div role="status" className="public-empty">正在載入系列賽…</div>}
-        {status === 'not-found' && <div className="py-20 text-center text-slate-500 font-bold">找不到此公開系列賽。</div>}
-        {status === 'idle' && <div className="py-20 text-center text-slate-500 font-bold">請輸入系列代碼。</div>}
+        {status === 'not-found' && <div className="public-empty">找不到此公開系列賽。</div>}
+        {status === 'idle' && <div className="public-empty">請輸入系列代碼。</div>}
 
         {series && (
           <>
-            <div className="public-sync" role="status">
-              {isUsingCache ? '離線快取' : '即時更新中'}・最後更新 {formatUpdateTime(lastUpdatedAt)}
-            </div>
-
-            <nav aria-label="系列賽導覽" className="public-section-links">
-              <a href="#series-events">系列場次</a><a href="#series-ranking">積分排名</a>
-            </nav>
+            {isOnline && !isUsingCache && <div className="public-sync" role="status">
+              即時更新中{lastUpdatedAt && `・更新 ${formatUpdateTime(lastUpdatedAt)}`}
+            </div>}
             <section id="series-events" className="mb-8">
               <h2 className="text-2xl font-black text-[#b6d2d4] mb-4">系列場次</h2>
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -184,7 +180,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                           <h3 className="text-2xl font-black">{event.name}</h3>
                           <p className="text-xs font-bold text-slate-500 mt-1">#{event.eventCode}</p>
                         </div>
-                        <span className="px-2.5 py-1 rounded-full text-xs font-black bg-cyan-950/60 text-[#b6d2d4]">
+                        <span className="public-event-status">
                           {tournament ? PHASE_LABELS[tournament.phase] || tournament.phase : '載入中'}
                         </span>
                       </div>
@@ -192,17 +188,17 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                         {event.judgeCount} 位評審・{event.doubleElimination ? '兩敗淘汰' : '不淘汰'}
                       </p>
                       <a href={`${window.location.pathname}?event=${event.eventCode}`}
-                        className="block mt-2 md:mt-5 py-3 rounded-lg text-center font-black bg-[#b6d2d4] text-[#0d0f12]">
+                        className="public-secondary-link">
                         查看單場賽況
                       </a>
                     </article>
                   );
                 })}
-                {series.events.length === 0 && <div className="p-10 text-center border border-dashed border-slate-700 rounded-xl text-slate-500 font-bold">目前沒有公開場次。</div>}
+                {series.events.length === 0 && <div className="public-empty">目前沒有公開場次。</div>}
               </div>
             </section>
 
-            <section id="series-ranking" className="p-3 sm:p-4 md:p-6 rounded-2xl border border-slate-700 bg-[#161920]">
+            {hasRanking ? <section id="series-ranking" className="p-3 sm:p-4 md:p-6 rounded-2xl border border-slate-700 bg-[#161920]">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
                 <h2 className="text-2xl font-black text-[#f1c6a6]">系列積分排名</h2>
                 <span className="text-xs font-bold text-slate-500">只有公開且已完賽場次計分</span>
@@ -231,7 +227,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                     </div>
                   </article>
                 ))}
-                {visibleStandings.length === 0 && <div className="p-10 text-center border border-dashed border-slate-700 rounded-xl text-slate-500 font-bold">{playerQuery.trim() ? '找不到這位選手，請確認打師名。' : '尚無可計分的完賽結果。'}</div>}
+                {visibleStandings.length === 0 && <div className="public-empty">{playerQuery.trim() ? '找不到這位選手，請確認打師名。' : '尚無可計分的完賽結果。'}</div>}
               </div>
 
               <div className="hidden md:block overflow-x-auto rounded-lg border border-slate-800" aria-label="桌面版系列積分排名">
@@ -257,12 +253,12 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                   </tbody>
                 </table>
               </div>
-            </section>
+            </section> : <p id="series-ranking" className="public-empty">積分排名將在首場完賽後公布。</p>}
           </>
         )}
         </div>
       </div>
-      <PublicBottomNav series seriesCode={publicCode || undefined} />
+      <PublicBottomNav series hasEvents={hasEvents} hasRanking={hasRanking} />
     </main>
   );
 }

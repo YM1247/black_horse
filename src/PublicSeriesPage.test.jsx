@@ -16,7 +16,7 @@ vi.mock('./services/tournamentRepository', () => ({
       clientUpdatedAt: '2026-08-13T10:00:00.000Z',
       sync: { fromCache: false },
       events: [
-        { id: 'one', name: '8/19', eventCode: 'MOCK819', judgeCount: 3, doubleElimination: true },
+        { id: 'one', name: '8/19', eventCode: code === 'REGSER' ? 'REG819' : 'MOCK819', judgeCount: 3, doubleElimination: true },
         { id: 'two', name: '8/21', eventCode: 'MOCK821', judgeCount: 3, doubleElimination: true },
         { id: 'three', name: '8/26', eventCode: 'MOCK826', judgeCount: 3, doubleElimination: true }
       ]
@@ -26,8 +26,8 @@ vi.mock('./services/tournamentRepository', () => ({
   subscribeTournament: (code, onTournament) => {
     onTournament({
       id: code,
-      phase: code === 'MOCK819' ? 'finished' : 'playing',
-      players: code === 'MOCK819' ? [{ id: 'alice', name: 'Alice', wins: 1, votes: 3 }] : [],
+      phase: code === 'REG819' ? 'registration' : code === 'MOCK819' ? 'finished' : 'playing',
+      players: ['MOCK819', 'REG819'].includes(code) ? [{ id: 'alice', name: 'Alice', wins: 1, votes: 3 }] : [],
       rounds: code === 'MOCK819' ? [[{
         id: 'm1', p1: { id: 'alice', name: 'Alice' }, p2: { id: 'bob', name: 'Bob' }, p1Votes: 3, p2Votes: 0
       }]] : [],
@@ -42,7 +42,7 @@ test('public series page shows public events and computes finished-event standin
   render(<PublicSeriesPage initialCode="SIM2026" />);
 
   expect(await screen.findByRole('heading', { name: '模擬賽' })).toBeInTheDocument();
-  expect(screen.getByText('系列說明・系列代碼 SIM2026')).toBeInTheDocument();
+  expect(screen.getByText('系列說明')).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '8/19' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '8/21' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '8/26' })).toBeInTheDocument();
@@ -80,4 +80,12 @@ test('系列排名可按打師名搜尋，保留原本名次與得分並提示�
   const row = screen.getByRole('cell', { name: 'Alice' }).parentElement;
   expect(row).toHaveTextContent('100');
   expect(row.firstElementChild).toHaveTextContent('1');
+});
+
+test('已有報名選手但尚未完賽，不顯示零分排名搜尋與導覽', async () => {
+  render(<PublicSeriesPage initialCode="REGSER" />);
+  expect(await screen.findByText('積分排名將在首場完賽後公布。')).toBeInTheDocument();
+  expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('cell', { name: 'Alice' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('navigation', { name: '公開頁面導覽' })).not.toBeInTheDocument();
 });

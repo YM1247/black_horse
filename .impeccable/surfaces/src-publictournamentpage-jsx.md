@@ -22,3 +22,7 @@ FIRST VIEWPORT: 390px 手機原圖識別居中高約212px；賽事標題後為�
 FORM: 種子6849939d，第7項場邊記分板，使用者選 A 介面＋B 識別、柔和水墨修訂。批准 comp .impeccable/mocks/decision/ab-ink-v2.jpg；原始網頁 ab-ink-v2.html。年份移除、Logo不重繪。簽名互動：搜尋選手顯示當輪對戰，比分更新不改選擇；過渡僅小幅狀態色，支援減少動態。
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## 核准後的精簡修訂
+
+使用者要求底部導覽移除圖示、隱藏目前沒有用途的操作，並統一提示與按鈕風格。導覽僅列出有資料的目的地，少於兩項時省略；報名前階段不顯示搜尋、空排名或無目標的完整賽程連結。已開賽的資料、比分與完整籤表仍保留。次要操作使用文字或柔和細框，離線／錯誤共用炭灰提示，真正斷線時不顯示重試。此為原水墨系統內的精簡，不重啟主視覺選擇，也不改品牌來源。
