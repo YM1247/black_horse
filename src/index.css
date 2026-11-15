@@ -36,6 +36,74 @@
 .bout { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: .6rem; padding: .6rem 0; align-items: center; }
 .bout span:last-child { text-align: right; }
 .bout small { display: block; color: #b6d2d4; }
+.playoff-tree-hint { color: #bac5ce; font-size: .875rem; margin: .75rem 0 1rem; max-width: 75ch; }
+.playoff-tree-scroll {
+  --tree-gap: 2.5rem;
+  --tree-step: 5.25rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-color: #85a4a6 #0d0f12;
+  scrollbar-width: auto;
+  padding-bottom: 1rem;
+}
+.playoff-tree-scroll.is-scoring { --tree-step: 6.5rem; }
+.playoff-tree-scroll:focus-visible { outline: 2px solid #f1c6a6; outline-offset: 3px; }
+.playoff-tree-canvas { min-width: 70rem; }
+.playoff-tree-headings, .playoff-tree {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: var(--tree-gap);
+}
+.playoff-tree-headings { border-bottom: 1px solid #424b55; padding-bottom: .75rem; }
+.playoff-tree { grid-template-rows: repeat(16, var(--tree-step)); }
+.playoff-tree-node { display: flex; align-items: center; position: relative; min-width: 0; }
+.playoff-tree-node.has-feeders::before {
+  content: '';
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  left: calc(-1 * var(--tree-gap));
+  width: calc(var(--tree-gap) / 2);
+  border-block: 1px solid #85a4a6;
+  border-inline-end: 1px solid #85a4a6;
+  pointer-events: none;
+}
+.playoff-tree-node.has-feeders::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: calc(-1 * var(--tree-gap) / 2);
+  width: calc(var(--tree-gap) / 2);
+  border-top: 1px solid #85a4a6;
+  pointer-events: none;
+}
+.playoff .playoff-tree-match {
+  width: 100%;
+  min-width: 0;
+  padding: .65rem .75rem;
+  border: 1px solid #56636e;
+  border-radius: .75rem;
+  background: #0d0f12;
+  position: relative;
+  z-index: 1;
+  font-variant-numeric: tabular-nums;
+}
+.playoff-tree-match h4 { color: #b6d2d4; font-weight: 750; font-size: .875rem; }
+.playoff-source { color: #bac5ce; font-size: .75rem; margin-block: .15rem .5rem; overflow-wrap: anywhere; }
+.playoff-entrant { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .6rem; padding-block: .25rem; }
+.playoff-entrant + .playoff-entrant { border-top: 1px solid #343e48; }
+.playoff-entrant strong { display: block; font-size: .9rem; line-height: 1.4; overflow-wrap: anywhere; font-weight: 550; }
+.playoff-entrant small { display: block; color: #bac5ce; font-size: .7rem; line-height: 1.4; }
+.playoff-entrant b { font-size: 1.125rem; min-width: 1.5rem; text-align: center; }
+.playoff-entrant.is-winner { color: #f1c6a6; }
+.playoff-entrant.is-winner strong { font-weight: 800; }
+.playoff-tree-bronze .playoff-tree-match { border-style: dashed; }
+.playoff-tree-match .final-games { border-top: 1px solid #424b55; margin-top: .5rem; padding-top: .5rem; font-size: .8rem; }
+.playoff-tree-match .final-games > div + div { margin-top: .5rem; }
+.playoff-tree-match .score-options { flex-wrap: nowrap; gap: .2rem; padding-top: .5rem; }
+.season-admin .playoff-tree-match .score-options button { flex: 1; min-width: 0; margin: 0; padding-inline: .25rem; font-size: .8rem; white-space: nowrap; }
+.akashiki-admin .scoring-layout { grid-template-columns: minmax(0, 1fr); }
+.akashiki-admin .scoring-layout .event-board { position: static; max-height: none; }
 .season-admin { background: #0d0f12; min-height: 100vh; color: #e2e8f0; padding: clamp(1rem,4vw,3rem) max(1rem,calc((100vw - 66rem)/2)); }
 .season-admin header { border-bottom: 1px solid #424b55; padding-bottom: 1rem; }
 .season-admin h1 { margin-top: 1rem; font-size: 2rem; font-weight: 850; }

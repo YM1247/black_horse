@@ -265,7 +265,7 @@ export default function SeasonAdmin({
   }
   const canClose = roundsDone && (!knockout || (event.bracket?.gold?.isDone && event.bracket?.bronze?.isDone));
   return (
-    <main className="season-admin">
+    <main className={'season-admin' + (isAkashiki ? ' akashiki-admin' : '')}>
       <header>
         <nav>
           <button disabled={busy || registering} onClick={onBack}>
