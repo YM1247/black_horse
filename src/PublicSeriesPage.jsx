@@ -64,8 +64,8 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   }, [publicCode]);
 
   useEffect(() => {
-    document.title = series?.name ? `${series.name}｜系列賽排名` : '黑馬記念｜公開系列賽';
-  }, [series?.name]);
+    document.title = series?.name ? `${publicSeriesName(series)}｜系列賽排名` : '黑馬記念｜公開系列賽';
+  }, [series?.name, series?.publicCode]);
 
   useEffect(() => {
     setSeries(null);
