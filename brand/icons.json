@@ -1,0 +1,15 @@
+{
+  "source": "black-horse-original.png",
+  "sourceSHA256": "be2256985b298c34e361b1244f966d59371904add6afb84e8f3c379dae250aa8",
+  "date": "2026-11-16",
+  "process": "Reuse approved brand display window (x0 y792 w2160 h1908), retain complete horse/circle/lettering and proportions; recolor to warm white on charcoal; export padded square PNG sizes 512/192/180/32 and legacy ICO. No redraw.",
+  "exports": [
+    "icon-512.png",
+    "icon-192.png",
+    "icon-180.png",
+    "icon-32.png",
+    "../favicon.ico",
+    "../logo192.png",
+    "../logo512.png"
+  ]
+}
