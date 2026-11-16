@@ -76,6 +76,8 @@ test('淘汰賽同樣即時高亮，可送出前往符合的對戰', () => {
     fireEvent.change(screen.getByRole('searchbox'),{target:{value:first.name}});
     const target=document.querySelector('[data-playoff-game="q1"]');
     expect(target).toHaveClass('is-search-match');
+    expect(screen.queryByRole('link',{name:'八強',exact:true})).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading',{name:/第 \d 輪對戰/})).not.toBeInTheDocument();
     expect(target.compareDocumentPosition(screen.getByRole('navigation',{name:'單場賽況導覽'})) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(target.compareDocumentPosition(screen.getByRole('region',{name:'本輪對戰'})) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

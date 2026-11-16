@@ -67,6 +67,7 @@ test('公開八強隱藏籤位與場次編號，已完成才明示勝敗', () =>
   event.bracket.q1={...event.bracket.q1,p1Votes:5,p2Votes:0,isDone:true};
   event.bracket.q2={...event.bracket.q2,p1Votes:1,p2Votes:0,isDone:false};
   render(<PlayoffBracket event={event} publicView />);
+  expect(screen.getByRole('heading',{name:'淘汰賽',exact:true})).toBeInTheDocument();
   const done=screen.getByRole('article',{name:'八強 1',exact:true});
   expect(within(done).queryByRole('heading')).not.toBeInTheDocument();
   const stage=screen.getByRole('region',{name:'八強',exact:true});

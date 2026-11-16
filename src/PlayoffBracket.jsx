@@ -106,7 +106,7 @@ function PlayoffTree({ event, renderScore, highlightQuery = '', publicView = fal
 export default function PlayoffBracket({ event, renderScore, highlightQuery = '', publicView = false }) {
   const bracket = event.bracket || {};
   const akashiki = event.rulesVersion === AKASHIKI;
-  const title = akashiki ? '十六強淘汰賽' : '八強淘汰賽';
+  const title = publicView ? '淘汰賽' : akashiki ? '十六強淘汰賽' : '八強淘汰賽';
   const medalists = [resultPlayer(bracket.gold), resultPlayer(bracket.gold, false), resultPlayer(bracket.bronze)];
   return <section id="playoff" className={'playoff' + (publicView ? ' public-playoff' : '')} aria-label={title}>
     <h2>{title}</h2>

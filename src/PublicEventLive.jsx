@@ -76,10 +76,9 @@ export default function PublicEventLive({ tournament }) {
     </PublicPlayerSearch>}
     {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} highlightQuery={term} publicView />}
     {(rounds.length > 1 || tournament.playoffSeeds?.length > 0) && <nav aria-label="單場賽況導覽" className="public-round-tabs">
-      {tournament.playoffSeeds?.length > 0 && <a href="#playoff" aria-current={roundChoice === null ? 'true' : undefined} onClick={() => setRoundChoice(null)}>{tournament.rulesVersion === AKASHIKI ? '十六強' : '八強'}</a>}
-      {rounds.map((_, i) => <a key={i} href="#swiss-round-matches" aria-current={index === i && (roundChoice !== null || !tournament.playoffSeeds?.length) ? 'true' : undefined} onClick={() => setRoundChoice(i)}>第 {i + 1} 輪</a>)}
+      {rounds.map((_, i) => <a key={i} href="#swiss-round-matches" aria-current={index === i ? 'true' : undefined} onClick={() => setRoundChoice(i)}>第 {i + 1} 輪</a>)}
     </nav>}
-    {rounds.length > 0 && <section id="swiss-round-matches" className="public-current-matches public-balanced-matches" aria-label="本輪對戰"><h2>第 {index + 1} 輪對戰</h2>
+    {rounds.length > 0 && <section id="swiss-round-matches" className="public-current-matches public-balanced-matches" aria-label="本輪對戰">
       {groupPublicMatches(matches, index, tournament.rulesVersion === AKASHIKI).map(group => <section className="public-match-group" key={group.label} aria-label={group.label}>
         <h3>{group.label}</h3>
         {group.matches.map(match => <PublicMatch key={match.id} match={match} highlighted={matchesQuery(match, term)} roundIndex={index} showStatus={false} showRecord label={`第 ${index + 1} 輪對戰 ${matches.indexOf(match) + 1}`} />)}
