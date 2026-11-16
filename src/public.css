@@ -8,7 +8,7 @@
   --public-line: #566063;
   min-height: 100vh; min-height: 100dvh;
   padding: 0;
-  background: #242728;
+  background: transparent;
   color: #eeeae3;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", sans-serif;
   font-weight: 400;
@@ -213,12 +213,24 @@
 .public-match-group { margin-top: 20px; }
 .public-match-group h3 { color: #b7cbd0; font-size: .8125rem; font-weight: 500; padding: 8px 0; border-bottom:1px solid #738184; }
 
-/* One hero wash, then a quiet repeating wash for arbitrarily long pages.
-   Each repeat fades into charcoal at both edges to hide its tile seam. */
+/* Paint the document canvas itself, so Safari safe areas share the same
+   artwork as the page instead of exposing a separate solid-color surface.
+   The first wash fades into the repeating lower wash; backgrounds do not
+   participate in layout and cannot create short-page overflow. */
+html:has(.public-ink) {
+  --public-hero-height:clamp(800px, 216.7vw, 1100px);
+  background-color:#242728;
+  background-image:
+    linear-gradient(transparent 45%, #242728 100%),
+    url('/brand/ink-wash.webp'),
+    linear-gradient(#242728 0%, transparent 18%, transparent 82%, #242728 100%),
+    url('/brand/ink-repeat.webp');
+  background-position:center top, center top, center 400px, center 400px;
+  background-size:100% var(--public-hero-height), 100% var(--public-hero-height), 100% 1000px, 100% 1000px;
+  background-repeat:no-repeat, no-repeat, repeat-y, repeat-y;
+}
+html:has(.public-ink) body { background:transparent; }
 .public-container { position:relative; background:none; }
-.public-ink::before, .public-ink::after { content:''; position:absolute; pointer-events:none; z-index:-1; left:0; right:0; }
-.public-ink::before { top:400px; bottom:0; background:url('/brand/ink-repeat.webp') center top / 100% 1000px repeat-y; opacity:.7; mask-image:linear-gradient(transparent, #000 18%, #000 82%, transparent); mask-size:100% 1000px; mask-repeat:repeat-y; }
-.public-ink::after { top:0; bottom:0; height:auto; max-height:clamp(800px, 216.7vw, 1100px); background:url('/brand/ink-wash.webp') center top / 100% clamp(800px, 216.7vw, 1100px) no-repeat; mask-image:linear-gradient(#000 45%, transparent 100%); }
 
 /* Event pages share navigation but never stack their content. */
 .public-event-page { max-width: 58rem; margin-inline: auto; }
