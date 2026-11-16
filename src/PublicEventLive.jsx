@@ -72,12 +72,13 @@ export default function PublicEventLive({ tournament }) {
 
   return <section ref={schedule} className="public-live" id="current-round" aria-label="當輪賽況">
     {players.length > 0 && <PublicPlayerSearch value={query} onChange={setQuery} onSubmit={jumpToMatch}>
-      {term && <p className="public-search-feedback" role="status">{matchingCount ? `${matchingCount} 場對戰符合，按 Enter 前往第一場。` : '目前沒有符合的對戰，可切換其他輪次或確認打師名。'}</p>}
+      {term && matchingCount === 0 && <p className="public-search-feedback" role="status">目前沒有符合的對戰，可切換其他輪次或確認打師名。</p>}
     </PublicPlayerSearch>}
     {(rounds.length > 1 || tournament.playoffSeeds?.length > 0) && <nav aria-label="單場賽況導覽" className="public-round-tabs">
-      {rounds.map((_, i) => <a key={i} href="#current-round" aria-current={index === i ? 'true' : undefined} onClick={() => setRoundChoice(i)}>第 {i + 1} 輪</a>)}
-      {tournament.playoffSeeds?.length > 0 && <a href="#playoff">{tournament.rulesVersion === AKASHIKI ? '十六強' : '八強'}</a>}
+      {tournament.playoffSeeds?.length > 0 && <a href="#playoff" aria-current={roundChoice === null ? 'true' : undefined} onClick={() => setRoundChoice(null)}>{tournament.rulesVersion === AKASHIKI ? '十六強' : '八強'}</a>}
+      {rounds.map((_, i) => <a key={i} href="#current-round" aria-current={index === i && (roundChoice !== null || !tournament.playoffSeeds?.length) ? 'true' : undefined} onClick={() => setRoundChoice(i)}>第 {i + 1} 輪</a>)}
     </nav>}
+    {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} highlightQuery={term} />}
     {rounds.length > 0 && <section className="public-current-matches public-balanced-matches" aria-label="本輪對戰"><h2>第 {index + 1} 輪對戰</h2>
       {groupPublicMatches(matches, index, tournament.rulesVersion === AKASHIKI).map(group => <section className="public-match-group" key={group.label} aria-label={group.label}>
         <h3>{group.label}</h3>
@@ -85,6 +86,5 @@ export default function PublicEventLive({ tournament }) {
       </section>)}
       {!matches.length && <p className="public-empty">本輪沒有符合搜尋的對戰。</p>}
     </section>}
-    {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} highlightQuery={term} />}
   </section>;
 }

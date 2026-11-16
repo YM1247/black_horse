@@ -20,6 +20,7 @@ test('搜尋高亮而不過濾，送出捲動至對戰並保留比分更新', ()
     const {rerender} = render(<PublicEventLive tournament={data} />);
     fireEvent.change(screen.getByRole('searchbox'), {target:{value:'青焰'}});
     expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     const row=screen.getByRole('article',{name:'第 2 輪對戰 1'});
     expect(row).toHaveClass('is-search-match');
     expect(screen.getByRole('article',{name:'第 2 輪對戰 2'})).not.toHaveClass('is-search-match');
@@ -70,11 +71,13 @@ test('淘汰賽同樣即時高亮，可送出前往符合的對戰', () => {
   const scroll=vi.fn();
   Element.prototype.scrollIntoView=scroll;
   try {
-    const player={id:'knockout',name:'淘汰測試'};
+    const player=first;
     render(<PublicEventLive tournament={{...base,playoffSeeds:[player,second],bracket:{q1:{p1:player,p2:second}}}} />);
-    fireEvent.change(screen.getByRole('searchbox'),{target:{value:'淘汰測試'}});
+    fireEvent.change(screen.getByRole('searchbox'),{target:{value:first.name}});
     const target=document.querySelector('[data-playoff-game="q1"]');
     expect(target).toHaveClass('is-search-match');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(target.compareDocumentPosition(screen.getByRole('region',{name:'本輪對戰'})) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.submit(screen.getByRole('searchbox').closest('form'));
     expect(scroll).toHaveBeenCalledTimes(1);
     expect(target).toHaveFocus();
