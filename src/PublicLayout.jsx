@@ -3,8 +3,9 @@ import { Search } from 'lucide-react';
 import { BLACK_HORSE } from './series';
 import './public.css';
 
-export function PublicBrand({ title, children }) {
-  return <header className="public-header">
+export function PublicBrand({ title, children, backHref }) {
+  return <header className={`public-header${backHref ? ' public-header--with-back' : ''}`}>
+    {backHref && <a className="public-back-link" href={backHref}>返回系列賽</a>}
     <a className="public-brand" href={window.location.pathname} aria-label="黑馬記念，返回賽事查詢">
       <span className="public-brand-window"><img src={`${import.meta.env.BASE_URL}brand/black-horse-original.png`} alt="黑馬記念" width="2160" height="3553" fetchPriority="high" /></span>
     </a>
@@ -48,12 +49,13 @@ export function PublicNotice({ children, tone = 'info', onRetry }) {
   </div>;
 }
 
-export function PublicPlayerSearch({ value, onChange, id = 'public-player-search', children }) {
-  return <div className="public-player-search">
+export function PublicPlayerSearch({ value, onChange, id = 'public-player-search', children, onSubmit }) {
+  const Container = onSubmit ? 'form' : 'div';
+  return <Container className="public-player-search" onSubmit={onSubmit}>
     <label className="public-search-field" htmlFor={id}><Search aria-hidden="true" /><span className="sr-only">搜尋打師名</span>
-      <input id={id} type="search" value={value} onChange={event => onChange(event.target.value)} placeholder="搜尋打師名" autoComplete="off" />
+      <input id={id} type="search" enterKeyHint="search" onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} value={value} onChange={event => onChange(event.target.value)} placeholder="搜尋打師名" autoComplete="off" />
     </label>{children}
-  </div>;
+  </Container>;
 }
 
 export const publicSeriesName = series => series?.publicCode === BLACK_HORSE.publicCode ? '黑馬記念系列賽' : series?.name;

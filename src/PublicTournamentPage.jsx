@@ -3,7 +3,6 @@ import { isFirebaseConfigured } from './firebase';
 import { normalizeEventCode, subscribeTournament, validateEventCode } from './services/tournamentRepository';
 import { eventRanking, hasPlayoff } from './seasonTournament';
 import { AKASHIKI } from './tournamentState';
-import PlayoffBracket from './PlayoffBracket';
 import { BLACK_HORSE, SERIES } from './series';
 import { PublicBrand, PublicBottomNav, PublicNotice } from './PublicLayout';
 import PublicEventLive from './PublicEventLive';
@@ -126,7 +125,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
     : null;
   const hasSchedule = rounds.length > 0 || tournament?.playoffSeeds?.length > 0;
   const hasRanking = hasSchedule && rankedPlayers.length > 0;
-  const hasBottomNav = hasSchedule && (hasRanking || Boolean(parentSeries?.publicCode));
+  const hasBottomNav = hasSchedule && hasRanking;
   const activeView = hasRanking && (requestedView || (tournament?.phase === 'finished' ? 'ranking' : 'matches')) === 'ranking' ? 'ranking' : 'matches';
   const changeView = (view, href) => {
     window.history.pushState({}, '', href);
@@ -140,15 +139,18 @@ export default function PublicTournamentPage({ initialCode = '' }) {
   return (
     <main className={`spectator-page public-ink${hasBottomNav ? '' : ' public-ink--no-nav'}`}>
       <div className="public-container">
-        <PublicBrand title={tournament?.name || '公開賽事查詢'}>
-          {tournament && <p className="public-event-meta">{PHASE_LABELS[tournament.phase] || tournament.phase}</p>}
+        <PublicBrand backHref={parentSeries?.publicCode ? `${window.location.pathname}?series=${parentSeries.publicCode}` : undefined} title={tournament?.name || '公開賽事查詢'}>
+          {tournament && <p className="public-event-meta" role="status">
+            {PHASE_LABELS[tournament.phase] || tournament.phase}・{!isOnline ? '離線' : tournament.sync?.fromCache ? '快取資料' : tournament.sync?.hasPendingWrites ? '資料同步中' : '即時更新中'}
+            {tournament.clientUpdatedAt && <span className="public-update-time">更新 {new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW')}</span>}
+          </p>}
         </PublicBrand>
         <div className="public-content">
         {previewStage && <nav aria-label="測試階段" className="public-preview-stages">
           <p>本機測試資料・不影響正式賽事</p>
           {[['registration','報名中'],['round1','第一輪'],['round2','第二輪'],['round3','第三輪'],['finished','積分賽完賽'],['playoff','八強淘汰賽'],['final','最終戰完賽']].map(([key,label]) => <a key={key} href={`?event=DEMO&preview=${key}`} aria-current={previewStage===key?'page':undefined}>{label}</a>)}
         </nav>}
-        <details id="public-lookup" className="public-code-lookup" open={!tournament}>
+        {!tournament && <details id="public-lookup" className="public-code-lookup" open={!tournament}>
           <summary>{tournament ? '切換賽事' : '查詢賽事'}</summary>
           <form onSubmit={handleLookup} className="public-code-form">
             <label htmlFor="public-event-code">賽事代碼</label>
@@ -156,7 +158,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
               placeholder="輸入賽事代碼" autoCapitalize="characters" autoComplete="off" spellCheck={false} />
             {isFirebaseConfigured && input.trim() && <button>查詢</button>}</div>
           </form>
-        </details>
+        </details>}
         {!isFirebaseConfigured && <p role="status" className="public-empty">此部署尚未設定 Firebase，暫時無法查詢雲端賽事。</p>}
 
         {error && <PublicNotice tone="error">{error}</PublicNotice>}
@@ -171,13 +173,8 @@ export default function PublicTournamentPage({ initialCode = '' }) {
 
         {tournament && (
           <>
-            {isOnline && !tournament.sync?.fromCache && <div className="public-sync" role="status">
-              {tournament.sync?.hasPendingWrites ? '資料同步中' : '即時更新中'}{tournament.clientUpdatedAt && `・更新 ${new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW')}`}
-            </div>}
-
             <div className="public-event-page" hidden={activeView !== 'matches'}>
               <PublicEventLive tournament={tournament} />
-              {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} />}
             </div>
             {hasRanking && <div className="public-event-page" hidden={activeView !== 'ranking'}>
               <PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} />
@@ -189,7 +186,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
         )}
         </div>
       </div>
-      <PublicBottomNav eventCode={eventCode} eventView={activeView} onEventViewChange={changeView} seriesCode={parentSeries?.publicCode} hasSchedule={hasSchedule} hasRanking={hasRanking} />
+      <PublicBottomNav eventCode={eventCode} eventView={activeView} onEventViewChange={changeView} hasSchedule={hasSchedule} hasRanking={hasRanking} />
     </main>
   );
 }

@@ -5,7 +5,7 @@ export const previewStages = [['registration','報名中'], ['round1','第一輪
 export function createPublicPreview(stage) {
   const names = ['青焰','夜凪','墨雨','白澤','星野','蒼月','千羽','風鈴','赤羽','流光','冬青','暮雪','初音','山嵐','海月','長名字測試・黑馬新星','晴空','紫苑','時雨','霜華','南風','北辰','夕霧','朝露','雲雀','月白'];
   const players = names.map((name,i)=>publicPlayer({id:`demo-${i}`,name}));
-  let state = { id:'preview', eventCode:'DEMO', name:'積分賽第一場', rulesVersion:QUALIFIER, phase:'registration', judgeCount:3, doubleElimination:true, players:players.slice(0,16), rounds:[], sync:{fromCache:false} };
+  let state = { id:'preview', seriesId:'black-horse-26-27', eventCode:'DEMO', name:'積分賽第一場', rulesVersion:QUALIFIER, phase:'registration', judgeCount:3, doubleElimination:true, players:players.slice(0,16), rounds:[], sync:{fromCache:false} };
   if (stage === 'registration') return state;
   const final = ['playoff','final'].includes(stage);
   if(final) {

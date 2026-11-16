@@ -33,6 +33,7 @@ vi.mock('./services/tournamentRepository', () => ({
       clientUpdatedAt: '2026-08-20T10:00:00.000Z',
       sync: { fromCache: false, hasPendingWrites: false }
     };
+    if (code === 'SERIES1') value.seriesId = 'black-horse-26-27';
     if (code === 'PLAYNOW') value.phase = 'playing';
     if (code === 'REGNOW') { value.phase = 'registration'; value.rounds = []; }
     if (code === 'OFF123') value.sync.fromCache = true;
@@ -108,11 +109,22 @@ test('切回賽況保留選手選擇', async () => {
   render(<PublicTournamentPage initialCode="PLAYNOW" />);
   const search = await screen.findByRole('searchbox');
   fireEvent.change(search, { target:{ value:'Alice' } });
-  fireEvent.click(screen.getByRole('button', { name:'Alice',exact:true }));
-  expect(screen.getByRole('region', { name:'你的對戰' })).toHaveTextContent('Alice');
+  expect(screen.getByRole('article')).toHaveClass('is-search-match');
   fireEvent.click(screen.getByRole('link', { name:'排名',exact:true }));
-  expect(screen.queryByRole('region', { name:'你的對戰' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('article')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('link', { name:'賽況',exact:true }));
   expect(screen.getByRole('searchbox')).toHaveValue('Alice');
-  expect(screen.getByRole('region', { name:'你的對戰' })).toHaveTextContent('Alice');
+  expect(screen.getByRole('article')).toHaveClass('is-search-match');
+});
+
+test.each([['SERIES1',true],['PLAYNOW',false]])('只有系列場次 %s 顯示頂部返回入口並移除切換欄', async (code,hasSeries) => {
+  render(<PublicTournamentPage initialCode={code} />);
+  await screen.findByRole('heading',{name:'8/19'});
+  const back=screen.queryByRole('link',{name:'返回系列賽'});
+  if(hasSeries) expect(back).toHaveAttribute('href','/?series=BH2627');
+  else expect(back).not.toBeInTheDocument();
+  expect(screen.queryByText('切換賽事')).not.toBeInTheDocument();
+  expect(screen.queryByRole('textbox',{name:'賽事代碼'})).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('即時更新中');
+  expect(screen.getByRole('status').closest('header')).toBeInTheDocument();
 });

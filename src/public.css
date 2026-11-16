@@ -221,3 +221,10 @@
 /* Event pages share navigation but never stack their content. */
 .public-event-page { max-width: 58rem; margin-inline: auto; }
 .public-event-page[hidden] { display: none; }
+
+.public-header--with-back { position: relative; padding-top: 52px; }
+.public-ink .public-back-link { position: absolute; top: 6px; left: 18px; display: inline-flex; align-items: center; min-height:44px; padding:8px 12px; font-size:.8125rem; border:1px solid #566063; background:rgb(36 39 40 / .38); }
+.public-update-time { display:block; font-size:.75rem; margin-top:4px; color:#b7cbd0; }
+.public-search-feedback { margin:8px 0 0; color:#b7cbd0; font-size:.8125rem; }
+.public-ink .is-search-match { background:rgb(183 203 208 / .12); outline:1px solid #b7cbd0; outline-offset:-1px; scroll-margin-block:80px; }
+.public-ink .is-search-match:focus { outline:2px solid #d18d90; outline-offset:2px; }
