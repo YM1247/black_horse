@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { vi } from 'vitest';
+import { beforeEach, vi } from 'vitest';
 import PublicTournamentPage from './PublicTournamentPage';
 
 vi.mock('./firebase', () => ({ isFirebaseConfigured: true }));
@@ -33,6 +33,7 @@ vi.mock('./services/tournamentRepository', () => ({
       clientUpdatedAt: '2026-08-20T10:00:00.000Z',
       sync: { fromCache: false, hasPendingWrites: false }
     };
+    if (code === 'PLAYNOW') value.phase = 'playing';
     if (code === 'REGNOW') { value.phase = 'registration'; value.rounds = []; }
     if (code === 'OFF123') value.sync.fromCache = true;
     onTournament(value);
@@ -40,31 +41,47 @@ vi.mock('./services/tournamentRepository', () => ({
   }
 }));
 
-test('finished event merges round records into one match list and retains final points', async () => {
-  render(<PublicTournamentPage initialCode="MOCK819" />);
-  expect(await screen.findByRole('heading', { name: '8/19' })).toBeInTheDocument();
-  const matches = screen.getByRole('region', { name: '本輪對戰' });
-  expect(matches).not.toHaveTextContent('賽前');
-  expect(matches).toHaveTextContent('0-0 組');
-  expect(matches.querySelectorAll('article')).toHaveLength(1);
-  expect(matches.querySelector('.public-match-status')).toBeNull();
-  expect(screen.queryByRole('region', { name: '完整瑞士制樹狀圖' })).not.toBeInTheDocument();
-  expect(screen.getByRole('region', { name: '最終排名' })).toHaveTextContent('本場積分 100');
+beforeEach(() => {
+  window.history.replaceState({}, '', '/');
+  window.scrollTo = vi.fn();
 });
 
-
-test('手機輪次與排名連結可回到同一場賽事，保留已載入的比分', async () => {
-  window.history.replaceState({}, '', '/?event=MOCK819');
+test('已完賽預設只顯示排名，可切換獨立賽況頁並保留賽事', async () => {
   render(<PublicTournamentPage initialCode="MOCK819" />);
-  expect(await screen.findByRole('heading', {name:'8/19'})).toBeInTheDocument();
-  const nav = screen.getByRole('navigation', { name: '公開頁面導覽' });
-  for (const link of nav.querySelectorAll('a')) {
-    expect(document.querySelector(link.hash)).toBeInTheDocument();
-    window.history.replaceState({}, '', '/?event=MOCK819' + link.hash);
-    fireEvent(window, new PopStateEvent('popstate'));
-    expect(screen.getByRole('region', { name: '最終排名' })).toHaveTextContent('Alice');
-  }
-  window.history.replaceState({}, '', '/');
+  expect(await screen.findByRole('region', { name: '最終排名' })).toHaveTextContent('本場積分 100');
+  expect(screen.queryByRole('region', { name: '本輪對戰' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: '排名', exact:true })).toHaveAttribute('aria-current', 'page');
+  fireEvent.click(screen.getByRole('link', { name:'賽況',exact:true }));
+  const matches=screen.getByRole('region', { name:'本輪對戰' });
+  expect(matches).toHaveTextContent('0-0 組');
+  expect(matches).not.toHaveTextContent('賽前');
+  expect(screen.queryByRole('region', { name:'最終排名' })).not.toBeInTheDocument();
+  expect(window.location.search).toContain('event=MOCK819');
+  expect(window.location.search).toContain('view=matches');
+  fireEvent.click(screen.getByRole('link', { name:'排名',exact:true }));
+  expect(screen.queryByRole('region', { name:'本輪對戰' })).not.toBeInTheDocument();
+  expect(screen.getByRole('region', { name:'最終排名' })).toHaveTextContent('Alice');
+});
+
+test('進行中預設賽況，排名連結保存預覽參數，上一頁還原選擇', async () => {
+  window.history.replaceState({}, '', '/?event=PLAYNOW&extra=keep');
+  render(<PublicTournamentPage initialCode="PLAYNOW" />);
+  expect(await screen.findByRole('region', { name:'本輪對戰' })).toBeInTheDocument();
+  expect(screen.queryByRole('region', { name:'即時排名' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('link', { name:'排名',exact:true }));
+  expect(window.location.search).toContain('extra=keep');
+  expect(window.location.search).toContain('view=ranking');
+  expect(screen.getByRole('region', { name:'即時排名' })).toBeInTheDocument();
+  window.history.replaceState({}, '', '/?event=PLAYNOW&view=matches');
+  fireEvent(window, new PopStateEvent('popstate'));
+  expect(screen.getByRole('region', { name:'本輪對戰' })).toBeInTheDocument();
+  expect(screen.queryByRole('region', { name:'即時排名' })).not.toBeInTheDocument();
+});
+
+test.each([['MOCK819','matches','本輪對戰'], ['PLAYNOW','ranking','即時排名']])('明確頁面連結優先於 %s 狀態預設', async (code,view,region) => {
+  window.history.replaceState({}, '', `/?event=${code}&view=${view}`);
+  render(<PublicTournamentPage initialCode={code} />);
+  expect(await screen.findByRole('region', { name:region })).toBeInTheDocument();
 });
 
 test('尚無賽程時隱藏搜尋、排名與沒有目標的導覽', async () => {
@@ -85,4 +102,17 @@ test('斷線時使用同風格提示，隱藏無法連線的重試操作', async
     expect(notice).toHaveTextContent('目前離線');
     expect(screen.queryByRole('button', { name: '重試' })).not.toBeInTheDocument();
   } finally { offline.mockRestore(); }
+});
+
+test('切回賽況保留選手選擇', async () => {
+  render(<PublicTournamentPage initialCode="PLAYNOW" />);
+  const search = await screen.findByRole('searchbox');
+  fireEvent.change(search, { target:{ value:'Alice' } });
+  fireEvent.click(screen.getByRole('button', { name:'Alice',exact:true }));
+  expect(screen.getByRole('region', { name:'你的對戰' })).toHaveTextContent('Alice');
+  fireEvent.click(screen.getByRole('link', { name:'排名',exact:true }));
+  expect(screen.queryByRole('region', { name:'你的對戰' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('link', { name:'賽況',exact:true }));
+  expect(screen.getByRole('searchbox')).toHaveValue('Alice');
+  expect(screen.getByRole('region', { name:'你的對戰' })).toHaveTextContent('Alice');
 });

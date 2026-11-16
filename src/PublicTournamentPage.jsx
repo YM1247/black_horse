@@ -39,8 +39,14 @@ export function PublicTournamentRanking({ tournament, rankedPlayers, prominent =
   </section>;
 }
 
+const readEventView = () => {
+  const view = new URLSearchParams(window.location.search).get('view');
+  return ['matches', 'ranking'].includes(view) ? view : window.location.hash === '#event-ranking' ? 'ranking' : null;
+};
+
 export default function PublicTournamentPage({ initialCode = '' }) {
   const previewStage = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('preview') : null;
+  const [requestedView, setRequestedView] = useState(readEventView);
   const [input, setInput] = useState(initialCode);
   const [eventCode, setEventCode] = useState(validateEventCode(initialCode) ? normalizeEventCode(initialCode) : '');
   const [tournament, setTournament] = useState(null);
@@ -53,6 +59,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     const handlePopState = () => {
+      setRequestedView(readEventView());
       const code = normalizeEventCode(new URLSearchParams(window.location.search).get('event') || '');
       if (code === eventCode) return;
       setTournament(null);
@@ -71,11 +78,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
     };
   }, [eventCode]);
 
-  useEffect(() => {
-    document.title = tournament?.name
-      ? `${tournament.name}｜即時賽況`
-      : '黑馬記念｜公開賽事';
-  }, [tournament?.name]);
+
 
   useEffect(() => {
     if (previewStage) {
@@ -110,6 +113,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
       return;
     }
     setTournament(null);
+    setRequestedView(null);
     setStatus('loading');
     window.history.pushState({}, '', `${window.location.pathname}?event=${code}`);
     setEventCode(code);
@@ -123,6 +127,15 @@ export default function PublicTournamentPage({ initialCode = '' }) {
   const hasSchedule = rounds.length > 0 || tournament?.playoffSeeds?.length > 0;
   const hasRanking = hasSchedule && rankedPlayers.length > 0;
   const hasBottomNav = hasSchedule && (hasRanking || Boolean(parentSeries?.publicCode));
+  const activeView = hasRanking && (requestedView || (tournament?.phase === 'finished' ? 'ranking' : 'matches')) === 'ranking' ? 'ranking' : 'matches';
+  const changeView = (view, href) => {
+    window.history.pushState({}, '', href);
+    setRequestedView(view);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+  useEffect(() => {
+    document.title = tournament?.name ? `${tournament.name}｜${activeView === 'ranking' ? '排名' : '即時賽況'}` : '黑馬記念｜公開賽事';
+  }, [tournament?.name, activeView]);
 
   return (
     <main className={`spectator-page public-ink${hasBottomNav ? '' : ' public-ink--no-nav'}`}>
@@ -162,11 +175,13 @@ export default function PublicTournamentPage({ initialCode = '' }) {
               {tournament.sync?.hasPendingWrites ? '資料同步中' : '即時更新中'}{tournament.clientUpdatedAt && `・更新 ${new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW')}`}
             </div>}
 
-            <div className={`public-event-grid${hasRanking ? ' has-ranking' : ''}`}>
+            <div className="public-event-page" hidden={activeView !== 'matches'}>
               <PublicEventLive tournament={tournament} />
-              {hasRanking && <aside><PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} /></aside>}
+              {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} />}
             </div>
-            {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} />}
+            {hasRanking && <div className="public-event-page" hidden={activeView !== 'ranking'}>
+              <PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} />
+            </div>}
 
 
 
@@ -174,7 +189,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
         )}
         </div>
       </div>
-      <PublicBottomNav seriesCode={parentSeries?.publicCode} hasSchedule={hasSchedule} hasRanking={hasRanking} />
+      <PublicBottomNav eventCode={eventCode} eventView={activeView} onEventViewChange={changeView} seriesCode={parentSeries?.publicCode} hasSchedule={hasSchedule} hasRanking={hasRanking} />
     </main>
   );
 }

@@ -217,3 +217,7 @@
 .public-container::before, .public-container::after { content:''; position:absolute; pointer-events:none; z-index:-1; left:0; right:0; }
 .public-container::before { top:400px; bottom:0; background:url('/brand/ink-repeat.webp') center top / 100% 1000px repeat-y; opacity:.7; mask-image:linear-gradient(transparent, #000 18%, #000 82%, transparent); mask-size:100% 1000px; mask-repeat:repeat-y; }
 .public-container::after { top:0; height:clamp(800px, 216.7vw, 1100px); background:url('/brand/ink-wash.webp') center top / 100% 100% no-repeat; mask-image:linear-gradient(#000 45%, transparent 100%); }
+
+/* Event pages share navigation but never stack their content. */
+.public-event-page { max-width: 58rem; margin-inline: auto; }
+.public-event-page[hidden] { display: none; }
