@@ -16,3 +16,5 @@
 
 公開入口：https://ym1247.github.io/black_horse/?event=BH2627S1
 系列首頁：https://ym1247.github.io/black_horse/?series=BH2627
+
+部署結果：來源提交 2ad2b24；GitHub Pages 發布提交 0937cc6e3c9a9537238b303b54d1db97ded746af，狀態 built。正式頁 HTTP 200，線上主程式 index-B-VXawzW.js 與樣式 index-CgtXOAur.css 的 SHA-256 與本機正式產物一致。正式第一場頁成功從快取切換為「即時更新中」，顯示雲端報名中狀態與最新更新時間。正式站沒有建立或更動測試賽事。
