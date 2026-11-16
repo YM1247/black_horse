@@ -1,25 +1,22 @@
 {
-  "short_name": "黑馬賽事",
+  "short_name": "黑馬記念",
   "name": "黑馬記念瑞士制賽事系統",
   "icons": [
     {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "brand/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "logo192.png",
+      "src": "brand/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "logo512.png",
-      "type": "image/png",
-      "sizes": "512x512"
+      "purpose": "any"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#0d0f12",
-  "background_color": "#0d0f12"
+  "theme_color": "#242728",
+  "background_color": "#242728"
 }

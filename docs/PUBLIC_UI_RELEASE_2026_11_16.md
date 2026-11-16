@@ -30,3 +30,13 @@
 原水墨背景掛在最大 78rem（1248px）的內容容器上，寬螢幕外側只剩純炭灰。將兩個水墨裝飾層及隔離層移到全寬 public-ink 主頁，內容仍置中並限制 78rem；背景維持高度邊界與長頁重複紋理，避免重新造成短頁溢出。
 
 驗證：1920×1080 下背景層寬 1920px、內容寬 1248px、文件高 1080px；844×390 橫式背景寬 844px，頁高 536px 來自實際內容；390×844 直式短頁高 844px。無橫向溢出，正式建置與差異檢查通過。
+
+## 手機 Safari 安全區與品牌圖示
+
+依手機截圖，白色出現在狀態列與瀏覽器底部安全區。原 html/body 沒有底色，viewport 未宣告 cover。依 WebKit 的安全區設計，新增 critical html/body 深色底與 color-scheme、viewport-fit=cover，並將 theme-color／manifest background/theme 統一為 #242728；主畫面模式加入黑色透明狀態列設定。公開標頭、返回按鈕、內容與底部導覽使用安全區內距，頁面最低高度支援 100dvh，縮放仍可使用。
+
+參考：https://webkit.org/blog/7929/designing-websites-for-iphone-x/ 、https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html
+
+品牌圖示以原始合圖的既有核准展示視窗匯出，僅改色與等比例縮放／補齊正方形畫布，沒有重繪；原圖 SHA-256 保持不變。提供 32px favicon、180px iOS touch icon、192/512px manifest icons，替換舊 React favicon.ico 與 logo192/512；來源流程記於 public/brand/icons.json。新圖示採新路徑，manifest／舊 favicon 加版本參數，降低快取干擾。
+
+驗證建置圖示路徑正確，ICO／PNG 尺寸及原圖雜湊正確；390×844 下 html/body 均為 #242728、頁高 844px，844×390 無水平溢出，viewport／主題色／圖示宣告正確。實體 iPhone Safari 的系統工具列無法由桌面瀏覽器模擬驗收；實際瀏覽器仍控制其介面外觀。正式產物沒有 Live 注入與預覽資料。

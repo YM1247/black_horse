@@ -6,7 +6,7 @@
   --public-muted: #b7cbd0;
   --public-accent: #d18d90;
   --public-line: #566063;
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
   padding: 0;
   background: #242728;
   color: #eeeae3;
@@ -18,10 +18,10 @@
 }
 .public-ink *, .public-ink *::before, .public-ink *::after { box-sizing: border-box; }
 .public-ink ::selection { background: #864b51; color: #fff; }
-.public-container { max-width: 78rem; min-height: 100vh; padding-bottom:calc(4rem + env(safe-area-inset-bottom)); margin: 0 auto; }
+.public-container { max-width: 78rem; min-height: 100vh; min-height: 100dvh; padding-bottom:calc(4rem + env(safe-area-inset-bottom)); margin: 0 auto; }
 .public-ink--no-nav { padding-bottom: 0; }
-.public-ink--no-nav .public-container { min-height: 100vh; padding-bottom:24px; }
-.public-header { text-align: center; padding-top: 2px; }
+.public-ink--no-nav .public-container { min-height: 100vh; min-height: 100dvh; padding-bottom:calc(24px + env(safe-area-inset-bottom)); }
+.public-header { text-align: center; padding-top: calc(2px + env(safe-area-inset-top)); }
 .public-ink .public-brand { display: block; width: 240px; min-height: 0; margin: 0 auto; }
 .public-brand-window { display: block; position: relative; width: 240px; height: 212px; overflow: hidden; }
 .public-brand-window img { display: block; position: absolute; max-width: none; width: 240px; height: auto; top: -88px; left: 0; filter: invert(1) sepia(.12) brightness(.94); mix-blend-mode: screen; }
@@ -224,8 +224,8 @@
 .public-event-page { max-width: 58rem; margin-inline: auto; }
 .public-event-page[hidden] { display: none; }
 
-.public-header--with-back { position: relative; padding-top: 52px; }
-.public-ink .public-back-link { position: absolute; top: 6px; left: 18px; display: inline-flex; align-items: center; min-height:44px; padding:8px 12px; font-size:.8125rem; border:1px solid #566063; background:rgb(36 39 40 / .38); }
+.public-header--with-back { position: relative; padding-top: calc(52px + env(safe-area-inset-top)); }
+.public-ink .public-back-link { position: absolute; top: calc(6px + env(safe-area-inset-top)); left: max(18px, env(safe-area-inset-left)); display: inline-flex; align-items: center; min-height:44px; padding:8px 12px; font-size:.8125rem; border:1px solid #566063; background:rgb(36 39 40 / .38); }
 .public-update-time { display:block; font-size:.75rem; margin-top:4px; color:#b7cbd0; }
 .public-search-feedback { margin:8px 0 0; color:#b7cbd0; font-size:.8125rem; }
 .public-ink .is-search-match { background:rgb(183 203 208 / .12); outline:1px solid #b7cbd0; outline-offset:-1px; scroll-margin-block:80px; }
@@ -254,3 +254,9 @@
 .public-playoff-ranking strong { color:#eeeae3; font-weight:600; overflow-wrap:anywhere; }
 
 .public-ink .public-swiss-heading { margin-top:36px; padding-top:0; border-top:0; }
+
+/* Keep controls clear of notches while the page color fills Safari chrome. */
+.public-content { padding-left:max(18px, env(safe-area-inset-left)); padding-right:max(18px, env(safe-area-inset-right)); }
+.public-ink .public-bottom-nav { padding-left:max(12px, calc((100vw - 78rem) / 2), env(safe-area-inset-left)); padding-right:max(12px, calc((100vw - 78rem) / 2), env(safe-area-inset-right)); }
+@media(min-width:768px) { .public-content { padding-left:max(36px, env(safe-area-inset-left)); padding-right:max(36px, env(safe-area-inset-right)); } }
+@media(max-width:359px) { .public-content { padding-left:max(12px, env(safe-area-inset-left)); padding-right:max(12px, env(safe-area-inset-right)); } }
