@@ -68,12 +68,29 @@ test('公開八強隱藏籤位與場次編號，已完成才明示勝敗', () =>
   event.bracket.q2={...event.bracket.q2,p1Votes:1,p2Votes:0,isDone:false};
   render(<PlayoffBracket event={event} publicView />);
   const done=screen.getByRole('article',{name:'八強 1',exact:true});
-  expect(within(done).getByRole('heading')).toHaveTextContent(/^八強$/);
+  expect(within(done).queryByRole('heading')).not.toBeInTheDocument();
+  const stage=screen.getByRole('region',{name:'八強',exact:true});
+  expect(within(stage).getAllByRole('heading')).toHaveLength(1);
+  expect(within(stage).getAllByRole('article')).toHaveLength(4);
+  expect(within(screen.getByRole('region',{name:'四強',exact:true})).getAllByRole('article')).toHaveLength(2);
   expect(done).not.toHaveTextContent('#');
   expect(done.querySelector('.is-winner')).toHaveTextContent(event.bracket.q1.p1.name);
-  expect(done.querySelector('.public-winner-label')).toHaveTextContent('勝');
+  expect(done.querySelector('.public-winner-label')).toBeNull();
   expect(done.querySelector('.is-loser')).toHaveTextContent(event.bracket.q1.p2.name);
   const pending=screen.getByRole('article',{name:'八強 2',exact:true});
   expect(pending.querySelector('.is-loser')).toBeNull();
   expect(pending.querySelector('.public-winner-label')).toBeNull();
+});
+
+
+test('公開合作賽按階段分組並保留冠軍戰逐局比分', () => {
+  let event=fixture();
+  for(const [key] of gamesFor(event)) if(key!=='gold') event=scorePlayoff(event,key,3);
+  event=scorePlayoff(event,'gold',3,0);
+  render(<PlayoffBracket event={event} publicView />);
+  expect(within(screen.getByRole('region',{name:'十六強',exact:true})).getAllByRole('article')).toHaveLength(8);
+  const final=screen.getByRole('region',{name:'冠軍戰',exact:true});
+  expect(within(final).getAllByRole('heading')).toHaveLength(1);
+  expect(within(final).getByText('第 1 局 · 3 : 0 票')).toBeInTheDocument();
+  expect(final.querySelector('.public-winner-label')).toBeNull();
 });

@@ -91,6 +91,6 @@ test('只在對戰完成後標示勝方並淡化敗方', () => {
   expect(container.querySelector('.is-winner')).toBeNull();
   expect(container.querySelector('.is-loser')).toBeNull();
   rerender(<PublicMatch match={{...match,isDone:true}} />);
-  expect(container.querySelector('.is-winner')).toHaveTextContent('青焰勝');
+  expect(container.querySelector('.is-winner')).toHaveTextContent('青焰');
   expect(container.querySelector('.is-loser')).toHaveTextContent('夜凪');
 });

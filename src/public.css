@@ -231,6 +231,16 @@
 
 .public-ink :is(.public-match-player, .playoff-entrant, .bout > span).is-loser strong { color:#929e9f; font-weight:400; }
 .public-ink :is(.public-match-player, .playoff-entrant, .bout > span).is-winner strong { color:#eeeae3; font-weight:650; }
-.public-ink :is(.public-match-player, .playoff-entrant, .bout > span) .public-winner-label { color:#e4b5b7; font-size:.6875rem; font-weight:600; }
 .public-ink .bout > span strong { font-weight:500; }
 .public-ink #swiss-round-matches { scroll-margin-top:18px; }
+
+/* Public knockout stages use the same compact grouping as Swiss matches. */
+.public-ink .public-live .public-playoff { border:0; padding:0; background:transparent; }
+.public-playoff-stage { margin-top:20px; }
+.public-ink .public-playoff-stage > h3 { font-size:.8125rem; font-weight:500; padding:8px 0; color:#b7cbd0; border-bottom:1px solid #738184; }
+.public-ink .public-playoff-stage > article { border-top:0; border-bottom:1px solid #566063; min-height:64px; padding:8px 0; }
+.public-ink .public-playoff-stage .bout { grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr); gap:12px; padding:0; min-height:47px; }
+.public-ink .public-playoff-stage .bout > span { display:flex; flex-direction:column-reverse; text-align:center; min-width:0; }
+.public-ink .public-playoff-stage .bout small { margin-top:3px; font-size:.75rem; font-weight:400; }
+.public-ink .public-playoff-stage .bout b { text-align:center; font-size:1.125rem; font-weight:500; font-variant-numeric:tabular-nums; }
+.public-ink .public-playoff-stage > article > p { color:#b7cbd0; font-size:.8125rem; padding-block:12px; }

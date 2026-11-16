@@ -34,13 +34,13 @@ export function PublicMatch({ match, prominent = false, label, unit, showStatus 
   const status = completed ? '已完成' : scored ? '進行中' : '等待比分';
   return <article className={(prominent ? 'public-personal-match' : 'public-match-row') + (highlighted ? ' is-search-match' : '')} aria-label={label} tabIndex={highlighted ? -1 : undefined}>
     <div className={'public-match-player' + (completed && match.p1Votes > match.p2Votes ? ' is-winner' : completed && match.p1Votes < match.p2Votes ? ' is-loser' : '')}>
-      <strong>{match.p1?.name || '等待選手'}</strong>{completed && match.p1Votes > match.p2Votes && <small className="public-winner-label">勝</small>}{showRecord && <small className="public-match-record">{left.wins} 勝 {left.losses} 敗・{left.votes} 票</small>}{match.attackOrder && <small>先攻</small>}
+      <strong>{match.p1?.name || '等待選手'}</strong>{showRecord && <small className="public-match-record">{left.wins} 勝 {left.losses} 敗・{left.votes} 票</small>}{match.attackOrder && <small>先攻</small>}
     </div>
     <div className="public-match-score"><b>{scored ? `${match.p1Votes} : ${match.p2Votes}` : '— : —'}</b>
       {unit && <small>{unit}</small>}{prominent && <small>{status}</small>}
     </div>
     <div className={'public-match-player' + (completed && match.p2Votes > match.p1Votes ? ' is-winner' : completed && match.p2Votes < match.p1Votes ? ' is-loser' : '')}>
-      <strong>{match.p2?.name || '等待選手'}</strong>{completed && match.p2Votes > match.p1Votes && <small className="public-winner-label">勝</small>}{showRecord && <small className="public-match-record">{right.wins} 勝 {right.losses} 敗・{right.votes} 票</small>}{match.attackOrder && <small>後攻</small>}
+      <strong>{match.p2?.name || '等待選手'}</strong>{showRecord && <small className="public-match-record">{right.wins} 勝 {right.losses} 敗・{right.votes} 票</small>}{match.attackOrder && <small>後攻</small>}
     </div>
     {!prominent && showStatus && <small className="public-match-status">{status}</small>}
     {unit && match.games?.length > 0 && <p className="public-match-games">{match.games.map((game, i) => `第${i + 1}局 ${game.p1Votes ?? '—'} : ${game.p2Votes ?? '—'} 票`).join('　')}</p>}
