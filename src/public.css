@@ -37,7 +37,7 @@
 .public-ink button:disabled { cursor: not-allowed; opacity: .55; }
 .public-ink input { caret-color: #d18d90; }
 .public-ink input::placeholder { color: #c3cecf; opacity: 1; }
-.public-code-lookup { margin: 0 0 14px; font-size: .8125rem; border-bottom: 1px solid #566063; }
+.public-code-lookup { margin: 0 0 14px; font-size: .8125rem; }
 .public-code-lookup summary { min-height: 44px; padding: 10px 0; color: #c4d2d4; cursor: pointer; }
 .public-code-lookup summary span { margin-left: 12px; font-size: .75rem; color: #bac6c9; overflow-wrap: anywhere; }
 .public-code-form { padding: 4px 0 16px; }
@@ -61,7 +61,7 @@
 .public-search-results ul { display: flex; flex-wrap: wrap; gap: 8px; max-height: 14rem; overflow-y: auto; padding: 3px; }
 .public-search-results button { border: 1px solid #738184; border-radius: 0; padding: 8px 14px; color: #eeeae3; min-height: 44px; overflow-wrap: anywhere; max-width: 100%; background: #303637; }
 .public-search-results button:hover { background: #455053; }
-.public-round-tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid #566063; margin: 14px 0 19px; }
+.public-round-tabs { display: flex; flex-wrap: wrap; margin: 14px 0 19px; }
 .public-ink .public-round-tabs a { flex: 1; position: relative; min-height: 46px; padding: 9px 6px 12px; font-size: 1rem; white-space: nowrap; color: #c6cfd0; }
 .public-round-tabs a[aria-current] { color: #eeeae3; font-weight: 600; }
 .public-round-tabs a[aria-current]::after { content: ''; position: absolute; height: 3px; left: 27%; right: 27%; bottom: -1px; border-radius: 0; background: #d18d90; }
@@ -83,7 +83,7 @@
 .public-personal-match .public-match-score b { font-size: clamp(1.375rem, 5vw, 1.75rem); }
 .public-match-games { grid-column: 1 / -1; color: #b7cbd0; font-size: .75rem; padding-top: 8px; }
 .public-current-matches { margin-top: 21px; }
-.public-match-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr) 60px; gap: 8px; align-items: center; min-height: 53px; padding: 10px 0; border-bottom: 1px solid #566063; }
+.public-match-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr) 60px; gap: 8px; align-items: center; min-height: 53px; padding: 10px 0; }
 .public-match-row > .public-match-player:nth-child(3) { text-align: center; }
 .public-match-row .public-match-player strong { font-size: .9375rem; }
 .public-match-status { color: #b7cbd0; font-size: .6875rem; text-align: right; }
@@ -92,7 +92,7 @@
 .public-event-grid > *, .public-live { min-width: 0; }
 .public-ink .event-board { background: transparent; border: 0; border-radius: 0; padding: 0; color: #eeeae3; }
 .public-ink .event-board h2 { margin-bottom: 10px; }
-.public-ink .event-board li { grid-template-columns: 24px minmax(0,1fr) auto; border-color: #566063; gap: 3px 10px; padding: 12px 0; }
+.public-ink .event-board li { grid-template-columns: 24px minmax(0,1fr) auto; border-bottom: 0; gap: 3px 10px; padding: 14px 0; }
 .public-ink .event-board .stage-name { font-size: .9375rem; font-weight: 500; }
 .public-ink .event-board .place { grid-column: 1; grid-row: 1; }
 .public-ink .event-board .stage-name { grid-column: 2; grid-row: 1; min-width: 0; }
@@ -103,7 +103,7 @@
 .public-ink .ranking-record { color: #eeeae3; font-size: .9375rem; font-weight: 600; }
 .public-ink .event-board .record .ranking-record { flex-basis: auto; }
 .public-ink .event-points { color: #d1b6b6; font-size: .75rem; font-weight: 500; }
-.public-ink .public-section-links { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 12px 0; margin: 12px 0; border-bottom: 1px solid #566063; font-size: .875rem; }
+.public-ink .public-section-links { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 12px 0; margin: 12px 0; font-size: .875rem; }
 .public-ink .public-section-links a { text-decoration: underline; }
 .public-full-bracket { padding: 18px 0 30px; min-width: 0; }
 .public-full-bracket > div:first-child { margin-bottom: 20px; }
@@ -192,7 +192,7 @@
 .public-ink .public-series-event-link:hover { background: #303637; color: #eeeae3; }
 .public-ink .public-series-event-link:focus-visible { outline: 2px solid #d18d90; outline-offset: 3px; }
 
-.public-preview-stages { display:flex; flex-wrap:wrap; gap:8px 18px; border-block:1px solid #566063; padding:12px 0; margin-bottom:24px; }
+.public-preview-stages { display:flex; flex-wrap:wrap; gap:8px 18px; padding:12px 0; margin-bottom:24px; }
 .public-preview-stages p { width:100%; color:#b7cbd0; font-size:12px; }
 .public-preview-stages a { min-height:44px; display:flex; align-items:center; font-size:14px; color:#c4d6da; }
 .public-preview-stages a[aria-current] { color:#eeeae3; text-decoration:underline; text-decoration-color:#d18d90; text-underline-offset:6px; }
@@ -209,7 +209,7 @@
 .public-code-form button:hover, .public-ink .public-primary-link:hover { background: #343c3d; color: #eeeae3; }
 .public-ink #series-ranking, .public-ink #series-ranking article { background: rgb(36 39 40 / .38); }
 .public-match-group { margin-top: 20px; }
-.public-match-group h3 { color: #b7cbd0; font-size: .8125rem; font-weight: 500; padding: 8px 0; border-bottom: 1px solid #738184; }
+.public-match-group h3 { color: #b7cbd0; font-size: .8125rem; font-weight: 500; padding: 8px 0; }
 
 /* One hero wash, then a quiet repeating wash for arbitrarily long pages.
    Each repeat fades into charcoal at both edges to hide its tile seam. */
@@ -237,8 +237,8 @@
 /* Public knockout stages use the same compact grouping as Swiss matches. */
 .public-ink .public-live .public-playoff { border:0; padding:0; background:transparent; }
 .public-playoff-stage { margin-top:20px; }
-.public-ink .public-playoff-stage > h3 { font-size:.8125rem; font-weight:500; padding:8px 0; color:#b7cbd0; border-bottom:1px solid #738184; }
-.public-ink .public-playoff-stage > article { border-top:0; border-bottom:1px solid #566063; min-height:64px; padding:8px 0; }
+.public-ink .public-playoff-stage > h3 { font-size:.8125rem; font-weight:500; padding:8px 0; color:#b7cbd0; }
+.public-ink .public-playoff-stage > article { border:0; min-height:64px; padding:8px 0; }
 .public-ink .public-playoff-stage .bout { grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr); gap:12px; padding:0; min-height:47px; }
 .public-ink .public-playoff-stage .bout > span { display:flex; flex-direction:column-reverse; text-align:center; min-width:0; }
 .public-ink .public-playoff-stage .bout small { margin-top:3px; font-size:.75rem; font-weight:400; }
@@ -247,8 +247,8 @@
 
 .public-playoff-ranking { margin-bottom:32px; }
 .public-playoff-ranking ol { margin-top:12px; }
-.public-playoff-ranking li { display:grid; grid-template-columns:64px minmax(0,1fr); gap:16px; align-items:center; padding:12px 0; border-bottom:1px solid #566063; }
+.public-playoff-ranking li { display:grid; grid-template-columns:64px minmax(0,1fr); gap:16px; align-items:center; padding:12px 0; }
 .public-playoff-ranking li span { color:#b7cbd0; font-size:.875rem; }
 .public-playoff-ranking strong { color:#eeeae3; font-weight:600; overflow-wrap:anywhere; }
 
-.public-swiss-heading { margin-top:36px; padding-top:24px; border-top:1px solid #738184; }
+.public-swiss-heading { margin-top:36px; padding-top:24px; border-top:1px solid #566063; }
