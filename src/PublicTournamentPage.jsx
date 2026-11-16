@@ -4,7 +4,6 @@ import { normalizeEventCode, subscribeTournament, validateEventCode } from './se
 import { eventRanking, hasPlayoff } from './seasonTournament';
 import { AKASHIKI } from './tournamentState';
 import PlayoffBracket from './PlayoffBracket';
-import PublicTournamentBracket from './PublicTournamentBracket';
 import { BLACK_HORSE, SERIES } from './series';
 import { PublicBrand, PublicBottomNav, PublicNotice } from './PublicLayout';
 import PublicEventLive from './PublicEventLive';
@@ -41,6 +40,7 @@ export function PublicTournamentRanking({ tournament, rankedPlayers, prominent =
 }
 
 export default function PublicTournamentPage({ initialCode = '' }) {
+  const previewStage = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('preview') : null;
   const [input, setInput] = useState(initialCode);
   const [eventCode, setEventCode] = useState(validateEventCode(initialCode) ? normalizeEventCode(initialCode) : '');
   const [tournament, setTournament] = useState(null);
@@ -78,6 +78,13 @@ export default function PublicTournamentPage({ initialCode = '' }) {
   }, [tournament?.name]);
 
   useEffect(() => {
+    if (previewStage) {
+      let active = true;
+      import('./publicPreview').then(({ createPublicPreview }) => {
+        if (active) { setTournament(createPublicPreview(previewStage)); setStatus('ready'); }
+      });
+      return () => { active = false; };
+    }
     if (!isFirebaseConfigured || !eventCode) return undefined;
     setStatus('loading');
     setError('');
@@ -89,7 +96,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
       setStatus('error');
       setError(firebaseError.code === 'permission-denied' ? '此賽事不存在或尚未公開。' : '讀取賽事失敗，請稍後再試。');
     });
-  }, [eventCode, retryKey]);
+  }, [eventCode, retryKey, previewStage]);
 
   const handleLookup = (event) => {
     event.preventDefault();
@@ -121,9 +128,13 @@ export default function PublicTournamentPage({ initialCode = '' }) {
     <main className={`spectator-page public-ink${hasBottomNav ? '' : ' public-ink--no-nav'}`}>
       <div className="public-container">
         <PublicBrand title={tournament?.name || '公開賽事查詢'}>
-          {tournament && <p className="public-event-meta">{PHASE_LABELS[tournament.phase] || tournament.phase} · {tournament.judgeCount} 位評審 · {tournament.doubleElimination ? '兩敗淘汰' : '不淘汰'}</p>}
+          {tournament && <p className="public-event-meta">{PHASE_LABELS[tournament.phase] || tournament.phase}</p>}
         </PublicBrand>
         <div className="public-content">
+        {previewStage && <nav aria-label="測試階段" className="public-preview-stages">
+          <p>本機測試資料・不影響正式賽事</p>
+          {[['registration','報名中'],['round1','第一輪'],['round2','第二輪'],['round3','第三輪'],['finished','積分賽完賽'],['playoff','八強淘汰賽'],['final','最終戰完賽']].map(([key,label]) => <a key={key} href={`?event=DEMO&preview=${key}`} aria-current={previewStage===key?'page':undefined}>{label}</a>)}
+        </nav>}
         <details id="public-lookup" className="public-code-lookup" open={!tournament}>
           <summary>{tournament ? '切換賽事' : '查詢賽事'}</summary>
           <form onSubmit={handleLookup} className="public-code-form">
@@ -155,22 +166,9 @@ export default function PublicTournamentPage({ initialCode = '' }) {
               <PublicEventLive tournament={tournament} />
               {hasRanking && <aside><PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} /></aside>}
             </div>
-            {(rounds.length > 0 || (!hasBottomNav && parentSeries?.publicCode)) && <nav className="public-section-links" aria-label="完整賽事資料">
-              {rounds.length > 0 && <a href="#swiss-bracket">完整瑞士制賽程</a>}
-              {!hasBottomNav && parentSeries?.publicCode && <a href={`?series=${parentSeries.publicCode}`}>查看整個系列賽</a>}
-            </nav>}
             {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} />}
 
-            {rounds.length > 0 && (
-              <section id="swiss-bracket" className="public-full-bracket">
-                <div className="mb-6">
-                  <h2 className="text-2xl md:text-3xl font-black text-[#b6d2d4]">完整瑞士制樹狀圖</h2>
-                  <p className="mt-2 text-sm font-bold text-slate-500">依輪次與{tournament.rulesVersion === AKASHIKI ? '總票數' : '勝場'}分組呈現，比分及戰績會隨後台操作即時更新。</p>
-                </div>
-                {tournament.players?.some(p=>p.seedCredit) && <p className="mb-4 text-slate-300">首輪種子（一勝五票） · {tournament.players.filter(p=>p.seedCredit).map(p=>p.name).join('、')}</p>}
-                <PublicTournamentBracket rounds={rounds} votesFirst={tournament.rulesVersion === AKASHIKI} publicView />
-              </section>
-            )}
+
 
           </>
         )}

@@ -1,0 +1,9 @@
+{
+  "tool": "image_gen",
+  "date": "2026-11-16",
+  "reference": "ink-wash.webp",
+  "purpose": "Low contrast charcoal ink wash for vertically repeated lower page background",
+  "source": "exec-bbc67b70-25ec-4b18-b676-8d0aecbb55e8.png",
+  "processing": "cwebp -q 82; CSS periodic alpha mask hides tile boundaries",
+  "brandArtworkChanged": false
+}

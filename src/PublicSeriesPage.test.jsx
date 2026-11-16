@@ -42,7 +42,7 @@ test('public series page shows public events and computes finished-event standin
   render(<PublicSeriesPage initialCode="SIM2026" />);
 
   expect(await screen.findByRole('heading', { name: '模擬賽' })).toBeInTheDocument();
-  expect(screen.getByText('系列說明')).toBeInTheDocument();
+  expect(screen.queryByText('系列說明')).not.toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '8/19' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '8/21' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '8/26' })).toBeInTheDocument();

@@ -139,12 +139,9 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   return (
     <main className={`spectator-page public-ink${hasBottomNav ? '' : ' public-ink--no-nav'}`}>
       <div className="public-container">
-        <PublicBrand title={publicSeriesName(series) || '公開系列賽查詢'}>
-          {series && <p className="public-event-meta">{series.description}</p>}
-        </PublicBrand>
+        <PublicBrand title={publicSeriesName(series) || '公開系列賽查詢'} />
         <div className="public-content">
-        <div className="public-section-links"><a href={window.location.pathname}>返回公開賽事查詢</a></div>
-        <details id="public-lookup" className="public-code-lookup" open={!series}>
+        <details hidden={Boolean(series)} id="public-lookup" className="public-code-lookup" open={!series}>
           <summary>{series ? '切換系列' : '查詢系列'}</summary>
           <form onSubmit={handleLookup} className="public-code-form">
             <label htmlFor="public-series-code">系列代碼</label>
@@ -174,21 +171,16 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                 {series.events.map(event => {
                   const tournament = tournamentsByCode[event.eventCode];
                   return (
-                    <article key={event.id} className="spectator-event p-3 md:p-5 rounded-2xl border border-slate-700 bg-[#161920]">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-2xl font-black">{event.name}</h3>
-                          <p className="text-xs font-bold text-slate-500 mt-1">#{event.eventCode}</p>
-                        </div>
-                        <span className="public-event-status">
-                          {tournament ? PHASE_LABELS[tournament.phase] || tournament.phase : '載入中'}
-                        </span>
+                    <article key={event.id} className="public-series-event">
+                      <h3>{event.name}</h3>
+                      <div className="public-series-event-meta">
+                        <span>#{event.eventCode}</span>
+                        <span>{tournament ? PHASE_LABELS[tournament.phase] || tournament.phase : '載入中'}</span>
                       </div>
-                      <p className="mt-2 md:mt-5 text-sm font-bold text-slate-400">
+                      <p className="public-series-event-rules">
                         {event.judgeCount} 位評審・{event.doubleElimination ? '兩敗淘汰' : '不淘汰'}
                       </p>
-                      <a href={`${window.location.pathname}?event=${event.eventCode}`}
-                        className="public-secondary-link">
+                      <a href={`${window.location.pathname}?event=${event.eventCode}`} className="public-series-event-link">
                         查看單場賽況
                       </a>
                     </article>
