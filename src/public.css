@@ -5,7 +5,7 @@
   --public-accent: #d18d90;
   --public-line: #566063;
   min-height: 100vh;
-  padding: 0 0 calc(4rem + env(safe-area-inset-bottom));
+  padding: 0;
   background: #242728;
   color: #eeeae3;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", sans-serif;
@@ -16,9 +16,9 @@
 }
 .public-ink *, .public-ink *::before, .public-ink *::after { box-sizing: border-box; }
 .public-ink ::selection { background: #864b51; color: #fff; }
-.public-container { max-width: 78rem; min-height: calc(100vh - 4rem - env(safe-area-inset-bottom)); margin: 0 auto; background: url('/brand/ink-wash.webp') center top / 100% auto no-repeat; }
-.public-ink--no-nav { padding-bottom: 24px; }
-.public-ink--no-nav .public-container { min-height: calc(100vh - 24px); }
+.public-container { max-width: 78rem; min-height: 100vh; padding-bottom:calc(4rem + env(safe-area-inset-bottom)); margin: 0 auto; background: url('/brand/ink-wash.webp') center top / 100% auto no-repeat; }
+.public-ink--no-nav { padding-bottom: 0; }
+.public-ink--no-nav .public-container { min-height: 100vh; padding-bottom:24px; }
 .public-header { text-align: center; padding-top: 2px; }
 .public-ink .public-brand { display: block; width: 240px; min-height: 0; margin: 0 auto; }
 .public-brand-window { display: block; position: relative; width: 240px; height: 212px; overflow: hidden; }
@@ -216,7 +216,7 @@
 .public-container { position:relative; isolation:isolate; background:none; }
 .public-container::before, .public-container::after { content:''; position:absolute; pointer-events:none; z-index:-1; left:0; right:0; }
 .public-container::before { top:400px; bottom:0; background:url('/brand/ink-repeat.webp') center top / 100% 1000px repeat-y; opacity:.7; mask-image:linear-gradient(transparent, #000 18%, #000 82%, transparent); mask-size:100% 1000px; mask-repeat:repeat-y; }
-.public-container::after { top:0; height:clamp(800px, 216.7vw, 1100px); background:url('/brand/ink-wash.webp') center top / 100% 100% no-repeat; mask-image:linear-gradient(#000 45%, transparent 100%); }
+.public-container::after { top:0; bottom:0; height:auto; max-height:clamp(800px, 216.7vw, 1100px); background:url('/brand/ink-wash.webp') center top / 100% clamp(800px, 216.7vw, 1100px) no-repeat; mask-image:linear-gradient(#000 45%, transparent 100%); }
 
 /* Event pages share navigation but never stack their content. */
 .public-event-page { max-width: 58rem; margin-inline: auto; }
