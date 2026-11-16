@@ -27,7 +27,7 @@
 .public-heading h1 { margin: 0; font-size: 1rem; font-weight: 500; line-height: 1.5; letter-spacing: .06em; overflow-wrap: anywhere; color: #d4dede; }
 .public-event-meta { color: #b7cbd0; font-size: .75rem; margin: 6px 0 0; }
 .public-content { padding: 0 18px; }
-.public-ink h2 { font-size: 1.0625rem; line-height: 1.5; font-weight: 600; color: #eeeae3; margin: 0 0 10px; }
+.public-ink h2 { font-size: 1.0625rem; line-height: 1.5; font-weight: 600; color: #eeeae3; margin: 0 0 10px; padding-bottom:10px; border-bottom:1px solid #566063; }
 .public-ink :is(a, button, input, summary) { -webkit-tap-highlight-color: #d18d9022; }
 .public-ink :is(a, button, input, summary):focus-visible { outline: 2px solid #d18d90; outline-offset: 3px; }
 .public-ink :is(input, button, a) { transition: color 140ms ease-out, background-color 140ms ease-out; }
@@ -61,7 +61,7 @@
 .public-search-results ul { display: flex; flex-wrap: wrap; gap: 8px; max-height: 14rem; overflow-y: auto; padding: 3px; }
 .public-search-results button { border: 1px solid #738184; border-radius: 0; padding: 8px 14px; color: #eeeae3; min-height: 44px; overflow-wrap: anywhere; max-width: 100%; background: #303637; }
 .public-search-results button:hover { background: #455053; }
-.public-round-tabs { display: flex; flex-wrap: wrap; margin: 14px 0 19px; }
+.public-round-tabs { display: flex; flex-wrap: wrap; border-bottom:1px solid #566063; margin: 14px 0 19px; }
 .public-ink .public-round-tabs a { flex: 1; position: relative; min-height: 46px; padding: 9px 6px 12px; font-size: 1rem; white-space: nowrap; color: #c6cfd0; }
 .public-round-tabs a[aria-current] { color: #eeeae3; font-weight: 600; }
 .public-round-tabs a[aria-current]::after { content: ''; position: absolute; height: 3px; left: 27%; right: 27%; bottom: -1px; border-radius: 0; background: #d18d90; }
@@ -209,7 +209,7 @@
 .public-code-form button:hover, .public-ink .public-primary-link:hover { background: #343c3d; color: #eeeae3; }
 .public-ink #series-ranking, .public-ink #series-ranking article { background: rgb(36 39 40 / .38); }
 .public-match-group { margin-top: 20px; }
-.public-match-group h3 { color: #b7cbd0; font-size: .8125rem; font-weight: 500; padding: 8px 0; }
+.public-match-group h3 { color: #b7cbd0; font-size: .8125rem; font-weight: 500; padding: 8px 0; border-bottom:1px solid #738184; }
 
 /* One hero wash, then a quiet repeating wash for arbitrarily long pages.
    Each repeat fades into charcoal at both edges to hide its tile seam. */
@@ -237,7 +237,7 @@
 /* Public knockout stages use the same compact grouping as Swiss matches. */
 .public-ink .public-live .public-playoff { border:0; padding:0; background:transparent; }
 .public-playoff-stage { margin-top:20px; }
-.public-ink .public-playoff-stage > h3 { font-size:.8125rem; font-weight:500; padding:8px 0; color:#b7cbd0; }
+.public-ink .public-playoff-stage > h3 { font-size:.8125rem; font-weight:500; padding:8px 0; color:#b7cbd0; border-bottom:1px solid #738184; }
 .public-ink .public-playoff-stage > article { border:0; min-height:64px; padding:8px 0; }
 .public-ink .public-playoff-stage .bout { grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr); gap:12px; padding:0; min-height:47px; }
 .public-ink .public-playoff-stage .bout > span { display:flex; flex-direction:column-reverse; text-align:center; min-width:0; }
@@ -251,4 +251,4 @@
 .public-playoff-ranking li span { color:#b7cbd0; font-size:.875rem; }
 .public-playoff-ranking strong { color:#eeeae3; font-weight:600; overflow-wrap:anywhere; }
 
-.public-swiss-heading { margin-top:36px; padding-top:24px; border-top:1px solid #566063; }
+.public-ink .public-swiss-heading { margin-top:36px; padding-top:0; border-top:0; }
