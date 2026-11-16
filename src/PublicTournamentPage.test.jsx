@@ -33,6 +33,16 @@ vi.mock('./services/tournamentRepository', () => ({
       clientUpdatedAt: '2026-08-20T10:00:00.000Z',
       sync: { fromCache: false, hasPendingWrites: false }
     };
+    if (['KNOCKNOW','KNOCKEND'].includes(code)) {
+      const c={id:'c',name:'Charlie'}, d={id:'d',name:'Dana'};
+      value.rulesVersion='final-26-27';
+      value.phase=code==='KNOCKEND'?'finished':'playing';
+      value.playoffSeeds=[alice,bob,c,d];
+      value.bracket={
+        gold:{p1:alice,p2:bob,p1Votes:3,p2Votes:0,isDone:code==='KNOCKEND'},
+        bronze:{p1:c,p2:d,p1Votes:2,p2Votes:1,isDone:code==='KNOCKEND'}
+      };
+    }
     if (code === 'SERIES1') value.seriesId = 'black-horse-26-27';
     if (code === 'PLAYNOW') value.phase = 'playing';
     if (code === 'REGNOW') { value.phase = 'registration'; value.rounds = []; }
@@ -127,4 +137,19 @@ test.each([['SERIES1',true],['PLAYNOW',false]])('只有系列場次 %s 顯示頂
   expect(screen.queryByRole('textbox',{name:'賽事代碼'})).not.toBeInTheDocument();
   expect(screen.getByRole('status')).toHaveTextContent('即時更新中');
   expect(screen.getByRole('status').closest('header')).toBeInTheDocument();
+});
+
+test.each(['KNOCKNOW','KNOCKEND'])('淘汰賽 %s 排名頁先列淘汰名次，僅完成對戰決定名次', async code => {
+  window.history.replaceState({}, '', `/?event=${code}&view=ranking`);
+  render(<PublicTournamentPage initialCode={code} />);
+  const knockout=await screen.findByRole('region',{name:'淘汰賽名次'});
+  const swiss=screen.getByRole('region',{name:'瑞士制排名'});
+  expect(knockout.compareDocumentPosition(swiss) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const rows=knockout.querySelectorAll('li');
+  if(code==='KNOCKEND') {
+    ['冠軍Alice','亞軍Bob','季軍Charlie','殿軍Dana'].forEach((text,i)=>expect(rows[i]).toHaveTextContent(text));
+  } else {
+    expect(knockout).not.toHaveTextContent('Alice');
+    expect([...rows].every(row=>row.textContent.includes('待定'))).toBe(true);
+  }
 });

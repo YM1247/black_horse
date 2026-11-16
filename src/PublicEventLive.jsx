@@ -57,7 +57,7 @@ export default function PublicEventLive({ tournament }) {
   const matches = rounds[index] || [];
   const term = query.trim().toLocaleLowerCase();
   const players = (tournament.players || []).filter(player => !player.isMC);
-  const matchingCount = matches.filter(match => matchesQuery(match, term)).length + gamesFor(tournament).filter(([key]) => matchesQuery(tournament.bracket?.[key], term)).length;
+  const matchingCount = matches.filter(match => matchesQuery(match, term)).length + gamesFor(tournament).filter(([key]) => tournament.bracket?.[key]?.p1 && tournament.bracket?.[key]?.p2 && matchesQuery(tournament.bracket[key], term)).length;
   const jumpToMatch = event => {
     event.preventDefault();
     if (!term) return;

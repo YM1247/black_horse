@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { isFirebaseConfigured } from './firebase';
 import { normalizeEventCode, subscribeTournament, validateEventCode } from './services/tournamentRepository';
 import { eventRanking, hasPlayoff } from './seasonTournament';
+import { resultPlayer } from './finalTournament';
 import { AKASHIKI } from './tournamentState';
 import { BLACK_HORSE, SERIES } from './series';
 import { PublicBrand, PublicBottomNav, PublicNotice } from './PublicLayout';
@@ -12,6 +13,22 @@ const PHASE_LABELS = {
   playing: '進行中',
   finished: '已完賽'
 };
+
+export function PublicPlayoffRanking({ tournament }) {
+  const bracket = tournament.bracket || {};
+  const places = [
+    ['冠軍', resultPlayer(bracket.gold)],
+    ['亞軍', resultPlayer(bracket.gold, false)],
+    ['季軍', resultPlayer(bracket.bronze)],
+    ['殿軍', resultPlayer(bracket.bronze, false)]
+  ];
+  return <section className="public-playoff-ranking" aria-label="淘汰賽名次">
+    <h2>淘汰賽名次</h2>
+    <ol>{places.map(([place, player]) => <li key={place}>
+      <span>{place}</span><strong>{player?.name || '待定'}</strong>
+    </li>)}</ol>
+  </section>;
+}
 
 export function PublicTournamentRanking({ tournament, rankedPlayers, prominent = false }) {
   const isFinished = tournament.phase === 'finished';
@@ -177,6 +194,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
               <PublicEventLive tournament={tournament} />
             </div>
             {hasRanking && <div className="public-event-page" hidden={activeView !== 'ranking'}>
+              {tournament.playoffSeeds?.length > 0 && <PublicPlayoffRanking tournament={tournament} />}
               <PublicTournamentRanking tournament={tournament} rankedPlayers={rankedPlayers} />
             </div>}
 

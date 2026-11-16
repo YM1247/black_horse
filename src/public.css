@@ -244,3 +244,9 @@
 .public-ink .public-playoff-stage .bout small { margin-top:3px; font-size:.75rem; font-weight:400; }
 .public-ink .public-playoff-stage .bout b { text-align:center; font-size:1.125rem; font-weight:500; font-variant-numeric:tabular-nums; }
 .public-ink .public-playoff-stage > article > p { color:#b7cbd0; font-size:.8125rem; padding-block:12px; }
+
+.public-playoff-ranking { margin-bottom:32px; }
+.public-playoff-ranking ol { margin-top:12px; }
+.public-playoff-ranking li { display:grid; grid-template-columns:64px minmax(0,1fr); gap:16px; align-items:center; padding:12px 0; border-bottom:1px solid #566063; }
+.public-playoff-ranking li span { color:#b7cbd0; font-size:.875rem; }
+.public-playoff-ranking strong { color:#eeeae3; font-weight:600; overflow-wrap:anywhere; }

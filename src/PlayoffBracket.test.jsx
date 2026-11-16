@@ -73,7 +73,9 @@ test('公開八強隱藏籤位與場次編號，已完成才明示勝敗', () =>
   const stage=screen.getByRole('region',{name:'八強',exact:true});
   expect(within(stage).getAllByRole('heading')).toHaveLength(1);
   expect(within(stage).getAllByRole('article')).toHaveLength(4);
-  expect(within(screen.getByRole('region',{name:'四強',exact:true})).getAllByRole('article')).toHaveLength(2);
+  expect(screen.queryByRole('region',{name:'四強',exact:true})).not.toBeInTheDocument();
+  expect(screen.queryByRole('region',{name:'冠軍戰',exact:true})).not.toBeInTheDocument();
+  expect(screen.queryByText('等待晉級結果')).not.toBeInTheDocument();
   expect(done).not.toHaveTextContent('#');
   expect(done.querySelector('.is-winner')).toHaveTextContent(event.bracket.q1.p1.name);
   expect(done.querySelector('.public-winner-label')).toBeNull();
@@ -94,4 +96,13 @@ test('公開合作賽按階段分組並保留冠軍戰逐局比分', () => {
   expect(within(final).getAllByRole('heading')).toHaveLength(1);
   expect(within(final).getByText('第 1 局 · 3 : 0 票')).toBeInTheDocument();
   expect(final.querySelector('.public-winner-label')).toBeNull();
+});
+
+test('後續階段有確定對戰才顯示，公開只列出已知組合', () => {
+  const seeds=fixture().playoffSeeds.slice(0,8);
+  let event={rulesVersion:FINAL,judgeCount:5,playoffSeeds:seeds,bracket:buildPlayoff(seeds)};
+  event=scorePlayoff(scorePlayoff(event,'q1',5),'q2',5);
+  render(<PlayoffBracket event={event} publicView />);
+  expect(within(screen.getByRole('region',{name:'四強',exact:true})).getAllByRole('article')).toHaveLength(1);
+  expect(screen.queryByRole('region',{name:'季軍戰',exact:true})).not.toBeInTheDocument();
 });

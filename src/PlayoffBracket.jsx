@@ -108,6 +108,7 @@ export default function PlayoffBracket({ event, renderScore, highlightQuery = ''
   const akashiki = event.rulesVersion === AKASHIKI;
   const title = publicView ? '淘汰賽' : akashiki ? '十六強淘汰賽' : '八強淘汰賽';
   const medalists = [resultPlayer(bracket.gold), resultPlayer(bracket.gold, false), resultPlayer(bracket.bronze)];
+  const readyGames = gamesFor(event).filter(([key]) => bracket[key]?.p1 && bracket[key]?.p2);
   return <section id="playoff" className={'playoff' + (publicView ? ' public-playoff' : '')} aria-label={title}>
     <h2>{title}</h2>
     {akashiki && <p>首輪隨機抽籤 · 三位評審 · 冠軍戰 BO3，其餘 BO1 · 含季軍戰</p>}
@@ -115,9 +116,9 @@ export default function PlayoffBracket({ event, renderScore, highlightQuery = ''
       {medalists.map((p, i) => <li key={i}>{['冠軍', '亞軍', '季軍'][i]}　{p?.name || '待定'}</li>)}
     </ol>}
     {publicView ? <div className="public-playoff-groups">
-      {[...new Set(gamesFor(event).map(([, label]) => label.replace(/\s+\d+$/, '')))].map(stage => <section className="public-playoff-stage" key={stage} aria-label={stage}>
+      {[...new Set(readyGames.map(([, label]) => label.replace(/\s+\d+$/, '')))].map(stage => <section className="public-playoff-stage" key={stage} aria-label={stage}>
         <h3>{stage}</h3>
-        {gamesFor(event).filter(([, label]) => label.replace(/\s+\d+$/, '') === stage).map(game => <PlayoffMatch key={game[0]} event={event} game={game} renderScore={renderScore} highlightQuery={highlightQuery} publicView hideHeading />)}
+        {readyGames.filter(([, label]) => label.replace(/\s+\d+$/, '') === stage).map(game => <PlayoffMatch key={game[0]} event={event} game={game} renderScore={renderScore} highlightQuery={highlightQuery} publicView hideHeading />)}
       </section>)}
     </div> : akashiki ? <PlayoffTree event={event} renderScore={renderScore} highlightQuery={highlightQuery} publicView={publicView} /> : <div className="playoff-grid">
       {gamesFor(event).map(game => <PlayoffMatch key={game[0]} event={event} game={game} renderScore={renderScore} highlightQuery={highlightQuery} publicView={publicView} />)}
