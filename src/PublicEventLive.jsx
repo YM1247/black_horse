@@ -75,6 +75,7 @@ export default function PublicEventLive({ tournament }) {
       {term && matchingCount === 0 && <p className="public-search-feedback" role="status">目前沒有符合的對戰，可切換其他輪次或確認打師名。</p>}
     </PublicPlayerSearch>}
     {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} highlightQuery={term} publicView />}
+    {tournament.playoffSeeds?.length > 0 && rounds.length > 0 && <h2 className="public-swiss-heading">瑞士輪</h2>}
     {(rounds.length > 1 || tournament.playoffSeeds?.length > 0) && <nav aria-label="單場賽況導覽" className="public-round-tabs">
       {rounds.map((_, i) => <a key={i} href="#swiss-round-matches" aria-current={index === i ? 'true' : undefined} onClick={() => setRoundChoice(i)}>第 {i + 1} 輪</a>)}
     </nav>}
