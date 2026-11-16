@@ -228,3 +228,9 @@
 .public-search-feedback { margin:8px 0 0; color:#b7cbd0; font-size:.8125rem; }
 .public-ink .is-search-match { background:rgb(183 203 208 / .12); outline:1px solid #b7cbd0; outline-offset:-1px; scroll-margin-block:80px; }
 .public-ink .is-search-match:focus { outline:2px solid #d18d90; outline-offset:2px; }
+
+.public-ink :is(.public-match-player, .playoff-entrant, .bout > span).is-loser strong { color:#929e9f; font-weight:400; }
+.public-ink :is(.public-match-player, .playoff-entrant, .bout > span).is-winner strong { color:#eeeae3; font-weight:650; }
+.public-ink :is(.public-match-player, .playoff-entrant, .bout > span) .public-winner-label { color:#e4b5b7; font-size:.6875rem; font-weight:600; }
+.public-ink .bout > span strong { font-weight:500; }
+.public-ink #swiss-round-matches { scroll-margin-top:18px; }

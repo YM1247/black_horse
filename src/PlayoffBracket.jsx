@@ -9,7 +9,7 @@ const treeRounds = [
   ['獎牌戰', ['gold']]
 ];
 
-function FinalGames({ match, renderScore, highlightQuery = '' }) {
+function FinalGames({ match, renderScore, highlightQuery = '', publicView = false }) {
   return <div className="final-games">
     {Array.from({ length: Math.min(3, (match.games?.length || 0) + (match.isDone ? 0 : 1)) }, (_, i) => {
       const game = match.games?.[i] || {};
@@ -21,42 +21,45 @@ function FinalGames({ match, renderScore, highlightQuery = '' }) {
   </div>;
 }
 
-function PlayoffMatch({ event, game: [key, label, first, second], tree = false, renderScore, highlightQuery = '' }) {
+function PlayoffMatch({ event, game: [key, label, first, second], tree = false, renderScore, highlightQuery = '', publicView = false }) {
   const match = event.bracket?.[key];
   const highlighted = Boolean(highlightQuery) && [match?.p1?.name, match?.p2?.name].some(name => name?.toLocaleLowerCase().includes(highlightQuery));
   const bo3 = event.rulesVersion === AKASHIKI && key === 'gold';
+  const displayLabel = publicView ? label.replace(/\s+\d+$/, '') : label;
+  const winnerId = resultPlayer(match)?.id;
+  const outcomeClass = player => publicView && winnerId && player ? player.id === winnerId ? ' is-winner' : ' is-loser' : '';
   const seed = (player) => event.playoffSeeds.findIndex((p) => p.id === player.id) + 1;
   const Heading = tree ? 'h4' : 'h3';
   const sourceLabel = (source) => {
     const sourceGame = gamesFor(event).find(([id]) => id === source);
-    return sourceGame ? `${sourceGame[1]} ${key === 'bronze' ? '敗者' : '勝者'}` : `籤位 ${source}`;
+    return sourceGame ? `${publicView ? sourceGame[1].replace(/\s+\d+$/, '') : sourceGame[1]} ${key === 'bronze' ? '敗者' : '勝者'}` : publicView ? '等待選手' : `籤位 ${source}`;
   };
   return <article className={(tree ? 'playoff-tree-match' : '') + (highlighted ? ' is-search-match' : '')} tabIndex={highlighted ? -1 : undefined} aria-label={label} data-playoff-game={key}>
-    <Heading>{label}{tree ? bo3 ? ' · BO3' : ' · BO1' : ''}</Heading>
+    <Heading>{displayLabel}{tree ? bo3 ? ' · BO3' : ' · BO1' : ''}</Heading>
     {tree && <p className="playoff-source">{key === 'bronze' ? '四強敗者對戰' : key.startsWith('r') ? '首輪隨機籤位' : `${sourceLabel(first)} × ${sourceLabel(second)}`}</p>}
     {tree ? <div className="playoff-entrants">
       {[0, 1].map(i => {
         const player = i === 0 ? match?.p1 : match?.p2;
         const score = i === 0 ? match?.p1Votes : match?.p2Votes;
         const winner = player && resultPlayer(match)?.id === player.id;
-        return <div key={i} className={'playoff-entrant' + (winner ? ' is-winner' : '')}>
+        return <div key={i} className={'playoff-entrant' + (publicView ? outcomeClass(player) : winner ? ' is-winner' : '')}>
           <span>
-            {player && <small>{i === 0 ? '先攻' : '後攻'} · 籤位 {seed(player)}</small>}
-            <strong>{player?.name || sourceLabel(i === 0 ? first : second)}</strong>
+            {player && <small>{i === 0 ? '先攻' : '後攻'}{!publicView && ` · 籤位 ${seed(player)}`}</small>}
+            <strong>{player?.name || sourceLabel(i === 0 ? first : second)}</strong>{publicView && winner && <small className="public-winner-label">勝</small>}
           </span>
           <b>{score ?? '–'}{bo3 && <small>局</small>}</b>
         </div>;
       })}
     </div> : match ? <div className="bout">
-      <span><small>先攻 · #{seed(match.p1)}</small>{match.p1.name}</span>
+      <span className={outcomeClass(match.p1)}><small>先攻{!publicView && ` · #${seed(match.p1)}`}</small>{publicView ? <strong>{match.p1.name}</strong> : match.p1.name}{publicView && winnerId === match.p1.id && <small className="public-winner-label">勝</small>}</span>
       <b>{match.p1Votes ?? '–'} : {match.p2Votes ?? '–'}</b>
-      <span><small>後攻 · #{seed(match.p2)}</small>{match.p2.name}</span>
+      <span className={outcomeClass(match.p2)}><small>後攻{!publicView && ` · #${seed(match.p2)}`}</small>{publicView ? <strong>{match.p2.name}</strong> : match.p2.name}{publicView && winnerId === match.p2.id && <small className="public-winner-label">勝</small>}</span>
     </div> : <p>等待晉級結果</p>}
-    {match && (bo3 ? <FinalGames match={match} renderScore={renderScore} highlightQuery={highlightQuery} /> : renderScore?.(key, match))}
+    {match && (bo3 ? <FinalGames match={match} renderScore={renderScore} highlightQuery={highlightQuery} publicView={publicView} /> : renderScore?.(key, match))}
   </article>;
 }
 
-function PlayoffTree({ event, renderScore, highlightQuery = '' }) {
+function PlayoffTree({ event, renderScore, highlightQuery = '', publicView = false }) {
   const canvas = useRef(null);
   const scoring = Boolean(renderScore);
   useLayoutEffect(() => {
@@ -88,11 +91,11 @@ function PlayoffTree({ event, renderScore, highlightQuery = '' }) {
             const span = 2 ** (stage + 1);
             return <div key={key} className={'playoff-tree-node' + (stage ? ' has-feeders' : '')}
               style={{ gridColumn: stage + 1, gridRow: `${index * span + 1} / span ${span}` }}>
-              <PlayoffMatch event={event} game={games.get(key)} tree renderScore={renderScore} highlightQuery={highlightQuery} />
+              <PlayoffMatch event={event} game={games.get(key)} tree renderScore={renderScore} highlightQuery={highlightQuery} publicView={publicView} />
             </div>;
           }))}
           <div className="playoff-tree-node playoff-tree-bronze" style={{ gridColumn: 4, gridRow: '13 / span 4' }}>
-            <PlayoffMatch event={event} game={games.get('bronze')} tree renderScore={renderScore} highlightQuery={highlightQuery} />
+            <PlayoffMatch event={event} game={games.get('bronze')} tree renderScore={renderScore} highlightQuery={highlightQuery} publicView={publicView} />
           </div>
         </div>
       </div>
@@ -100,7 +103,7 @@ function PlayoffTree({ event, renderScore, highlightQuery = '' }) {
   </>;
 }
 
-export default function PlayoffBracket({ event, renderScore, highlightQuery = '' }) {
+export default function PlayoffBracket({ event, renderScore, highlightQuery = '', publicView = false }) {
   const bracket = event.bracket || {};
   const akashiki = event.rulesVersion === AKASHIKI;
   const title = akashiki ? '十六強淘汰賽' : '八強淘汰賽';
@@ -111,8 +114,8 @@ export default function PlayoffBracket({ event, renderScore, highlightQuery = ''
     {medalists.some(Boolean) && <ol className="medalists">
       {medalists.map((p, i) => <li key={i}>{['冠軍', '亞軍', '季軍'][i]}　{p?.name || '待定'}</li>)}
     </ol>}
-    {akashiki ? <PlayoffTree event={event} renderScore={renderScore} highlightQuery={highlightQuery} /> : <div className="playoff-grid">
-      {gamesFor(event).map(game => <PlayoffMatch key={game[0]} event={event} game={game} renderScore={renderScore} highlightQuery={highlightQuery} />)}
+    {akashiki ? <PlayoffTree event={event} renderScore={renderScore} highlightQuery={highlightQuery} publicView={publicView} /> : <div className="playoff-grid">
+      {gamesFor(event).map(game => <PlayoffMatch key={game[0]} event={event} game={game} renderScore={renderScore} highlightQuery={highlightQuery} publicView={publicView} />)}
     </div>}
   </section>;
 }

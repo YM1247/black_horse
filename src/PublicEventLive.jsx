@@ -33,14 +33,14 @@ export function PublicMatch({ match, prominent = false, label, unit, showStatus 
   const completed = scored && match.isDone !== false;
   const status = completed ? '已完成' : scored ? '進行中' : '等待比分';
   return <article className={(prominent ? 'public-personal-match' : 'public-match-row') + (highlighted ? ' is-search-match' : '')} aria-label={label} tabIndex={highlighted ? -1 : undefined}>
-    <div className={'public-match-player' + (completed && match.p1Votes > match.p2Votes ? ' is-winner' : '')}>
-      <strong>{match.p1?.name || '等待選手'}</strong>{showRecord && <small className="public-match-record">{left.wins} 勝 {left.losses} 敗・{left.votes} 票</small>}{match.attackOrder && <small>先攻</small>}
+    <div className={'public-match-player' + (completed && match.p1Votes > match.p2Votes ? ' is-winner' : completed && match.p1Votes < match.p2Votes ? ' is-loser' : '')}>
+      <strong>{match.p1?.name || '等待選手'}</strong>{completed && match.p1Votes > match.p2Votes && <small className="public-winner-label">勝</small>}{showRecord && <small className="public-match-record">{left.wins} 勝 {left.losses} 敗・{left.votes} 票</small>}{match.attackOrder && <small>先攻</small>}
     </div>
     <div className="public-match-score"><b>{scored ? `${match.p1Votes} : ${match.p2Votes}` : '— : —'}</b>
       {unit && <small>{unit}</small>}{prominent && <small>{status}</small>}
     </div>
-    <div className={'public-match-player' + (completed && match.p2Votes > match.p1Votes ? ' is-winner' : '')}>
-      <strong>{match.p2?.name || '等待選手'}</strong>{showRecord && <small className="public-match-record">{right.wins} 勝 {right.losses} 敗・{right.votes} 票</small>}{match.attackOrder && <small>後攻</small>}
+    <div className={'public-match-player' + (completed && match.p2Votes > match.p1Votes ? ' is-winner' : completed && match.p2Votes < match.p1Votes ? ' is-loser' : '')}>
+      <strong>{match.p2?.name || '等待選手'}</strong>{completed && match.p2Votes > match.p1Votes && <small className="public-winner-label">勝</small>}{showRecord && <small className="public-match-record">{right.wins} 勝 {right.losses} 敗・{right.votes} 票</small>}{match.attackOrder && <small>後攻</small>}
     </div>
     {!prominent && showStatus && <small className="public-match-status">{status}</small>}
     {unit && match.games?.length > 0 && <p className="public-match-games">{match.games.map((game, i) => `第${i + 1}局 ${game.p1Votes ?? '—'} : ${game.p2Votes ?? '—'} 票`).join('　')}</p>}
@@ -74,12 +74,12 @@ export default function PublicEventLive({ tournament }) {
     {players.length > 0 && <PublicPlayerSearch value={query} onChange={setQuery} onSubmit={jumpToMatch}>
       {term && matchingCount === 0 && <p className="public-search-feedback" role="status">目前沒有符合的對戰，可切換其他輪次或確認打師名。</p>}
     </PublicPlayerSearch>}
+    {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} highlightQuery={term} publicView />}
     {(rounds.length > 1 || tournament.playoffSeeds?.length > 0) && <nav aria-label="單場賽況導覽" className="public-round-tabs">
       {tournament.playoffSeeds?.length > 0 && <a href="#playoff" aria-current={roundChoice === null ? 'true' : undefined} onClick={() => setRoundChoice(null)}>{tournament.rulesVersion === AKASHIKI ? '十六強' : '八強'}</a>}
-      {rounds.map((_, i) => <a key={i} href="#current-round" aria-current={index === i && (roundChoice !== null || !tournament.playoffSeeds?.length) ? 'true' : undefined} onClick={() => setRoundChoice(i)}>第 {i + 1} 輪</a>)}
+      {rounds.map((_, i) => <a key={i} href="#swiss-round-matches" aria-current={index === i && (roundChoice !== null || !tournament.playoffSeeds?.length) ? 'true' : undefined} onClick={() => setRoundChoice(i)}>第 {i + 1} 輪</a>)}
     </nav>}
-    {tournament.playoffSeeds?.length > 0 && <PlayoffBracket event={tournament} highlightQuery={term} />}
-    {rounds.length > 0 && <section className="public-current-matches public-balanced-matches" aria-label="本輪對戰"><h2>第 {index + 1} 輪對戰</h2>
+    {rounds.length > 0 && <section id="swiss-round-matches" className="public-current-matches public-balanced-matches" aria-label="本輪對戰"><h2>第 {index + 1} 輪對戰</h2>
       {groupPublicMatches(matches, index, tournament.rulesVersion === AKASHIKI).map(group => <section className="public-match-group" key={group.label} aria-label={group.label}>
         <h3>{group.label}</h3>
         {group.matches.map(match => <PublicMatch key={match.id} match={match} highlighted={matchesQuery(match, term)} roundIndex={index} showStatus={false} showRecord label={`第 ${index + 1} 輪對戰 ${matches.indexOf(match) + 1}`} />)}

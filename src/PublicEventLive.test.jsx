@@ -76,10 +76,21 @@ test('淘汰賽同樣即時高亮，可送出前往符合的對戰', () => {
     fireEvent.change(screen.getByRole('searchbox'),{target:{value:first.name}});
     const target=document.querySelector('[data-playoff-game="q1"]');
     expect(target).toHaveClass('is-search-match');
+    expect(target.compareDocumentPosition(screen.getByRole('navigation',{name:'單場賽況導覽'})) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(target.compareDocumentPosition(screen.getByRole('region',{name:'本輪對戰'})) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.submit(screen.getByRole('searchbox').closest('form'));
     expect(scroll).toHaveBeenCalledTimes(1);
     expect(target).toHaveFocus();
   } finally {Element.prototype.scrollIntoView=prior;}
+});
+
+test('只在對戰完成後標示勝方並淡化敗方', () => {
+  const match={p1:first,p2:second,p1Votes:3,p2Votes:0,isDone:false};
+  const {container,rerender}=render(<PublicMatch match={match} />);
+  expect(container.querySelector('.is-winner')).toBeNull();
+  expect(container.querySelector('.is-loser')).toBeNull();
+  rerender(<PublicMatch match={{...match,isDone:true}} />);
+  expect(container.querySelector('.is-winner')).toHaveTextContent('青焰勝');
+  expect(container.querySelector('.is-loser')).toHaveTextContent('夜凪');
 });

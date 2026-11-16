@@ -59,3 +59,21 @@ test('既有五票八強仍顯示原場次與冠軍、季軍戰', () => {
   expect(screen.getAllByRole('article')).toHaveLength(8);
   expect(screen.queryByRole('region', { name: '十六強晉級樹狀圖' })).not.toBeInTheDocument();
 });
+
+
+test('公開八強隱藏籤位與場次編號，已完成才明示勝敗', () => {
+  const playoffSeeds=fixture().playoffSeeds.slice(0,8);
+  const event={rulesVersion:FINAL,playoffSeeds,bracket:buildPlayoff(playoffSeeds)};
+  event.bracket.q1={...event.bracket.q1,p1Votes:5,p2Votes:0,isDone:true};
+  event.bracket.q2={...event.bracket.q2,p1Votes:1,p2Votes:0,isDone:false};
+  render(<PlayoffBracket event={event} publicView />);
+  const done=screen.getByRole('article',{name:'八強 1',exact:true});
+  expect(within(done).getByRole('heading')).toHaveTextContent(/^八強$/);
+  expect(done).not.toHaveTextContent('#');
+  expect(done.querySelector('.is-winner')).toHaveTextContent(event.bracket.q1.p1.name);
+  expect(done.querySelector('.public-winner-label')).toHaveTextContent('勝');
+  expect(done.querySelector('.is-loser')).toHaveTextContent(event.bracket.q1.p2.name);
+  const pending=screen.getByRole('article',{name:'八強 2',exact:true});
+  expect(pending.querySelector('.is-loser')).toBeNull();
+  expect(pending.querySelector('.public-winner-label')).toBeNull();
+});
