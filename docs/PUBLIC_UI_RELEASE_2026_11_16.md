@@ -1,0 +1,18 @@
+# 公開介面上線與後台連動驗證（2026-11-16）
+
+本次發布包含公開單場賽況／排名分頁、原圖水墨視覺、方框、精簡分隔線、搜尋高亮與 Enter 定位、系列返回、淘汰階段分組及名次。後台記分及資料庫規則維持原有機制。
+
+## 資料連動
+
+後台 SeasonAdmin 透過 saveCloudTournament / saveTournamentVersion 寫入 tournaments/{eventCode}；公開單場透過 subscribeTournament 的 Firestore onSnapshot 即時讀取同一文件。瑞士 round map 會還原為輪次陣列，playoffSeeds / bracket / phase 隨快照更新；畫面不使用概念圖或本機預覽資料。完賽未明確指定 view 時開排名；明確指定頁面連結仍優先。
+
+新增資料庫整合測試由已授權管理員實際建立賽事、開始瑞士賽、寫入比分、抽選十六強、登錄淘汰比分及鎖定 BO3 完賽。另一個未登入的公開訂閱依每次 revision 收到更新，驗證 phase、rounds、比分、籤位與決賽／季軍戰結果，同時檢查不含私人姓名或電話欄位。
+
+驗證使用獨立本機 Firestore 模擬器 127.0.0.1:8188，因既有 8080 已被使用；未操作正式賽事資料，未修改正式規則。應用測試 142 項、資料庫整合／權限測試 12 項通過。
+
+## 部署
+
+使用專案既有 npm run deploy（Vite 正式建置後發布 GitHub Pages）。正式產物排除 Live 注入、publicPreview 模組、本機測試工具列與模擬器設定。水墨素材與原始品牌圖片隨同發布。
+
+公開入口：https://ym1247.github.io/black_horse/?event=BH2627S1
+系列首頁：https://ym1247.github.io/black_horse/?series=BH2627

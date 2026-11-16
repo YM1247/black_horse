@@ -5,7 +5,7 @@ import { getFirebaseServices } from '../src/firebase';
 import { saveIdentity } from '../src/services/playerDirectory';
 import { reviewKey } from '../src/playerIdentity';
 import { BLACK_HORSE, SIMULATION_SERIES } from '../src/series';
-import { ensureCloudSeries, createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore } from '../src/services/tournamentRepository';
+import { ensureCloudSeries, createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore, subscribeTournament } from '../src/services/tournamentRepository';
 import { AKASHIKI, createEmptyTournament } from '../src/tournamentState';
 import { gamesFor, playoffSelection, scorePlayoff, seedPlayoff } from '../src/finalTournament';
 import { QUALIFIER, nextSwissRound, publicPlayer, scoreSwiss } from '../src/seasonTournament';
@@ -317,4 +317,57 @@ test('既有模擬賽封存時保留公開狀態、場次及自訂資料，重�
   await ensureCloudSeries(SIMULATION_SERIES);
   await ensureCloudSeries(SIMULATION_SERIES);
   expect((await getDoc(ref)).data()).toMatchObject({ ...existing, isArchived: true, revision: 2 });
+});
+
+
+test('後台儲存後，公開即時訂閱接收到開賽、比分、淘汰籤表及完賽資料', async () => {
+  await seedAdmin();
+  const admin=testEnvironment.authenticatedContext('admin-user').firestore();
+  const visitor=testEnvironment.unauthenticatedContext().firestore();
+  const useAdmin=()=>getFirebaseServices.mockReturnValue({db:admin,auth:{currentUser:{uid:'admin-user'}}});
+  useAdmin();
+  let state={...createEmptyTournament({rulesVersion:AKASHIKI}),players:Array.from({length:32},(_,i)=>publicPlayer({id:String(i),name:'連動選手'+i}))};
+  const code=await createCloudTournament({eventCode:'UILIVE',name:'公開連動測試',tournament:state});
+  getFirebaseServices.mockReturnValue({db:visitor,auth:{currentUser:null}});
+  let latest, failure;
+  const unsubscribe=subscribeTournament(code,data=>{latest=data;},error=>{failure=error;});
+  const received=async revision=>{
+    await vi.waitFor(()=>{expect(failure).toBeUndefined();expect(latest?.revision).toBe(revision);},{timeout:10000});
+  };
+  try {
+    await received(0);
+    expect(latest.phase).toBe('registration');
+    useAdmin();
+    let revision=0;
+    state=nextSwissRound(state);
+    revision=await saveCloudTournament(code,state,{action:'開始第一輪'},revision);
+    await received(revision);
+    expect(latest.phase).toBe('playing');
+    expect(latest.rounds[0]).toHaveLength(16);
+    const first=state.rounds[0][0];
+    state=scoreSwiss(state,0,first.id,2);
+    revision=await saveCloudTournament(code,state,{action:'登錄瑞士比分'},revision);
+    await received(revision);
+    expect(latest.rounds[0][0]).toMatchObject({p1Votes:2,p2Votes:1,isDone:true});
+    for(let r=0;r<3;r++) {
+      if(r) state=nextSwissRound(state);
+      for(const match of state.rounds[r]) if(!match.isDone) state=scoreSwiss(state,r,match.id,3);
+    }
+    const decisions=Object.fromEntries(playoffSelection(state).ties.map(({key,group})=>[key,group.map(p=>p.id)]));
+    state=seedPlayoff(state,decisions);
+    revision=await saveCloudTournament(code,state,{action:'抽選淘汰籤表'},revision);
+    await received(revision);
+    expect(latest.playoffSeeds).toHaveLength(16);
+    expect(latest.bracket.r1.p1.id).toBe(state.bracket.r1.p1.id);
+    state=scorePlayoff(state,'r1',3);
+    revision=await saveCloudTournament(code,state,{action:'登錄淘汰比分'},revision);
+    await received(revision);
+    expect(latest.bracket.r1).toMatchObject({p1Votes:3,p2Votes:0,isDone:true});
+    for(const [key] of gamesFor(state)) if(key!=='gold' && !state.bracket[key]?.isDone) state=scorePlayoff(state,key,3);
+    state=scorePlayoff(scorePlayoff(state,'gold',3,0),'gold',3,1);
+    const done=await saveTournamentVersion(code,state,{expectedRevision:revision,type:'completed',reason:'連動驗證完賽'});
+    await received(done.revision);
+    expect(latest).toMatchObject({phase:'finished',resultLocked:true,bracket:{gold:{isDone:true,p1Votes:2,p2Votes:0},bronze:{isDone:true}}});
+    expect(JSON.stringify(latest)).not.toMatch(/realName|phone/);
+  } finally {unsubscribe();}
 });
