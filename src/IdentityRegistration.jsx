@@ -3,12 +3,13 @@ import { identityMatches, normalizeIdentity, readIdentityCsv, reviewKey } from '
 import { saveIdentity } from './services/playerDirectory';
 
 const blank = { realName: '', phone: '', name: '' };
-export default function IdentityRegistration({ profiles, onPlayer, remaining = 48, onBusyChange, singleEntry = false }) {
+export default function IdentityRegistration({ profiles, onPlayer, onPlayers, remaining = 48, onBusyChange, singleEntry = false }) {
   const [form, setForm] = useState(blank);
   const [queue, setQueue] = useState([]);
   const [review, setReview] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(null);
   const [name, setName] = useState('');
   async function process(rows, decision) {
     if (busy || !rows.length) return;
@@ -16,41 +17,54 @@ export default function IdentityRegistration({ profiles, onPlayer, remaining = 4
     setBusy(true);
     onBusyChange?.(true);
     let pending = rows;
+    let batch = [];
     const known = [...profiles];
+    const flush = async () => {
+      if (!batch.length) return;
+      if (onPlayers) await onPlayers(batch);
+      else await onPlayer(batch[0]);
+      pending = pending.slice(batch.length);
+      batch = [];
+      setQueue(pending);
+      setProgress({ done: rows.length - pending.length, total: rows.length });
+    };
+    setProgress({ done: 0, total: rows.length });
     try {
       if (rows.length > remaining) throw new Error('名單超過本場人數上限。');
-      while (pending.length) {
-        const row = normalizeIdentity(pending[0]);
+      while (pending.length > batch.length) {
+        const row = normalizeIdentity(pending[batch.length]);
         const matches = identityMatches(known, row);
         const exact = matches.find(
           (p) => p.realName === row.realName && p.phone === row.phone && p.name === row.name
         );
         if (matches.length && !exact && !decision) {
+          await flush();
           setReview(matches);
           setName(row.name);
-          setQueue(pending);
           return;
         }
         const player = await saveIdentity(row, decision);
-        await onPlayer(player);
+        batch.push(player);
         const previous = known.findIndex((p) => p.id === player.id);
         if (previous >= 0) known.splice(previous, 1);
         known.push({ ...row, ...player });
-        pending = pending.slice(1);
         decision = null;
         setReview(null);
-        setQueue(pending);
+        if (batch.length >= (onPlayers ? 8 : 1)) await flush();
       }
+      await flush();
       setForm(blank);
     } catch (err) {
+      // Keep rows in the retry queue until the tournament write succeeds.
       setError(err.message);
-      setQueue(pending);
       setReview(null);
     } finally {
+      setQueue(pending);
       setBusy(false);
       onBusyChange?.(false);
     }
   }
+
   return (
     <section aria-label={singleEntry ? '新增資格席位選手' : '選手身分核對'}>
       <form
@@ -96,6 +110,7 @@ export default function IdentityRegistration({ profiles, onPlayer, remaining = 4
           }}
         />
       </label>}
+      {progress && <p role="status">已完成 {progress.done}／{progress.total} 筆{busy ? '，處理中…' : ''}</p>}
       {review && (
         <section role="alert" className="season-review">
           <h3>請核對選手身分</h3>

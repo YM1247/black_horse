@@ -259,17 +259,10 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCloudTournaments([]);
       return undefined;
     }
-    let active = true;
-    let unsubscribe = () => {};
+    const unsubscribe = subscribeAdminTournaments(setCloudTournaments, error => setCloudError(error.message));
     ensureTournamentSummaries()
-      .then(() => {
-        if (active) unsubscribe = subscribeAdminTournaments(setCloudTournaments, error => setCloudError(error.message));
-      })
-      .catch(error => setCloudError(`賽事摘要載入失敗：${error.message}`));
-    return () => {
-      active = false;
-      unsubscribe();
-    };
+      .catch(error => setCloudError(`賽事摘要檢查失敗：${error.message}`));
+    return unsubscribe;
   }, [adminUser]);
 
   useEffect(() => {

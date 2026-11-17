@@ -16,23 +16,42 @@ const privateDb = () => {
 };
 const listeners = new Set();
 export function subscribePlayers(onPlayers, onError) {
-  let active = true,
-    request = 0;
-  const refresh = async () => {
-    const sequence = ++request;
-    try {
-      const snapshot = await getDocs(collection(privateDb(), 'privatePlayers'));
-      if (active && sequence === request) onPlayers(snapshot.docs.map((item) => item.data()));
-    } catch (error) {
-      if (active) onError(error);
-    }
+  let active = true;
+  let inFlight = null;
+  let profiles = [];
+  const updates = new Map();
+  const publish = (profile) => {
+    updates.set(profile.id, profile);
+    profiles = [...profiles.filter(item => item.id !== profile.id), profile];
+    if (active) onPlayers(profiles);
   };
-  listeners.add(refresh);
+  const refresh = () => {
+    if (inFlight) return inFlight;
+    updates.clear();
+    inFlight = (async () => {
+      try {
+        const snapshot = await getDocs(collection(privateDb(), 'privatePlayers'));
+        // Preserve saves that finish while this server read is in flight.
+        const merged = new Map(snapshot.docs.map(item => [item.id, item.data()]));
+        updates.forEach((profile, id) => merged.set(id, profile));
+        profiles = [...merged.values()];
+        if (active) onPlayers(profiles);
+      } catch (error) {
+        if (active) onError(error);
+      } finally {
+        inFlight = null;
+      }
+    })();
+    return inFlight;
+  };
+  listeners.add(publish);
   window.addEventListener('focus', refresh);
   refresh();
   return () => {
     active = false;
-    listeners.delete(refresh);
+    profiles = [];
+    updates.clear();
+    listeners.delete(publish);
     window.removeEventListener('focus', refresh);
   };
 }
@@ -70,8 +89,8 @@ export async function saveIdentity(input, decision) {
       else tx.delete(ref);
     }
     tx.set(doc(db, 'privatePlayers', profile.id), profile);
-    return { id: profile.id, name: profile.name };
+    return profile;
   });
-  listeners.forEach((refresh) => refresh());
-  return player;
+  listeners.forEach((publish) => publish(player));
+  return { id: player.id, name: player.name };
 }

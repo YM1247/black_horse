@@ -471,12 +471,11 @@ export default function SeasonAdmin({
                   onBusyChange={setRegistering}
                   profiles={profiles}
                   remaining={limit - event.players.length}
-                  onPlayer={(p) => {
+                  onPlayers={(additions) => {
                     const current = latest.current;
                     if (current.phase !== 'registration') throw new Error('賽事已開打，無法新增報名。');
-                    return write({ ...current, players: registeredPlayers(current.players, [p], limit) }, '選手報名', {
-                      id: p.id,
-                      name: p.name
+                    return write({ ...current, players: registeredPlayers(current.players, additions, limit) }, '選手報名', {
+                      players: additions
                     });
                   }}
                 />

@@ -85,8 +85,9 @@ export default function PublicSeriesPage({ initialCode = '' }) {
     });
   }, [publicCode, retryKey]);
 
+  const eventCodesKey = JSON.stringify((series?.events || []).map(event => event.eventCode));
   useEffect(() => {
-    const events = Array.isArray(series?.events) ? series.events : [];
+    const events = JSON.parse(eventCodesKey).map(eventCode => ({ eventCode }));
     setTournamentsByCode({});
     if (!events.length) return undefined;
     const unsubscribers = events.map(event => subscribeTournament(event.eventCode, tournament => {
@@ -98,11 +99,11 @@ export default function PublicSeriesPage({ initialCode = '' }) {
         });
       }
       setError(firebaseError.code === 'permission-denied'
-        ? `場次 ${event.name} 已取消公開。`
-        : `場次 ${event.name} 暫時無法更新。`);
+        ? `場次 ${event.eventCode} 已取消公開。`
+        : `場次 ${event.eventCode} 暫時無法更新。`);
     }));
     return () => unsubscribers.forEach(unsubscribe => unsubscribe());
-  }, [series?.events, retryKey]);
+  }, [eventCodesKey, retryKey]);
 
   const tournaments = useMemo(() => Object.values(tournamentsByCode).filter(Boolean), [tournamentsByCode]);
   const standings = useMemo(() => buildSeriesStandings(series, tournaments), [series, tournaments]);

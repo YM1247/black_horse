@@ -1,13 +1,15 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import PublicSeriesPage from './PublicSeriesPage';
+import { act } from '@testing-library/react';
+import { subscribePublicSeries, subscribeTournament } from './services/tournamentRepository';
 
 vi.mock('./firebase', () => ({ isFirebaseConfigured: true }));
 
 vi.mock('./services/tournamentRepository', () => ({
   normalizeEventCode: value => String(value || '').trim().toUpperCase(),
   validateEventCode: value => /^[A-Z0-9]{4,10}$/.test(String(value || '').trim().toUpperCase()),
-  subscribePublicSeries: (code, onSeries) => {
+  subscribePublicSeries: vi.fn((code, onSeries) => {
     onSeries({
       id: code,
       publicCode: code,
@@ -23,8 +25,8 @@ vi.mock('./services/tournamentRepository', () => ({
       ]
     });
     return vi.fn();
-  },
-  subscribeTournament: (code, onTournament) => {
+  }),
+  subscribeTournament: vi.fn((code, onTournament) => {
     if (code === 'GONE819') { onTournament(null); return vi.fn(); }
     onTournament({
       id: code,
@@ -37,7 +39,7 @@ vi.mock('./services/tournamentRepository', () => ({
       sync: { fromCache: false }
     });
     return vi.fn();
-  }
+  })
 }));
 
 test('public series page shows public events and computes finished-event standings', async () => {
@@ -103,4 +105,24 @@ test('最終戰不計入積分格數，手機最後一個積分場次仍佔滿�
   const mobile = await screen.findByLabelText('手機版系列積分排名');
   expect(within(mobile).getByText('8/26').parentElement).toHaveClass('col-span-2');
   expect(within(mobile).queryByText('最終戰')).not.toBeInTheDocument();
+});
+
+
+test('系列 metadata 與名稱更新保留場次資料及訂閱，新增場次仍會載入', async () => {
+  subscribePublicSeries.mockClear();
+  subscribeTournament.mockClear();
+  render(<PublicSeriesPage initialCode="SIM2026" />);
+  expect(await screen.findByRole('cell', { name: 'Alice' })).toBeInTheDocument();
+  const [, publishSeries] = subscribePublicSeries.mock.calls[0];
+  const events = [
+    { id: 'one', name: '新場名', eventCode: 'MOCK819', judgeCount: 3 },
+    { id: 'two', name: '8/21', eventCode: 'MOCK821', judgeCount: 3 },
+    { id: 'three', name: '8/26', eventCode: 'MOCK826', judgeCount: 3 }
+  ];
+  act(() => publishSeries({ id: 'SIM2026', name: '更新名稱', events, sync: { fromCache: false } }));
+  expect(subscribeTournament).toHaveBeenCalledTimes(3);
+  expect(screen.getByRole('cell', { name: 'Alice' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '新場名' })).toBeInTheDocument();
+  act(() => publishSeries({ id: 'SIM2026', name: '更新名稱', events: [...events, { id: 'four', name: '新場次', eventCode: 'NEW123' }] }));
+  expect(subscribeTournament).toHaveBeenCalledWith('NEW123', expect.any(Function), expect.any(Function));
 });

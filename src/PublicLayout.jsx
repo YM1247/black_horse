@@ -6,9 +6,9 @@ import './public.css';
 export function PublicBrand({ title, children, backHref }) {
   return <header className={`public-header${backHref ? ' public-header--with-back' : ''}`}>
     {backHref && <a className="public-back-link" href={backHref}>返回系列賽</a>}
-    <a className="public-brand" href={window.location.pathname} aria-label="黑馬記念，返回賽事查詢">
+    <div className="public-brand">
       <span className="public-brand-window"><img src={`${import.meta.env.BASE_URL}brand/black-horse-original.png`} alt="黑馬記念" width="2160" height="3553" fetchPriority="high" /></span>
-    </a>
+    </div>
     <div className="public-heading"><h1>{title}</h1>{children}</div>
   </header>;
 }

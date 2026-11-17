@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import { TournamentAdminApp } from './App';
 import { QUALIFIER } from './seasonTournament';
-import { createCloudTournament, ensureCloudTournament, saveCloudTournament, subscribeAdminTournaments } from './services/tournamentRepository';
+import { createCloudTournament, ensureCloudTournament, saveCloudTournament, subscribeAdminTournaments, ensureTournamentSummaries } from './services/tournamentRepository';
 import { AKASHIKI, AKASHIKI_EVENT, createEmptyTournament } from './tournamentState';
 
 const stored = vi.hoisted(() => new Map());
@@ -129,4 +129,13 @@ it('合作賽已存在時，入口保留現有報名資料', async () => {
   expect(await screen.findByRole('heading', { name: '名單 1／32' })).toBeInTheDocument();
   expect(screen.getByText('已報名的選手')).toBeInTheDocument();
   expect(createCloudTournament).not.toHaveBeenCalled();
+});
+
+
+it('摘要檢查尚未完成時，後台仍立即訂閱賽事列表', async () => {
+  ensureTournamentSummaries.mockReturnValueOnce(new Promise(() => {}));
+  subscribeAdminTournaments.mockClear();
+  render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
+  expect(subscribeAdminTournaments).toHaveBeenCalled();
+  expect(await screen.findByRole('button', { name: /黑馬記念26-27.*進入管理/ })).toBeInTheDocument();
 });
