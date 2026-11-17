@@ -217,6 +217,9 @@
    The first wash fades into the repeating lower wash; backgrounds do not
    participate in layout and cannot create short-page overflow. */
 html:has(.public-ink) {
+  /* Stop vertical rubber-banding at the document edges without changing
+     the native scrolling container, anchor navigation, or horizontal tables. */
+  overscroll-behavior-y:none;
   --public-hero-height:clamp(800px, 216.7vw, 1100px);
   background-color:#242728;
   background-image:
@@ -228,7 +231,7 @@ html:has(.public-ink) {
   background-size:100% var(--public-hero-height), 100% var(--public-hero-height), 100% 1000px, 100% 1000px;
   background-repeat:no-repeat, no-repeat, repeat-y, repeat-y;
 }
-html:has(.public-ink) body { background:transparent; }
+html:has(.public-ink) body { background:transparent; overscroll-behavior-y:none; }
 .public-container { position:relative; background:none; }
 
 /* Event pages share navigation but never stack their content. */
