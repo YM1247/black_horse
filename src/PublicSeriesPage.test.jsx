@@ -16,14 +16,16 @@ vi.mock('./services/tournamentRepository', () => ({
       clientUpdatedAt: '2026-08-13T10:00:00.000Z',
       sync: { fromCache: false },
       events: [
-        { id: 'one', name: '8/19', eventCode: code === 'REGSER' ? 'REG819' : 'MOCK819', judgeCount: 3, doubleElimination: true },
+        { id: 'one', name: '8/19', eventCode: code === 'REGSER' ? 'REG819' : code === 'MISSING' ? 'GONE819' : 'MOCK819', judgeCount: 3, doubleElimination: true },
         { id: 'two', name: '8/21', eventCode: 'MOCK821', judgeCount: 3, doubleElimination: true },
-        { id: 'three', name: '8/26', eventCode: 'MOCK826', judgeCount: 3, doubleElimination: true }
+        { id: 'three', name: '8/26', eventCode: 'MOCK826', judgeCount: 3, doubleElimination: true },
+        ...(code === 'WITHFINAL' ? [{ id: 'final', name: '最終戰', eventCode: 'FINAL1', rulesVersion: 'final-26-27' }] : [])
       ]
     });
     return vi.fn();
   },
   subscribeTournament: (code, onTournament) => {
+    if (code === 'GONE819') { onTournament(null); return vi.fn(); }
     onTournament({
       id: code,
       phase: code === 'REG819' ? 'registration' : code === 'MOCK819' ? 'finished' : 'playing',
@@ -88,4 +90,17 @@ test('已有報名選手但尚未完賽，不顯示零分排名搜尋與導覽',
   expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
   expect(screen.queryByRole('cell', { name: 'Alice' })).not.toBeInTheDocument();
   expect(screen.queryByRole('navigation', { name: '公開頁面導覽' })).not.toBeInTheDocument();
+});
+
+test('不存在的系列場次結束載入，顯示尚未公開', async () => {
+  render(<PublicSeriesPage initialCode="MISSING" />);
+  expect(await screen.findByText('尚未公開')).toBeInTheDocument();
+  expect(screen.queryByText('載入中')).not.toBeInTheDocument();
+});
+
+test('最終戰不計入積分格數，手機最後一個積分場次仍佔滿整列', async () => {
+  render(<PublicSeriesPage initialCode="WITHFINAL" />);
+  const mobile = await screen.findByLabelText('手機版系列積分排名');
+  expect(within(mobile).getByText('8/26').parentElement).toHaveClass('col-span-2');
+  expect(within(mobile).queryByText('最終戰')).not.toBeInTheDocument();
 });

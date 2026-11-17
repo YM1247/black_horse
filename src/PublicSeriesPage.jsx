@@ -94,9 +94,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
     }, firebaseError => {
       if (firebaseError.code === 'permission-denied') {
         setTournamentsByCode(current => {
-          const remaining = {...current};
-          delete remaining[event.eventCode];
-          return remaining;
+          return { ...current, [event.eventCode]: null };
         });
       }
       setError(firebaseError.code === 'permission-denied'
@@ -110,6 +108,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   const standings = useMemo(() => buildSeriesStandings(series, tournaments), [series, tournaments]);
   const visibleStandings = standings.filter(player => player.name.toLocaleLowerCase().includes(playerQuery.trim().toLocaleLowerCase()));
   const hasEvents = Boolean(series?.events?.length);
+  const scoringEvents = (series?.events || []).filter(event => event.rulesVersion !== FINAL);
   const hasRanking = standings.length > 0 && Boolean(series?.events?.some(event => event.rulesVersion !== FINAL && tournamentsByCode[event.eventCode]?.phase === 'finished'));
   const hasBottomNav = hasEvents && hasRanking;
   const isUsingCache = Boolean(series?.sync?.fromCache || tournaments.some(tournament => tournament.sync?.fromCache));
@@ -153,9 +152,9 @@ export default function PublicSeriesPage({ initialCode = '' }) {
         {!isFirebaseConfigured && <p className="public-empty" role="status">此部署尚未設定 Firebase，暫時無法查詢雲端系列賽。</p>}
 
         {series && (!isOnline || isUsingCache) && <PublicNotice tone="offline" onRetry={isOnline ? () => setRetryKey(value => value + 1) : undefined}>
-          目前離線，顯示快取資料。{lastUpdatedAt && `最後更新：${formatUpdateTime(lastUpdatedAt)}`}
+          {isOnline ? '正在連線，暫時顯示快取資料。' : '目前離線，顯示快取資料。'}{lastUpdatedAt && `最後更新：${formatUpdateTime(lastUpdatedAt)}`}
         </PublicNotice>}
-        {error && <PublicNotice tone="error">{error}</PublicNotice>}
+        {error && <PublicNotice tone="error" onRetry={isOnline ? () => setRetryKey(value => value + 1) : undefined}>{error}</PublicNotice>}
         {status === 'loading' && isFirebaseConfigured && <div role="status" className="public-empty">正在載入系列賽…</div>}
         {status === 'not-found' && <div className="public-empty">找不到此公開系列賽。</div>}
         {status === 'idle' && <div className="public-empty">請輸入系列代碼。</div>}
@@ -175,7 +174,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                       <h3>{event.name}</h3>
                       <div className="public-series-event-meta">
                         <span>#{event.eventCode}</span>
-                        <span>{tournament ? PHASE_LABELS[tournament.phase] || tournament.phase : '載入中'}</span>
+                        <span>{tournament ? PHASE_LABELS[tournament.phase] || tournament.phase : Object.hasOwn(tournamentsByCode, event.eventCode) ? '尚未公開' : '載入中'}</span>
                       </div>
                       <p className="public-series-event-rules">
                         {event.judgeCount} 位評審・{event.doubleElimination ? '兩敗淘汰' : '不淘汰'}
@@ -210,8 +209,8 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-px bg-slate-800">
-                      {series.events.filter(e => e.rulesVersion !== FINAL).map((event, eventIndex) => (
-                        <div key={event.id} className={`bg-[#161920] px-3 py-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 ${series.events.length % 2 === 1 && eventIndex === series.events.length - 1 ? 'col-span-2' : ''}`}>
+                      {scoringEvents.map((event, eventIndex) => (
+                        <div key={event.id} className={`bg-[#161920] px-3 py-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 ${scoringEvents.length % 2 === 1 && eventIndex === scoringEvents.length - 1 ? 'col-span-2' : ''}`}>
                           <span className="text-xs font-bold text-slate-400 break-words">{event.name}</span>
                           <span className="font-black text-slate-200"><SeriesEventPoints standing={standing} eventCode={event.eventCode} /></span>
                         </div>
@@ -228,7 +227,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                     <tr>
                       <th className="p-3 text-center sticky left-0 z-20 bg-[#0d0f12] w-12 min-w-12 max-w-12">排名</th>
                       <th className="p-3 sticky left-12 z-20 bg-[#0d0f12] w-40 min-w-40 max-w-40 border-r border-slate-700 shadow-[8px_0_12px_rgba(0,0,0,0.35)]">選手</th>
-                      {series.events.filter(e => e.rulesVersion !== FINAL).map(event => <th key={event.id} className="p-3 text-center min-w-[5.5rem]">{event.name}</th>)}
+                      {scoringEvents.map(event => <th key={event.id} className="p-3 text-center min-w-[5.5rem]">{event.name}</th>)}
                       <th className="p-3 text-center text-[#f1c6a6] min-w-24">總積分</th>
                     </tr>
                   </thead>
@@ -237,11 +236,11 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                       <tr key={standing.id || standing.name} className="border-t border-slate-800">
                         <td className="p-3 text-center font-black text-[#b6d2d4] sticky left-0 z-10 bg-[#161920] w-12 min-w-12 max-w-12">{standing.displayRank}</td>
                         <td title={standing.name} className="p-3 font-black text-white sticky left-12 z-10 bg-[#161920] w-40 min-w-40 max-w-40 overflow-hidden break-words leading-tight border-r border-slate-700 shadow-[8px_0_12px_rgba(0,0,0,0.35)]">{standing.name}</td>
-                        {series.events.filter(e => e.rulesVersion !== FINAL).map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300 min-w-[5.5rem]"><SeriesEventPoints standing={standing} eventCode={event.eventCode} /></td>)}
+                        {scoringEvents.map(event => <td key={event.id} className="p-3 text-center font-bold text-slate-300 min-w-[5.5rem]"><SeriesEventPoints standing={standing} eventCode={event.eventCode} /></td>)}
                         <td className="p-3 text-center text-xl font-black text-[#f1c6a6] min-w-24">{standing.totalPoints}</td>
                       </tr>
                     ))}
-                    {visibleStandings.length === 0 && <tr><td colSpan={series.events.length + 3} className="p-10 text-center text-slate-500 font-bold">{playerQuery.trim() ? '找不到這位選手，請確認打師名。' : '尚無可計分的完賽結果。'}</td></tr>}
+                    {visibleStandings.length === 0 && <tr><td colSpan={scoringEvents.length + 3} className="p-10 text-center text-slate-500 font-bold">{playerQuery.trim() ? '找不到這位選手，請確認打師名。' : '尚無可計分的完賽結果。'}</td></tr>}
                   </tbody>
                 </table>
               </div>

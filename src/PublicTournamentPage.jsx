@@ -178,10 +178,10 @@ export default function PublicTournamentPage({ initialCode = '' }) {
         </details>}
         {!isFirebaseConfigured && <p role="status" className="public-empty">此部署尚未設定 Firebase，暫時無法查詢雲端賽事。</p>}
 
-        {error && <PublicNotice tone="error">{error}</PublicNotice>}
+        {error && <PublicNotice tone="error" onRetry={status === 'error' && isOnline ? () => setRetryKey(value => value + 1) : undefined}>{error}</PublicNotice>}
         {tournament && (!isOnline || tournament.sync?.fromCache) && (
           <PublicNotice tone="offline" onRetry={isOnline ? () => setRetryKey(value => value + 1) : undefined}>
-            目前離線，顯示快取資料。{tournament.clientUpdatedAt && `最後更新：${new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW')}`}
+            {isOnline ? '正在連線，暫時顯示快取資料。' : '目前離線，顯示快取資料。'}{tournament.clientUpdatedAt && `最後更新：${new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW')}`}
           </PublicNotice>
         )}
         {status === 'loading' && isFirebaseConfigured && <div role="status" className="public-empty">正在載入賽事…</div>}

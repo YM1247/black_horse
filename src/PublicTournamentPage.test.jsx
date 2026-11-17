@@ -7,7 +7,8 @@ vi.mock('./firebase', () => ({ isFirebaseConfigured: true }));
 vi.mock('./services/tournamentRepository', () => ({
   normalizeEventCode: value => String(value || '').trim().toUpperCase(),
   validateEventCode: value => /^[A-Z0-9]{4,10}$/.test(String(value || '').trim().toUpperCase()),
-  subscribeTournament: (code, onTournament) => {
+  subscribeTournament: (code, onTournament, onError) => {
+    if (code === 'FAIL123') { onError({ code: 'unavailable' }); return vi.fn(); }
     const alice = { id: 'alice', name: 'Alice', wins: 1, votes: 3, isWithdrawn: false, isEliminated: false };
     const bob = { id: 'bob', name: 'Bob', wins: 0, votes: 0, isWithdrawn: false, isEliminated: false };
     const value = {
@@ -113,6 +114,20 @@ test('斷線時使用同風格提示，隱藏無法連線的重試操作', async
     expect(notice).toHaveTextContent('目前離線');
     expect(screen.queryByRole('button', { name: '重試' })).not.toBeInTheDocument();
   } finally { offline.mockRestore(); }
+});
+
+test('連網但仍使用快取時不誤報離線，提供重新連線操作', async () => {
+  render(<PublicTournamentPage initialCode="OFF123" />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('正在連線，暫時顯示快取資料。');
+  expect(screen.getByRole('button', { name: '重試' })).toBeInTheDocument();
+});
+
+test('訂閱失敗後可以重試，不必重新輸入代碼', async () => {
+  render(<PublicTournamentPage initialCode="FAIL123" />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('讀取賽事失敗');
+  fireEvent.click(screen.getByRole('button', { name: '重試' }));
+  expect(screen.getByRole('textbox', { name: '賽事代碼' })).toHaveValue('FAIL123');
+  expect(screen.getByRole('alert')).toHaveTextContent('讀取賽事失敗');
 });
 
 test('切回賽況保留選手選擇', async () => {

@@ -1,7 +1,6 @@
 /* Public surfaces only. Brand artwork is the unchanged supplied original. */
 .public-ink {
   position: relative;
-  isolation: isolate;
   --public-fg: #eeeae3;
   --public-muted: #b7cbd0;
   --public-accent: #d18d90;
@@ -31,7 +30,7 @@
 .public-content { padding: 0 18px; }
 .public-ink h2 { font-size: 1.0625rem; line-height: 1.5; font-weight: 600; color: #eeeae3; margin: 0 0 10px; padding-bottom:10px; border-bottom:1px solid #566063; }
 .public-ink :is(a, button, input, summary) { -webkit-tap-highlight-color: #d18d9022; }
-.public-ink :is(a, button, input, summary):focus-visible { outline: 2px solid #d18d90; outline-offset: 3px; }
+.public-ink.spectator-page :is(a, button, input, summary):focus-visible { outline: 2px solid #d18d90; outline-offset: 3px; }
 .public-ink :is(input, button, a) { transition: color 140ms ease-out, background-color 140ms ease-out; }
 .public-ink a { color: #c4d6da; text-underline-offset: .2em; }
 .public-ink a:hover { color: #fff; }
@@ -57,7 +56,7 @@
 .public-search-field svg { width: 20px; height: 20px; flex-shrink: 0; }
 .public-search-field input { width: 100%; min-width: 0; min-height: 44px; border: 0; background: transparent; color: #eeeae3; font-size: 16px; }
 .public-search-field:focus-within { outline: 2px solid #d18d90; outline-offset: 2px; }
-.public-search-field input:focus-visible { outline: none; }
+.public-ink.spectator-page .public-search-field input:focus-visible { outline: none; }
 .public-search-results { padding: 12px 0 0; }
 .public-search-results p { color: #b7cbd0; font-size: .8125rem; margin-bottom: 8px; }
 .public-search-results ul { display: flex; flex-wrap: wrap; gap: 8px; max-height: 14rem; overflow-y: auto; padding: 3px; }
@@ -94,7 +93,7 @@
 .public-event-grid > *, .public-live { min-width: 0; }
 .public-ink .event-board { background: transparent; border: 0; border-radius: 0; padding: 0; color: #eeeae3; }
 .public-ink .event-board h2 { margin-bottom: 10px; }
-.public-ink .event-board li { grid-template-columns: 24px minmax(0,1fr) auto; border-bottom: 0; gap: 3px 10px; padding: 14px 0; }
+.public-ink .event-board li { grid-template-columns: 24px minmax(0,1fr) auto; border: 0; gap: 3px 10px; padding: 14px 0; }
 .public-ink .event-board .stage-name { font-size: .9375rem; font-weight: 500; }
 .public-ink .event-board .place { grid-column: 1; grid-row: 1; }
 .public-ink .event-board .stage-name { grid-column: 2; grid-row: 1; min-width: 0; }
