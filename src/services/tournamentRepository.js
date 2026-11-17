@@ -249,7 +249,7 @@ export const subscribeAuth = (callback) => {
   };
 };
 
-export const createCloudTournament = async ({ eventCode, name, tournament }) => {
+export const createCloudTournament = async ({ eventCode, name, tournament }, { ifMissing = false } = {}) => {
   const code = normalizeEventCode(eventCode);
   if (!validateEventCode(code)) throw new Error('賽事代碼需為 4–10 位英文字母或數字。');
   const user = requireUser();
@@ -259,13 +259,21 @@ export const createCloudTournament = async ({ eventCode, name, tournament }) => 
   const now = new Date().toISOString();
   await runTransaction(db, async transaction => {
     const existing = await transaction.get(tournamentRef);
-    if (existing.exists()) throw new Error('此賽事代碼已存在，請更換代碼。');
+    if (existing.exists()) {
+      if (ifMissing) return;
+      throw new Error('此賽事代碼已存在，請更換代碼。');
+    }
+    // A Console deletion can leave a summary behind. Rebuild only the missing
+    // document, keeping its label and visibility without reviving old run data.
+    const summary = ifMissing ? await transaction.get(summaryRef) : null;
+    const previous = summary?.exists() ? summary.data() : null;
     const tournamentDocument = {
       rulesVersion: tournament.rulesVersion || 'legacy-v1',
       ...encodeTournamentForFirestore(tournament),
       eventCode: code,
-      name: name.trim() || code,
-      isPublic: DEFAULT_CLOUD_TOURNAMENT_VISIBILITY,
+      name: previous?.name || name.trim() || code,
+      isPublic: previous ? previous.isPublic === true : DEFAULT_CLOUD_TOURNAMENT_VISIBILITY,
+      ...(previous ? { isArchived: previous.isArchived === true } : {}),
       revision: 0,
       currentVersionId: '',
       createdAt: serverTimestamp(),
@@ -279,10 +287,14 @@ export const createCloudTournament = async ({ eventCode, name, tournament }) => 
       updatedAt: serverTimestamp(),
       updatedBy: user.uid
     });
-    createAuditLog(transaction, tournamentRef, user, 'TOURNAMENT_CREATED', { name, eventCode: code });
+    createAuditLog(transaction, tournamentRef, user, previous ? 'TOURNAMENT_RECREATED' : 'TOURNAMENT_CREATED', {
+      name: tournamentDocument.name, eventCode: code
+    });
   });
   return code;
 };
+
+export const ensureCloudTournament = (definition) => createCloudTournament(definition, { ifMissing: true });
 
 export const saveCloudTournament = async (eventCode, tournament, audits, expectedRevision = null, qualificationSources) => {
   const code = normalizeEventCode(eventCode);

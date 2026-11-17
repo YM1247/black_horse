@@ -2,8 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import { TournamentAdminApp } from './App';
 import { QUALIFIER } from './seasonTournament';
-import { createCloudTournament, saveCloudTournament } from './services/tournamentRepository';
-import { AKASHIKI, AKASHIKI_EVENT } from './tournamentState';
+import { createCloudTournament, ensureCloudTournament, saveCloudTournament, subscribeAdminTournaments } from './services/tournamentRepository';
+import { AKASHIKI, AKASHIKI_EVENT, createEmptyTournament } from './tournamentState';
+
+const stored = vi.hoisted(() => new Map());
 
 vi.mock('./firebase', () => ({ isFirebaseConfigured: true }));
 vi.mock('./services/playerDirectory', () => ({
@@ -14,7 +16,10 @@ vi.mock('./services/playerDirectory', () => ({
 }));
 vi.mock('./services/tournamentRepository', async (importOriginal) => {
   const actual = await importOriginal();
-  const stored = new Map();
+  const create = vi.fn(async ({ eventCode, name, tournament }) => {
+    stored.set(eventCode, { ...tournament, id: eventCode, name, revision: 0, isPublic: true });
+    return eventCode;
+  });
   return {
     ...actual,
     ensureCloudSeries: vi.fn(async () => {}),
@@ -23,10 +28,10 @@ vi.mock('./services/tournamentRepository', async (importOriginal) => {
       cb({ uid: 'admin' });
       return () => {};
     },
-    subscribeAdminTournaments: (cb) => {
+    subscribeAdminTournaments: vi.fn((cb) => {
       cb([]);
       return () => {};
-    },
+    }),
     subscribeCloudSeries: (_id, cb) => {
       cb(null);
       return () => {};
@@ -38,10 +43,9 @@ vi.mock('./services/tournamentRepository', async (importOriginal) => {
     subscribeTournamentVersions: () => () => {},
     subscribeTournamentAuditLogs: () => () => {},
     syncPublicSeriesProjection: vi.fn(async () => {}),
-    createCloudTournament: vi.fn(async ({ eventCode, name, tournament }) => {
-      stored.set(eventCode, { ...tournament, id: eventCode, name, revision: 0, isPublic: true });
-      return eventCode;
-    }),
+    createCloudTournament: create,
+    ensureCloudTournament: vi.fn(async (definition) => stored.has(definition.eventCode)
+      ? definition.eventCode : create(definition)),
     saveCloudTournament: vi.fn()
   };
 });
@@ -97,5 +101,32 @@ it('一般建立表單不能占用合作賽代碼', async () => {
   fireEvent.change(await screen.findByLabelText('新賽事代碼'), { target: { value: 'AKASHIKI' } });
   fireEvent.click(screen.getByRole('button', { name: '建立並進入', exact: true }));
   expect(await screen.findByText(/AKASHIKI 為合作賽專用代碼/)).toBeInTheDocument();
+  expect(createCloudTournament).not.toHaveBeenCalled();
+});
+
+it('合作賽摘要存在但主文件被刪除時，入口仍會重建空白賽事', async () => {
+  stored.delete('AKASHIKI');
+  ensureCloudTournament.mockClear();
+  subscribeAdminTournaments.mockImplementationOnce((cb) => {
+    cb([{ id: 'AKASHIKI', name: AKASHIKI_EVENT.name, phase: 'finished', playerCount: 32, revision: 183 }]);
+    return () => {};
+  });
+  render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
+  fireEvent.click(await screen.findByRole('button', { name: /赤式x黑馬記念合作賽.*進入管理/ }));
+  expect(await screen.findByRole('heading', { name: '名單 0／32' })).toBeInTheDocument();
+  expect(ensureCloudTournament).toHaveBeenCalledWith(expect.objectContaining({ eventCode: 'AKASHIKI' }));
+  expect(screen.queryByText('找不到指定的雲端賽事。')).not.toBeInTheDocument();
+});
+
+it('合作賽已存在時，入口保留現有報名資料', async () => {
+  createCloudTournament.mockClear();
+  stored.set('AKASHIKI', {
+    ...createEmptyTournament(AKASHIKI_EVENT), id: 'AKASHIKI', name: AKASHIKI_EVENT.name, revision: 4,
+    players: [{ id: 'saved', name: '已報名的選手', wins: 0, votes: 0, losses: 0 }]
+  });
+  render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
+  fireEvent.click(await screen.findByRole('button', { name: /赤式x黑馬記念合作賽.*進入管理/ }));
+  expect(await screen.findByRole('heading', { name: '名單 1／32' })).toBeInTheDocument();
+  expect(screen.getByText('已報名的選手')).toBeInTheDocument();
   expect(createCloudTournament).not.toHaveBeenCalled();
 });

@@ -1,5 +1,6 @@
 const AUDIT_ACTION_LABELS = {
   TOURNAMENT_CREATED: '建立賽事',
+  TOURNAMENT_RECREATED: '重建遺失的賽事',
   TOURNAMENT_STARTED: '開始賽事',
   TOURNAMENT_FINISHED: '結算賽事',
   TOURNAMENT_RESET: '重設賽事',
@@ -31,6 +32,7 @@ export const describeAuditLog = (audit = {}) => {
 
   switch (audit.action) {
     case 'TOURNAMENT_CREATED':
+    case 'TOURNAMENT_RECREATED':
       return `${details.name || details.eventCode || '未命名賽事'}（#${details.eventCode || '—'}）`;
     case 'PLAYER_ADDED':
     case 'PLAYER_REMOVED':

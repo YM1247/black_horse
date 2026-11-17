@@ -10,7 +10,7 @@ import {
   registeredPlayers,
   withdrawPlayer
 } from './seasonTournament';
-import { AKASHIKI } from './tournamentState';
+import { AKASHIKI, clearTournamentContents } from './tournamentState';
 import { buildSeriesStandings } from './series';
 import {
   displacedGames,
@@ -114,8 +114,11 @@ export default function SeasonAdmin({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState(null);
+  const [clearRequest, setClearRequest] = useState(null);
+  const [clearCode, setClearCode] = useState('');
+  const [notice, setNotice] = useState('');
   const reviewPanel = useRef(null);
-  const reviewing = Boolean(review);
+  const reviewing = Boolean(review || clearRequest);
   useEffect(() => {
     if (reviewing) reviewPanel.current?.focus();
   }, [reviewing]);
@@ -264,6 +267,23 @@ export default function SeasonAdmin({
     setReview(null);
   }
   const canClose = roundsDone && (!knockout || (event.bracket?.gold?.isDone && event.bracket?.bronze?.isDone));
+  async function confirmClear() {
+    if (clearCode.trim().toUpperCase() !== event.id) throw new Error('請輸入本場賽事代碼。');
+    if (clearRequest.revision !== latest.current.revision) throw new Error('賽事已有更新，請取消後重新確認清除內容。');
+    await write({ ...event, ...clearTournamentContents(event) }, 'TOURNAMENT_CLEARED', {
+      name: event.name,
+      ...(event.seriesId ? { seriesId: event.seriesId } : {}),
+      previousPhase: event.phase,
+      removedPlayers: event.players.filter((player) => !player.isMC).length,
+      removedRounds: event.rounds.length
+    });
+    setClearRequest(null);
+    setClearCode('');
+    setReviveId('');
+    setSubstituteName('');
+    setNewPlayerSlot(null);
+    setNotice('已清除選手與賽程，賽事回到報名狀態。賽事名稱、代碼與賽制已保留。');
+  }
   return (
     <main className={'season-admin' + (isAkashiki ? ' akashiki-admin' : '')}>
       <header>
@@ -292,6 +312,17 @@ export default function SeasonAdmin({
           <button onClick={onSignOut} disabled={busy || registering}>
             登出
           </button>
+          <button
+            disabled={busy || registering || offline || reviewing}
+            onClick={() => {
+              setError('');
+              setNotice('');
+              setClearCode('');
+              setClearRequest({ revision: event.revision });
+            }}
+          >
+            清除賽事內容
+          </button>
         </nav>
         <h1>{event.name}</h1>
         <p>
@@ -300,7 +331,25 @@ export default function SeasonAdmin({
         {isAkashiki && <p>排名與配對：總票數 → 勝場 → 對手勝率 → 對手的對手勝率。淘汰賽 BO1，冠軍戰 BO3，另設季軍戰。</p>}
       </header>
       {error && <p role="alert">{error}</p>}
+      {notice && <p role="status">{notice}</p>}
       {offline && <p role="status">離線中，恢復連線後可操作。</p>}
+      {clearRequest && (
+        <section ref={reviewPanel} tabIndex={-1} className="season-review" role="region" aria-label="確認清除賽事內容">
+          <h2>清除 {event.name} 的內容？</h2>
+          <p>將清除本場的 {event.players.filter((player) => !player.isMC).length} 位選手、{event.rounds.length} 輪瑞士賽、淘汰賽籤表、比分與資格名單，回到報名狀態。</p>
+          <p>保留賽事名稱、代碼、賽制、公開狀態、選手資料庫、操作紀錄與歷史完賽版本。舊名單與賽程不會自動還原。</p>
+          <label>
+            輸入賽事代碼 {event.id} 確認清除
+            <input value={clearCode} disabled={busy} autoComplete="off" spellCheck={false}
+              onChange={(e) => setClearCode(e.target.value)} />
+          </label>
+          <button disabled={busy || offline || clearCode.trim().toUpperCase() !== event.id}
+            onClick={() => run(confirmClear)}>
+            {busy ? '清除中…' : '確認清除內容'}
+          </button>
+          <button disabled={busy} onClick={() => { setClearRequest(null); setClearCode(''); }}>取消</button>
+        </section>
+      )}
       {review && (
         <section ref={reviewPanel} tabIndex={-1} className="season-review" role="region" aria-label="確認更正">
           <h2>{review.action}</h2>
@@ -331,7 +380,7 @@ export default function SeasonAdmin({
           <button onClick={() => setReview(null)}>取消</button>
         </section>
       )}
-      <fieldset disabled={busy || offline || Boolean(review)} className="season-body">
+      <fieldset disabled={busy || offline || reviewing} className="season-body">
         {registered && (
           <section>
             <h2>{isFinal ? '最終戰資格名單' : '選手報名'}</h2>

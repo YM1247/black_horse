@@ -4,6 +4,7 @@ import { Trophy, Users, Swords, UserPlus, Play, Medal, ChevronRight, AlertTriang
 import { applyDoubleElimination, pairSwissRound, rankPlayers, recalculatePlayerRecords, updateMatchScore } from './tournament';
 import {
   createEmptyTournament,
+  clearTournamentContents,
   AKASHIKI_EVENT,
   createId,
   DEFAULT_DOUBLE_ELIMINATION,
@@ -27,6 +28,7 @@ import {
   createCloudTournament,
   deleteCloudTournament,
   ensureCloudSeries,
+  ensureCloudTournament,
   ensureTournamentSummaries,
   generateEventCode,
   getAdminLoginErrorMessage,
@@ -649,7 +651,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
   const handleCreateSeriesTournament = async (series, eventDefinition) => {
     const existing = cloudTournaments.find(tournament => tournament.id === eventDefinition.eventCode);
-    if (existing) {
+    const isCooperative = eventDefinition.eventCode === AKASHIKI_EVENT.eventCode;
+    if (existing && !isCooperative) {
       await handleSelectCloudTournament(existing.id, series?.id || '');
       return;
     }
@@ -662,7 +665,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         judgeCount: eventDefinition.judgeCount,
         doubleElimination: eventDefinition.doubleElimination
       });
-      const code = await createCloudTournament({
+      const code = await (isCooperative ? ensureCloudTournament : createCloudTournament)({
         eventCode: eventDefinition.eventCode,
         name: eventDefinition.name,
         tournament: {
@@ -744,12 +747,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     setCloudError('');
     setSeriesMutationStatus(`clear:${eventDefinition.eventCode}`);
     try {
-      const emptyTournament = createEmptyTournament({
-        rulesVersion: eventDefinition.rulesVersion,
-        judgeCount: eventDefinition.judgeCount,
-        doubleElimination: eventDefinition.doubleElimination
-      });
-      emptyTournament.runNumber = (Number(tournament.runNumber) || 1) + 1;
+      const emptyTournament = clearTournamentContents(tournament);
       await saveCloudTournament(eventDefinition.eventCode, emptyTournament, {
         action: 'TOURNAMENT_CLEARED',
         details: {

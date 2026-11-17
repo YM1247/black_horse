@@ -5,8 +5,8 @@ import { getFirebaseServices } from '../src/firebase';
 import { saveIdentity } from '../src/services/playerDirectory';
 import { reviewKey } from '../src/playerIdentity';
 import { BLACK_HORSE, SIMULATION_SERIES } from '../src/series';
-import { ensureCloudSeries, createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore, subscribeTournament } from '../src/services/tournamentRepository';
-import { AKASHIKI, createEmptyTournament } from '../src/tournamentState';
+import { ensureCloudSeries, ensureCloudTournament, createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore, subscribeTournament } from '../src/services/tournamentRepository';
+import { AKASHIKI, AKASHIKI_EVENT, clearTournamentContents, createEmptyTournament } from '../src/tournamentState';
 import { gamesFor, playoffSelection, scorePlayoff, seedPlayoff } from '../src/finalTournament';
 import { QUALIFIER, nextSwissRound, publicPlayer, scoreSwiss } from '../src/seasonTournament';
 vi.mock('../src/firebase', () => ({ getFirebaseServices: vi.fn(), isFirebaseConfigured: true }));
@@ -283,6 +283,65 @@ test('合作賽保存十六強與 BO3；鎖定後須建立更正版本，1:1 可
   expect(data.playoffSeeds).toHaveLength(16);
   expect(data.rounds.map(r => r.length)).toEqual([16, 16, 16]);
   expect(JSON.stringify(data)).not.toMatch(/realName|phone|seriesId/);
+});
+
+test('合作賽主文件被刪除但摘要仍在時可原子重建，重複或並行進入不覆寫內容', async () => {
+  await seedAdmin();
+  const db = testEnvironment.authenticatedContext('admin-user').firestore();
+  getFirebaseServices.mockReturnValue({ db, auth: { currentUser: { uid: 'admin-user' } } });
+  const summaryRef = doc(db, 'tournamentSummaries', 'AKASHIKI');
+  await setDoc(summaryRef, { name: '原有合作賽名稱', isPublic: false, isArchived: true,
+    phase: 'finished', playerCount: 32, revision: 183 });
+  const definition = { ...AKASHIKI_EVENT, tournament: createEmptyTournament(AKASHIKI_EVENT) };
+  await Promise.all([ensureCloudTournament(definition), ensureCloudTournament(definition)]);
+  const ref = doc(db, 'tournaments', 'AKASHIKI');
+  const recreated = (await getDoc(ref)).data();
+  expect(recreated).toMatchObject({ name: '原有合作賽名稱', eventCode: 'AKASHIKI', rulesVersion: AKASHIKI,
+    judgeCount: 3, doubleElimination: false, isPublic: false, isArchived: true,
+    phase: 'registration', players: [], rounds: {}, revision: 0 });
+  expect((await getDoc(summaryRef)).data()).toMatchObject({ phase: 'registration', playerCount: 0, revision: 0 });
+  expect((await getDocs(collection(ref, 'auditLogs'))).docs.map(log => log.data().action)).toEqual(['TOURNAMENT_RECREATED']);
+  await saveCloudTournament('AKASHIKI', { players: [publicPlayer({ id: 'saved', name: '新報名選手' })] }, { action: '報名' }, 0);
+  const before = (await getDoc(ref)).data();
+  await ensureCloudTournament(definition);
+  expect((await getDoc(ref)).data()).toEqual(before);
+  await expect(createCloudTournament(definition)).rejects.toThrow('已存在');
+});
+
+test.each(['registration', 'playing', 'finished'])('%s 合作賽清除保留身分、賽制、私人選手檔與歷史版本，公開資料同步歸零', async (phase) => {
+  await seedAdmin();
+  const db = testEnvironment.authenticatedContext('admin-user').firestore();
+  getFirebaseServices.mockReturnValue({ db, auth: { currentUser: { uid: 'admin-user' } } });
+  const initial = { ...createEmptyTournament(AKASHIKI_EVENT), phase, runNumber: 4,
+    players: [publicPlayer({ id: 'a', name: '合作選手' })], rounds: phase === 'registration' ? [] : [[]],
+    qualificationConfig: { online: ['a'] }, qualificationSources: { OTHER1: 2 }, qualifiedIds: ['a'],
+    playoffSeeds: [{ id: 'a', name: '合作選手' }], playoffDecisions: { tie: ['a'] }, bracket: { gold: { isDone: true } } };
+  await createCloudTournament({ ...AKASHIKI_EVENT, tournament: initial });
+  await setDoc(doc(db, 'privatePlayers', 'a'), { name: '合作選手', realName: '私人本名' });
+  const ref = doc(db, 'tournaments', 'AKASHIKI');
+  if (phase === 'finished') await saveTournamentVersion('AKASHIKI', initial, { expectedRevision: 0, type: 'completed', reason: '完賽' });
+  const before = decodeTournamentFromFirestore((await getDoc(ref)).data());
+  const oldVersions = (await getDocs(collection(ref, 'versions'))).docs.map(d => ({ id: d.id, ...d.data() }));
+  const oldAudits = (await getDocs(collection(ref, 'auditLogs'))).docs.map(d => ({ id: d.id, ...d.data() }));
+  await expect(saveCloudTournament('AKASHIKI', clearTournamentContents(before), { action: 'TOURNAMENT_CLEARED' }, before.revision + 1))
+    .rejects.toMatchObject({ code: 'cloud/revision-conflict' });
+  await saveCloudTournament('AKASHIKI', clearTournamentContents(before), { action: 'TOURNAMENT_CLEARED' }, before.revision);
+  const visitor = testEnvironment.unauthenticatedContext().firestore();
+  const cleared = decodeTournamentFromFirestore((await getDoc(doc(visitor, 'tournaments', 'AKASHIKI'))).data());
+  expect(cleared).toMatchObject({ name: AKASHIKI_EVENT.name, eventCode: 'AKASHIKI', rulesVersion: AKASHIKI,
+    judgeCount: 3, doubleElimination: false, isPublic: true, phase: 'registration',
+    players: [], rounds: [], bracket: {}, qualificationConfig: {}, qualificationSources: {},
+    qualifiedIds: [], playoffSeeds: [], playoffDecisions: {}, runNumber: 5,
+    currentVersion: 0, currentVersionId: '', resultLocked: false, revision: before.revision + 1 });
+  expect(cleared.runId).not.toBe(before.runId);
+  expect((await getDoc(doc(db, 'tournamentSummaries', 'AKASHIKI'))).data()).toMatchObject({
+    phase: 'registration', playerCount: 0, revision: cleared.revision
+  });
+  expect((await getDocs(collection(ref, 'versions'))).docs.map(d => ({ id: d.id, ...d.data() }))).toEqual(oldVersions);
+  const audits = (await getDocs(collection(ref, 'auditLogs'))).docs.map(d => ({ id: d.id, ...d.data() }));
+  expect(audits).toEqual(expect.arrayContaining(oldAudits));
+  expect(audits.filter(log => log.action === 'TOURNAMENT_CLEARED')).toHaveLength(1);
+  expect((await getDoc(doc(db, 'privatePlayers', 'a'))).exists()).toBe(true);
 });
 
 test('既有系列與已完賽場次改用中文場名；重新開啟不重複寫入', async () => {

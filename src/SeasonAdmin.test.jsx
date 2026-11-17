@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import SeasonAdmin from './SeasonAdmin';
-import { createEmptyTournament } from './tournamentState';
+import { AKASHIKI, createEmptyTournament } from './tournamentState';
 import { FINAL, QUALIFIER } from './seasonTournament';
 import { saveCloudTournament } from './services/tournamentRepository';
 import { saveIdentity } from './services/playerDirectory';
@@ -77,4 +77,76 @@ test('最終戰可直接新增未參賽選手並填入第二個線上保送席�
   const [, state] = saveCloudTournament.mock.calls[0];
   expect(state.qualificationConfig).toEqual({ online: ['stable', 'new-online'], local: 'audition' });
   expect(JSON.stringify(state)).not.toMatch(/新人本名|0900000001/);
+});
+
+const cooperativeEvent = (phase = 'playing') => ({
+  ...createEmptyTournament({ rulesVersion: AKASHIKI }),
+  id: 'AKASHIKI', name: '赤式x黑馬記念合作賽', revision: 12,
+  isPublic: true, phase, runNumber: 3,
+  resultLocked: phase === 'finished', currentVersion: phase === 'finished' ? 2 : 0,
+  players: [{ id: 'a', name: '合作選手', wins: 0, votes: 0, losses: 0 }],
+  rounds: phase === 'registration' ? [] : [[]],
+  qualifiedIds: ['a'], playoffSeeds: [{ id: 'a', name: '合作選手' }], playoffDecisions: { tie: ['a'] }
+});
+
+test.each(['registration', 'playing', 'finished'])('%s 的合作賽需確認代碼才清除，保留賽制並回到報名', async (phase) => {
+  saveCloudTournament.mockClear();
+  const event = cooperativeEvent(phase);
+  render(<SeasonAdmin tournament={event} tournaments={[]} online versions={[]} />);
+  fireEvent.click(screen.getByRole('button', { name: '清除賽事內容' }));
+  const confirmation = within(screen.getByRole('region', { name: '確認清除賽事內容' }));
+  expect(confirmation.getByRole('button', { name: '確認清除內容' })).toBeDisabled();
+  expect(saveCloudTournament).not.toHaveBeenCalled();
+  fireEvent.change(confirmation.getByRole('textbox'), { target: { value: 'akashiki' } });
+  fireEvent.click(confirmation.getByRole('button', { name: '確認清除內容' }));
+  await waitFor(() => expect(saveCloudTournament).toHaveBeenCalledTimes(1));
+  const [code, state, audit, revision] = saveCloudTournament.mock.calls[0];
+  expect(code).toBe('AKASHIKI');
+  expect(revision).toBe(12);
+  expect(state).toMatchObject({
+    phase: 'registration', rulesVersion: AKASHIKI, judgeCount: 3, doubleElimination: false,
+    players: [], rounds: [], bracket: {}, qualifiedIds: [], playoffSeeds: [], playoffDecisions: {},
+    qualificationConfig: {}, qualificationSources: {}, runNumber: 4, resultLocked: false, currentVersion: 0
+  });
+  expect(state.runId).not.toBe(event.runId);
+  expect(state).not.toHaveProperty('isPublic');
+  expect(audit).toMatchObject({ action: 'TOURNAMENT_CLEARED', details: { removedPlayers: 1, removedRounds: event.rounds.length } });
+  expect(await screen.findByRole('heading', { name: '名單 0／32' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: event.name })).toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('已清除選手與賽程');
+});
+
+test('取消、離線與確認後版本衝突不會清除賽事', async () => {
+  saveCloudTournament.mockClear();
+  const event = cooperativeEvent();
+  const view = render(<SeasonAdmin tournament={event} tournaments={[]} online versions={[]} />);
+  fireEvent.click(screen.getByRole('button', { name: '清除賽事內容' }));
+  fireEvent.click(within(screen.getByRole('region', { name: '確認清除賽事內容' })).getByRole('button', { name: '取消' }));
+  expect(screen.queryByRole('region', { name: '確認清除賽事內容' })).not.toBeInTheDocument();
+  expect(saveCloudTournament).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '清除賽事內容' }));
+  view.rerender(<SeasonAdmin tournament={{ ...event, revision: 13 }} tournaments={[]} online versions={[]} />);
+  const confirmation = within(screen.getByRole('region', { name: '確認清除賽事內容' }));
+  fireEvent.change(confirmation.getByRole('textbox'), { target: { value: 'AKASHIKI' } });
+  fireEvent.click(confirmation.getByRole('button', { name: '確認清除內容' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('賽事已有更新');
+  expect(saveCloudTournament).not.toHaveBeenCalled();
+  view.rerender(<SeasonAdmin tournament={event} tournaments={[]} online={false} versions={[]} />);
+  expect(screen.getByRole('button', { name: '確認清除內容' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '清除賽事內容' })).toBeDisabled();
+});
+
+test('雲端清除失敗時保留名單與確認內容供重試', async () => {
+  saveCloudTournament.mockClear();
+  saveCloudTournament.mockRejectedValueOnce(new Error('同步失敗，請稍後重試。'));
+  render(<SeasonAdmin tournament={cooperativeEvent('registration')} tournaments={[]} online versions={[]} />);
+  fireEvent.click(screen.getByRole('button', { name: '清除賽事內容' }));
+  const confirmation = within(screen.getByRole('region', { name: '確認清除賽事內容' }));
+  fireEvent.change(confirmation.getByRole('textbox'), { target: { value: 'AKASHIKI' } });
+  fireEvent.click(confirmation.getByRole('button', { name: '確認清除內容' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('同步失敗');
+  expect(screen.getByRole('heading', { name: '名單 1／32' })).toBeInTheDocument();
+  expect(confirmation.getByRole('textbox')).toHaveValue('AKASHIKI');
+  fireEvent.click(confirmation.getByRole('button', { name: '確認清除內容' }));
+  expect(await screen.findByRole('heading', { name: '名單 0／32' })).toBeInTheDocument();
 });

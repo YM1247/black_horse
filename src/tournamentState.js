@@ -89,3 +89,9 @@ export const createEmptyTournament = ({
   doubleElimination,
   runId: createId()
 });
+
+// Return only run state; repository updates keep the event's identity and metadata.
+export const clearTournamentContents = (tournament) => ({
+  ...createEmptyTournament(tournament),
+  runNumber: (Number(tournament.runNumber) || 1) + 1
+});
