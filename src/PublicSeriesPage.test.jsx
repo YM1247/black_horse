@@ -126,3 +126,16 @@ test('系列 metadata 與名稱更新保留場次資料及訂閱，新增場次�
   act(() => publishSeries({ id: 'SIM2026', name: '更新名稱', events: [...events, { id: 'four', name: '新場次', eventCode: 'NEW123' }] }));
   expect(subscribeTournament).toHaveBeenCalledWith('NEW123', expect.any(Function), expect.any(Function));
 });
+
+test('場次尚未到齊或訂閱失敗時標示暫列與個別狀態', async () => {
+  let rejectStation;
+  subscribeTournament.mockImplementationOnce((_code, _onData, onError) => {
+    rejectStation = onError;
+    return () => {};
+  });
+  render(<PublicSeriesPage initialCode="SIM2026" />);
+  expect(await screen.findByText('積分暫列 · 已讀取 2／3 場積分賽')).toBeInTheDocument();
+  act(() => rejectStation({ code: 'unavailable' }));
+  expect(screen.getByText('讀取失敗')).toBeInTheDocument();
+  expect(screen.queryByText('載入中')).not.toBeInTheDocument();
+});

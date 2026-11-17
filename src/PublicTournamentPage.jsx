@@ -157,6 +157,7 @@ export default function PublicTournamentPage({ initialCode = '' }) {
     <main className={`spectator-page public-ink${hasBottomNav ? '' : ' public-ink--no-nav'}`}>
       <div className="public-container">
         <PublicBrand backHref={parentSeries?.publicCode ? `${window.location.pathname}?series=${parentSeries.publicCode}` : undefined} title={tournament?.name || '公開賽事查詢'}>
+          {tournament?.qualificationConfirmedAt && <p>入圍名單於 {new Date(tournament.qualificationConfirmedAt).toLocaleString('zh-TW')} 確認</p>}
           {tournament && <p className="public-event-meta" role="status">
             {PHASE_LABELS[tournament.phase] || tournament.phase}・{!isOnline ? '離線' : tournament.sync?.fromCache ? '快取資料' : tournament.sync?.hasPendingWrites ? '資料同步中' : '即時更新中'}
             {tournament.clientUpdatedAt && <span className="public-update-time">更新 {new Date(tournament.clientUpdatedAt).toLocaleString('zh-TW')}</span>}

@@ -1,4 +1,5 @@
 import { eventRanking, FINAL, QUALIFIER } from './seasonTournament';
+import { AKASHIKI, AKASHIKI_EVENT } from './tournamentState';
 import { rankPlayers } from './tournament';
 
 export const SIMULATION_SERIES = Object.freeze({
@@ -24,6 +25,11 @@ export const BLACK_HORSE = {
     rulesVersion: QUALIFIER, judgeCount: 3, doubleElimination: true
   })), { id: 'final', name: '最終戰', eventCode: 'BH2627F', rulesVersion: FINAL, judgeCount: 5, doubleElimination: false }]
 };
+export function officialEventMatches(code, event) {
+  if (code === AKASHIKI_EVENT.eventCode) return event.rulesVersion === AKASHIKI && !event.seriesId;
+  const station = BLACK_HORSE.events.find(item => item.eventCode === code);
+  return !station || (event.seriesId === BLACK_HORSE.id && event.rulesVersion === station.rulesVersion);
+}
 export const SERIES = Object.freeze([BLACK_HORSE, SIMULATION_SERIES]);
 
 const normalizePlayerName = (name) => String(name || '').trim();

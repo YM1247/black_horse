@@ -21,7 +21,7 @@ import { describeAuditLog, formatAuditTime, getAuditActionLabel } from './audit'
 import { isFirebaseConfigured } from './firebase';
 import { canLeaveWithoutTournamentWrite, runWithCloudRetry, shouldApplyCloudSnapshot, shouldShowCloudSyncAlert } from './cloudSync';
 import FullScreenCloudManager from './FullScreenCloudManager';
-import { buildSeriesStandings, normalizeSeriesDefinition, SERIES } from './series';
+import { officialEventMatches, buildSeriesStandings, normalizeSeriesDefinition, SERIES } from './series';
 import SeriesAdminDashboard from './SeriesAdminDashboard';
 import ResultCorrectionPanel from './ResultCorrectionPanel';
 import {
@@ -146,14 +146,26 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
   const [mockConfirmUntil, setMockConfirmUntil] = useState(0);
 
   // Firebase 雲端後台狀態
-  const [isCloudModalOpen, setIsCloudModalOpen] = useState(isFirebaseConfigured);
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState(isFirebaseConfigured && !validateEventCode(new URLSearchParams(location.search).get('manage') || ''));
   const [adminUser, setAdminUser] = useState(authenticatedUser);
   const [adminToken, setAdminToken] = useState('');
   const [cloudTournaments, setCloudTournaments] = useState([]);
+  const [summaryOwner, setSummaryOwner] = useState(null);
+  const [seriesOwners, setSeriesOwners] = useState({});
   const [seriesTournaments, setSeriesTournaments] = useState([]);
   const [cloudAuditLogs, setCloudAuditLogs] = useState([]);
   const [cloudVersions, setCloudVersions] = useState([]);
-  const [activeCloudCode, setActiveCloudCode] = useState('');
+  const [activeCloudCode, setActiveCloudCode] = useState(() => {
+    const code = normalizeEventCode(new URLSearchParams(location.search).get('manage') || '');
+    return validateEventCode(code) ? code : '';
+  });
+  useEffect(() => {
+    if (!new URLSearchParams(location.search).has('admin')) return;
+    const url = new URL(location.href);
+    if (activeCloudCode) url.searchParams.set('manage', activeCloudCode);
+    else url.searchParams.delete('manage');
+    history.replaceState(history.state, '', url);
+  }, [activeCloudCode]);
   const [activeCloudName, setActiveCloudName] = useState('');
   const [cloudIsPublic, setCloudIsPublic] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState('local');
@@ -259,10 +271,20 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCloudTournaments([]);
       return undefined;
     }
-    const unsubscribe = subscribeAdminTournaments(setCloudTournaments, error => setCloudError(error.message));
-    ensureTournamentSummaries()
+    let active = true;
+    let summariesCurrent = false;
+    let migrationReady = false;
+    const updateReady = () => {
+      if (active) setSummaryOwner(summariesCurrent && migrationReady ? adminUser : null);
+    };
+    const unsubscribe = subscribeAdminTournaments((rows, fromServer) => {
+      setCloudTournaments(rows);
+      summariesCurrent = fromServer;
+      updateReady();
+    }, error => setCloudError(error.message));
+    ensureTournamentSummaries().then(() => { migrationReady = true; updateReady(); })
       .catch(error => setCloudError(`賽事摘要檢查失敗：${error.message}`));
-    return unsubscribe;
+    return () => { active = false; unsubscribe(); };
   }, [adminUser]);
 
   useEffect(() => {
@@ -271,7 +293,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       return undefined;
     }
     if (isOnline) Promise.all(SERIES.map(series => ensureCloudSeries(series))).catch(error => setCloudError(error.message));
-    const unsubscribers = SERIES.map(fallback => subscribeCloudSeries(fallback.id, data => {
+    const unsubscribers = SERIES.map(fallback => subscribeCloudSeries(fallback.id, (data, fromServer) => {
+      setSeriesOwners(current => ({ ...current, [fallback.id]: data && fromServer ? adminUser : null }));
       const normalized = normalizeSeriesDefinition(data, fallback);
       setSeriesDefinitions(current => current.map(series => series.id === normalized.id ? normalized : series));
     }, error => setCloudError(error.message)));
@@ -299,7 +322,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
 
   useEffect(() => {
     if (!isFirebaseConfigured || !adminUser || !isOnline) return;
+    if (summaryOwner !== adminUser) return;
     seriesDefinitions.forEach(series => {
+      if (seriesOwners[series.id] !== adminUser) return;
       const relatedTournaments = cloudTournaments.filter(tournament =>
         series.events.some(event => event.eventCode === tournament.id)
       );
@@ -321,7 +346,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         setCloudError(`公開系列資料同步失敗：${error.message}`);
       });
     });
-  }, [adminUser, cloudTournaments, isOnline, seriesDefinitions]);
+  }, [adminUser, cloudTournaments, isOnline, seriesDefinitions, summaryOwner, seriesOwners]);
 
   useEffect(() => {
     if (!isFirebaseConfigured || !adminUser || !activeCloudCode) {
@@ -331,13 +356,22 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     cloudReadyRef.current = false;
     lastCloudStateRef.current = null;
     setCloudSyncStatus('loading');
-    return subscribeTournament(activeCloudCode, data => {
+    return subscribeTournament(activeCloudCode, (data, serverConfirmed) => {
       if (!data) {
+        if (serverConfirmed === false) return;
+        setIsCloudModalOpen(true);
         setCloudError('找不到指定的雲端賽事。');
         setCloudSyncStatus('error');
         return;
       }
+      if (!officialEventMatches(activeCloudCode, data)) {
+        setCloudError('場次代碼與所屬系列或賽制不符，請核對場次設定。');
+        setActiveCloudCode('');
+        setIsCloudModalOpen(true);
+        return;
+      }
       if (isSeasonEvent(data)) {
+        setActiveSeriesId(data.seriesId || '');
         cloudReadyRef.current = false;
         setSeasonEvent(data);
         setActiveCloudName(data.name);
@@ -403,8 +437,9 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCloudVersions([]);
       return undefined;
     }
+    if (!isCorrectionMode) return undefined;
     return subscribeTournamentVersions(activeCloudCode, setCloudVersions, error => setCloudError(error.message));
-  }, [adminUser, activeCloudCode]);
+  }, [adminUser, activeCloudCode, isCorrectionMode]);
 
   flushCloudSyncRef.current = async () => {
     if (!adminUser || !activeCloudCode || !cloudReadyRef.current || !isOnline) return false;
@@ -602,6 +637,8 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
     try {
       if (normalizeEventCode(newCloudCode) === AKASHIKI_EVENT.eventCode)
         throw new Error('AKASHIKI 為合作賽專用代碼，請由「赤式x黑馬記念合作賽」入口建立。');
+      if (seriesDefinitions.some(s => s.events.some(e => e.eventCode === normalizeEventCode(newCloudCode))))
+        throw new Error('此代碼已保留給系列場次，請從系列賽入口建立。');
       if (activeCloudCode && !await persistCurrentCloudState()) return;
       const tournament = createEmptyTournament({
         rulesVersion: newSeasonRules ? QUALIFIER : undefined,
@@ -708,7 +745,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       setCloudError('賽事代碼需為 4–10 位英文字母或數字。');
       return false;
     }
-    if (seriesDefinitions.some(item => item.events.some(event => event.eventCode === normalizedCode)) || cloudTournaments.some(tournament => tournament.id === normalizedCode)) {
+    if (normalizedCode === AKASHIKI_EVENT.eventCode || seriesDefinitions.some(item => item.events.some(event => event.eventCode === normalizedCode)) || cloudTournaments.some(tournament => tournament.id === normalizedCode)) {
       setCloudError('此賽事代碼已被其他場次或賽事使用。');
       return false;
     }

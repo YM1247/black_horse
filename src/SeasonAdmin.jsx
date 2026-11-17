@@ -21,7 +21,7 @@ import {
   seedPlayoff,
   startFinal
 } from './finalTournament';
-import { saveCloudTournament, saveTournamentVersion } from './services/tournamentRepository';
+import { restoreClearedTournament, subscribeTournamentVersions, saveCloudTournament, saveTournamentVersion } from './services/tournamentRepository';
 import { subscribePlayers } from './services/playerDirectory';
 import IdentityRegistration from './IdentityRegistration';
 import PlayoffBracket from './PlayoffBracket';
@@ -43,6 +43,7 @@ const stateKeys = [
   'resultLocked',
   'qualificationConfig',
   'qualificationSources',
+  'qualificationConfirmedAt',
   'qualifiedIds',
   'playoffDecisions',
   'playoffSeeds',
@@ -129,7 +130,7 @@ export default function SeasonAdmin({
   const latest = useRef(tournament);
   const writing = useRef(false);
   if (tournament.revision >= latest.current.revision) latest.current = tournament;
-  useEffect(() => subscribePlayers(setProfiles, (err) => setError(err.message)), []);
+
   const event = confirmed.revision > tournament.revision ? confirmed : tournament;
   const isFinal = event.rulesVersion === FINAL;
   const isAkashiki = event.rulesVersion === AKASHIKI;
@@ -137,6 +138,15 @@ export default function SeasonAdmin({
   const limit = playerLimit(event);
   const registered = event.phase === 'registration';
   const finished = event.phase === 'finished';
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyRows, setHistoryRows] = useState([]);
+  useEffect(() => {
+    if (registered) return subscribePlayers(setProfiles, err => setError(err.message));
+    setProfiles([]);
+  }, [registered]);
+  useEffect(() => {
+    if (finished && historyOpen) return subscribeTournamentVersions(event.id, setHistoryRows, err => setError(err.message));
+  }, [event.id, finished, historyOpen]);
   const ranked = eventRanking(event);
   const decision = nextRoundDecision(event);
   const config = event.qualificationConfig || {};
@@ -207,7 +217,7 @@ export default function SeasonAdmin({
         return [station.eventCode, result.revision];
       })
     );
-    const next = { ...startFinal(event, preview), qualificationSources: sources };
+    const next = { ...startFinal(event, preview), qualificationSources: sources, qualificationConfirmedAt: new Date().toISOString() };
     return write(
       next,
       '確認資格並開賽',
@@ -330,9 +340,24 @@ export default function SeasonAdmin({
         </p>
         {isAkashiki && <p>排名與配對：總票數 → 勝場 → 對手勝率 → 對手的對手勝率。淘汰賽 BO1，冠軍戰 BO3，另設季軍戰。</p>}
       </header>
+      {isFinal && !registered && event.qualificationSources && <details>
+        <summary>開賽時確認的資格來源</summary>
+        {event.qualificationConfirmedAt && <p>{new Date(event.qualificationConfirmedAt).toLocaleString('zh-TW')}</p>}
+        {Object.entries(event.qualificationSources).map(([code, revision]) => {
+          const current = tournaments.find(t => t.id === code);
+          return <p key={code}>{code} · 版本 {revision}{current && current.revision !== revision ? `（目前版本 ${current.revision}）` : ''}</p>;
+        })}
+      </details>}
       {error && <p role="alert">{error}</p>}
+      {busy && !registering && <p role="status">正在儲存賽事…</p>}
       {notice && <p role="status">{notice}</p>}
       {offline && <p role="status">離線中，恢復連線後可操作。</p>}
+      {event.clearBackupId && registered && !event.players.length && <button disabled={offline || busy || registering} onClick={() => run(async () => {
+        if (!window.confirm('還原清除前的名單、配對與比分？')) return;
+        setBusy(true);
+        try { await restoreClearedTournament(event.id, event.revision); }
+        finally { setBusy(false); }
+      })}>還原清除前快照</button>}
       {clearRequest && (
         <section ref={reviewPanel} tabIndex={-1} className="season-review" role="region" aria-label="確認清除賽事內容">
           <h2>清除 {event.name} 的內容？</h2>
@@ -471,12 +496,19 @@ export default function SeasonAdmin({
                   onBusyChange={setRegistering}
                   profiles={profiles}
                   remaining={limit - event.players.length}
-                  onPlayers={(additions) => {
+                  onPlayers={async (additions) => {
                     const current = latest.current;
                     if (current.phase !== 'registration') throw new Error('賽事已開打，無法新增報名。');
-                    return write({ ...current, players: registeredPlayers(current.players, additions, limit) }, '選手報名', {
-                      players: additions
+                    const ids = new Set(current.players.map(player => player.id));
+                    const duplicates = [];
+                    const fresh = additions.filter((player, index) => {
+                      if (ids.has(player.id)) { duplicates.push(index); return false; }
+                      ids.add(player.id);
+                      return true;
                     });
+                    if (fresh.length) await write({ ...current, players: registeredPlayers(current.players, fresh, limit) },
+                      '選手報名', { players: fresh });
+                    return duplicates;
                   }}
                 />
                 <div className="registration-list">
@@ -647,10 +679,10 @@ export default function SeasonAdmin({
               </div>
               <PublicTournamentRanking tournament={event} rankedPlayers={ranked} />
             </div>
-            {finished && versions?.length > 0 && (
-              <details>
+            {finished && (
+              <details onToggle={e => setHistoryOpen(e.currentTarget.open)}>
                 <summary>完賽版本紀錄</summary>
-                {versions
+                {(historyRows.length ? historyRows : versions || [])
                   .filter((v) => v.runId === event.runId)
                   .map((v) => (
                     <button

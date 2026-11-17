@@ -5,7 +5,7 @@ import { getFirebaseServices } from '../src/firebase';
 import { saveIdentity } from '../src/services/playerDirectory';
 import { reviewKey } from '../src/playerIdentity';
 import { BLACK_HORSE, SIMULATION_SERIES } from '../src/series';
-import { ensureCloudSeries, ensureCloudTournament, createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore, subscribeTournament } from '../src/services/tournamentRepository';
+import { restoreClearedTournament, ensureCloudSeries, ensureCloudTournament, createCloudTournament, saveCloudTournament, saveTournamentVersion, decodeTournamentFromFirestore, subscribeTournament } from '../src/services/tournamentRepository';
 import { AKASHIKI, AKASHIKI_EVENT, clearTournamentContents, createEmptyTournament } from '../src/tournamentState';
 import { gamesFor, playoffSelection, scorePlayoff, seedPlayoff } from '../src/finalTournament';
 import { QUALIFIER, nextSwissRound, publicPlayer, scoreSwiss } from '../src/seasonTournament';
@@ -341,6 +341,14 @@ test.each(['registration', 'playing', 'finished'])('%s 合作賽清除保留身�
   const audits = (await getDocs(collection(ref, 'auditLogs'))).docs.map(d => ({ id: d.id, ...d.data() }));
   expect(audits).toEqual(expect.arrayContaining(oldAudits));
   expect(audits.filter(log => log.action === 'TOURNAMENT_CLEARED')).toHaveLength(1);
+  await assertFails(getDoc(doc(visitor, 'tournaments', 'AKASHIKI', 'clearBackups', cleared.clearBackupId)));
+  await expect(restoreClearedTournament('AKASHIKI', before.revision)).rejects.toThrow();
+  await restoreClearedTournament('AKASHIKI', cleared.revision);
+  expect(decodeTournamentFromFirestore((await getDoc(ref)).data())).toMatchObject({
+    runId: before.runId, players: before.players, rounds: before.rounds, bracket: before.bracket,
+    phase, currentVersion: before.currentVersion, currentVersionId: before.currentVersionId,
+    revision: cleared.revision + 1
+  });
   expect((await getDoc(doc(db, 'privatePlayers', 'a'))).exists()).toBe(true);
 });
 

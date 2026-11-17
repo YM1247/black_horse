@@ -34,7 +34,7 @@ function PlayoffMatch({ event, game: [key, label, first, second], tree = false, 
     const sourceGame = gamesFor(event).find(([id]) => id === source);
     return sourceGame ? `${publicView ? sourceGame[1].replace(/\s+\d+$/, '') : sourceGame[1]} ${key === 'bronze' ? '敗者' : '勝者'}` : publicView ? '等待選手' : `籤位 ${source}`;
   };
-  return <article className={(tree ? 'playoff-tree-match' : '') + (highlighted ? ' is-search-match' : '')} tabIndex={highlighted ? -1 : undefined} aria-label={label} data-playoff-game={key}>
+  return <article className={(tree ? 'playoff-tree-match' : '') + (highlighted ? ' is-search-match' : '')} tabIndex={highlighted ? -1 : undefined} aria-label={label} data-pending={Boolean(match && !match.isDone)} data-playoff-game={key}>
     {!hideHeading && <Heading>{displayLabel}{tree ? bo3 ? ' · BO3' : ' · BO1' : ''}</Heading>}
     {tree && <p className="playoff-source">{key === 'bronze' ? '四強敗者對戰' : key.startsWith('r') ? '首輪隨機籤位' : `${sourceLabel(first)} × ${sourceLabel(second)}`}</p>}
     {tree ? <div className="playoff-entrants">

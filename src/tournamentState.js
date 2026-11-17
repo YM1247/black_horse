@@ -71,6 +71,7 @@ export const normalizeTournamentData = (data = {}) => {
       rulesVersion: data.rulesVersion,
       qualificationConfig: data.qualificationConfig || {},
       qualificationSources: data.qualificationSources || {},
+      ...(final ? { qualificationConfirmedAt: data.qualificationConfirmedAt || null } : {}),
       qualifiedIds: data.qualifiedIds || [],
       playoffSeeds: data.playoffSeeds || [],
       playoffDecisions: data.playoffDecisions || {},

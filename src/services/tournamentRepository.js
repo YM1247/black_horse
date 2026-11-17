@@ -1,3 +1,4 @@
+import { officialEventMatches, BLACK_HORSE } from '../series';
 import { QUALIFIER } from '../tournamentState';
 import {
   collection,
@@ -29,7 +30,7 @@ const EVENT_CODE_PATTERN = /^[A-Z0-9]{4,10}$/;
 const EVENT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const DEFAULT_CLOUD_TOURNAMENT_VISIBILITY = true;
 export const ADMIN_SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
-export const TOURNAMENT_DELETION_SUBCOLLECTIONS = Object.freeze(['auditLogs', 'versions']);
+export const TOURNAMENT_DELETION_SUBCOLLECTIONS = Object.freeze(['auditLogs', 'versions', 'clearBackups']);
 
 export class CloudRevisionConflictError extends Error {
   constructor({ expectedRevision, actualRevision, tournament }) {
@@ -103,6 +104,7 @@ export const buildPublicSeriesProjection = (series = {}, tournaments = []) => {
       const eventCode = normalizeEventCode(event.eventCode || '');
       const tournament = tournamentsByCode.get(eventCode);
       if (!tournament || tournament.isPublic !== true || tournament.deletionStatus === 'deleting') return [];
+      if (series.id === BLACK_HORSE.id && tournament.seriesId !== series.id) return [];
       return [{
         id: String(event.id || `event-${eventCode.toLowerCase()}`),
         name: String(event.name || tournament.name || eventCode).trim(),
@@ -252,6 +254,7 @@ export const subscribeAuth = (callback) => {
 export const createCloudTournament = async ({ eventCode, name, tournament }, { ifMissing = false } = {}) => {
   const code = normalizeEventCode(eventCode);
   if (!validateEventCode(code)) throw new Error('賽事代碼需為 4–10 位英文字母或數字。');
+  if (!officialEventMatches(code, tournament)) throw new Error('此代碼已保留給正式場次，請由對應的賽事入口建立。');
   const user = requireUser();
   const { db } = getFirebaseServices();
   const tournamentRef = doc(db, 'tournaments', code);
@@ -260,7 +263,8 @@ export const createCloudTournament = async ({ eventCode, name, tournament }, { i
   await runTransaction(db, async transaction => {
     const existing = await transaction.get(tournamentRef);
     if (existing.exists()) {
-      if (ifMissing) return;
+      if (ifMissing && officialEventMatches(code, existing.data())) return;
+      if (ifMissing) throw new Error('既有場次的所屬系列或賽制不符，請核對設定。');
       throw new Error('此賽事代碼已存在，請更換代碼。');
     }
     // A Console deletion can leave a summary behind. Rebuild only the missing
@@ -307,6 +311,7 @@ export const saveCloudTournament = async (eventCode, tournament, audits, expecte
   return runTransaction(db, async transaction => {
     const snapshot = await transaction.get(tournamentRef);
     if (!snapshot.exists()) throw new Error('找不到指定的雲端賽事。');
+    if (!officialEventMatches(code, snapshot.data())) throw new Error('場次代碼與所屬系列或賽制不符。');
     const actualRevision = Number(snapshot.data().revision) || 0;
     if (expectedRevision !== null && Number(expectedRevision) !== actualRevision) {
       throw new CloudRevisionConflictError({
@@ -324,9 +329,14 @@ export const saveCloudTournament = async (eventCode, tournament, audits, expecte
       }
     }
     const lockedKeys = ['phase', 'players', 'rounds', 'currentRoundNum', 'judgeCount', 'doubleElimination', 'runId', 'runNumber',
-      'rulesVersion', 'qualificationConfig', 'qualificationSources', 'qualifiedIds', 'playoffSeeds', 'playoffDecisions', 'bracket'];
+      'rulesVersion', 'qualificationConfig', 'qualificationSources', 'qualificationConfirmedAt', 'qualifiedIds', 'playoffSeeds', 'playoffDecisions', 'bracket'];
     const isClearingRun = auditEntries.some(audit => audit.action === 'TOURNAMENT_CLEARED');
     const encoded = encodeTournamentForFirestore(tournament);
+    if (isClearingRun && snapshot.data().rulesVersion && snapshot.data().rulesVersion !== 'legacy-v1') {
+      const backup = doc(collection(tournamentRef, 'clearBackups'));
+      transaction.set(backup, { snapshot: snapshot.data(), clearedRunId: encoded.runId });
+      encoded.clearBackupId = backup.id;
+    }
     if (snapshot.data().resultLocked && !isClearingRun && lockedKeys.some(key =>
       key in encoded && JSON.stringify(encoded[key]) !== JSON.stringify(snapshot.data()[key]))) {
       const error = new Error('賽事結果已鎖定，請使用完賽結果更正功能。');
@@ -360,6 +370,27 @@ export const saveCloudTournament = async (eventCode, tournament, audits, expecte
     return nextRevision;
   });
 };
+
+export async function restoreClearedTournament(eventCode, expectedRevision) {
+  const user = requireUser();
+  const { db } = getFirebaseServices();
+  const ref = doc(db, 'tournaments', eventCode);
+  await runTransaction(db, async tx => {
+    const current = (await tx.get(ref)).data();
+    if (!current?.clearBackupId || current.revision !== expectedRevision ||
+        current.phase !== 'registration' || current.players.length || Object.keys(current.rounds).length)
+      throw new Error('賽事已變動，請重新確認後再還原。');
+    const backup = (await tx.get(doc(ref, 'clearBackups', current.clearBackupId))).data();
+    if (!backup || backup.clearedRunId !== current.runId) throw new Error('找不到本次清除前的快照。');
+    const restored = { ...backup.snapshot, name: current.name, isPublic: current.isPublic,
+      isArchived: Boolean(current.isArchived), clearBackupId: '', revision: current.revision + 1,
+      updatedBy: user.uid, updatedAt: serverTimestamp(), clientUpdatedAt: new Date().toISOString() };
+    tx.set(ref, restored);
+    tx.set(doc(db, 'tournamentSummaries', eventCode), { ...buildTournamentSummary(restored, eventCode),
+      updatedBy: user.uid, updatedAt: serverTimestamp() });
+    createAuditLog(tx, ref, user, '還原清除前快照', { backupId: current.clearBackupId });
+  });
+}
 
 export const saveTournamentVersion = async (eventCode, tournament, {
   expectedRevision,
@@ -466,7 +497,7 @@ export const subscribeTournament = (eventCode, onTournament, onError) => {
         fromCache: snapshot.metadata.fromCache,
         hasPendingWrites: snapshot.metadata.hasPendingWrites
       }
-    }) : null);
+    }) : null, !snapshot.metadata.fromCache);
   }, onError);
 };
 
@@ -474,7 +505,7 @@ export const subscribeAdminTournaments = (onTournaments, onError) => {
   const { db } = getFirebaseServices();
   const tournamentsQuery = query(collection(db, 'tournamentSummaries'), orderBy('updatedAt', 'desc'));
   return onSnapshot(tournamentsQuery, { includeMetadataChanges: true }, snapshot => {
-    onTournaments(snapshot.docs.map(item => ({ id: item.id, ...item.data() })));
+    onTournaments(snapshot.docs.map(item => ({ id: item.id, ...item.data() })), !snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites);
   }, onError);
 };
 
@@ -555,8 +586,8 @@ export const ensureCloudSeries = async series => {
 
 export const subscribeCloudSeries = (seriesId, onSeries, onError) => {
   const { db } = getFirebaseServices();
-  return onSnapshot(doc(db, 'series', seriesId), snapshot => {
-    onSeries(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null);
+  return onSnapshot(doc(db, 'series', seriesId), { includeMetadataChanges: true }, snapshot => {
+    onSeries(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null, !snapshot.metadata.fromCache && !snapshot.metadata.hasPendingWrites);
   }, onError);
 };
 

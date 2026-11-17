@@ -9,6 +9,8 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
   const [review, setReview] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [addedCount, setAddedCount] = useState(0);
+  const [skipped, setSkipped] = useState([]);
   const [progress, setProgress] = useState(null);
   const [name, setName] = useState('');
   async function process(rows, decision) {
@@ -19,10 +21,17 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
     let pending = rows;
     let batch = [];
     const known = [...profiles];
+    let processingRow = null;
     const flush = async () => {
       if (!batch.length) return;
-      if (onPlayers) await onPlayers(batch);
-      else await onPlayer(batch[0]);
+      processingRow = null;
+      if (onPlayers) {
+        const duplicates = await onPlayers(batch) || [];
+        const added = batch.length - duplicates.length;
+        setAddedCount(previous => previous + added);
+        const items = duplicates.map(index => ({ name: batch[index].name, line: pending[index].csvLine }));
+        if (items.length) setSkipped(previous => [...previous, ...items]);
+      } else await onPlayer(batch[0]);
       pending = pending.slice(batch.length);
       batch = [];
       setQueue(pending);
@@ -30,9 +39,10 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
     };
     setProgress({ done: 0, total: rows.length });
     try {
-      if (rows.length > remaining) throw new Error('名單超過本場人數上限。');
+      if (!onPlayers && rows.length > remaining) throw new Error('名單超過本場人數上限。');
       while (pending.length > batch.length) {
-        const row = normalizeIdentity(pending[batch.length]);
+        processingRow = pending[batch.length];
+        const row = normalizeIdentity(processingRow);
         const matches = identityMatches(known, row);
         const exact = matches.find(
           (p) => p.realName === row.realName && p.phone === row.phone && p.name === row.name
@@ -56,7 +66,11 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
       setForm(blank);
     } catch (err) {
       // Keep rows in the retry queue until the tournament write succeeds.
-      setError(err.message);
+      const firstLine = pending[0]?.csvLine;
+      const lastLine = pending[batch.length - 1]?.csvLine;
+      const location = processingRow?.csvLine ? `第 ${processingRow.csvLine} 列（${processingRow.name}）`
+        : firstLine && lastLine ? `第 ${firstLine} 至 ${lastLine} 列尚未加入` : '';
+      setError(location ? location + '：' + err.message : err.message);
       setReview(null);
     } finally {
       setQueue(pending);
@@ -70,6 +84,8 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          setAddedCount(0);
+          setSkipped([]);
           process([form]);
         }}
       >
@@ -103,7 +119,9 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
             e.target.value = '';
             if (!file) return;
             try {
-              await process(readIdentityCsv(await file.text()));
+              setAddedCount(0);
+              setSkipped([]);
+              await process(readIdentityCsv(await file.text(), { includeLine: true }));
             } catch (err) {
               setError(err.message);
             }
@@ -111,6 +129,8 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
         />
       </label>}
       {progress && <p role="status">已完成 {progress.done}／{progress.total} 筆{busy ? '，處理中…' : ''}</p>}
+      {progress && onPlayers && <p>已加入本場 {addedCount} 位</p>}
+      {skipped.length > 0 && <p>已跳過 {skipped.length} 筆重複報名：{skipped.map(({ line, name }) => line ? `第 ${line} 列 ${name}` : name).join('、')}</p>}
       {review && (
         <section role="alert" className="season-review">
           <h3>請核對選手身分</h3>
@@ -149,6 +169,8 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
             disabled={busy}
             onClick={() => {
               setQueue([]);
+              setProgress(null);
+              setError('');
               setReview(null);
             }}
           >

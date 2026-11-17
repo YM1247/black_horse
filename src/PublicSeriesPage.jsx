@@ -31,6 +31,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   const [input, setInput] = useState(normalizedInitialCode);
   const [publicCode, setPublicCode] = useState(validateEventCode(normalizedInitialCode) ? normalizedInitialCode : '');
   const [series, setSeries] = useState(null);
+  const [failedEvents, setFailedEvents] = useState({});
   const [tournamentsByCode, setTournamentsByCode] = useState({});
   const [status, setStatus] = useState(publicCode ? 'loading' : 'idle');
   const [error, setError] = useState('');
@@ -89,10 +90,12 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   useEffect(() => {
     const events = JSON.parse(eventCodesKey).map(eventCode => ({ eventCode }));
     setTournamentsByCode({});
+    setFailedEvents({});
     if (!events.length) return undefined;
     const unsubscribers = events.map(event => subscribeTournament(event.eventCode, tournament => {
       setTournamentsByCode(current => ({ ...current, [event.eventCode]: tournament }));
     }, firebaseError => {
+      setFailedEvents(current => ({ ...current, [event.eventCode]: firebaseError.code === 'permission-denied' ? '尚未公開' : '讀取失敗' }));
       if (firebaseError.code === 'permission-denied') {
         setTournamentsByCode(current => {
           return { ...current, [event.eventCode]: null };
@@ -110,6 +113,8 @@ export default function PublicSeriesPage({ initialCode = '' }) {
   const visibleStandings = standings.filter(player => player.name.toLocaleLowerCase().includes(playerQuery.trim().toLocaleLowerCase()));
   const hasEvents = Boolean(series?.events?.length);
   const scoringEvents = (series?.events || []).filter(event => event.rulesVersion !== FINAL);
+  const loaded = scoringEvents.filter(e => tournamentsByCode[e.eventCode] && !failedEvents[e.eventCode]).length;
+  const partial = loaded < scoringEvents.length;
   const hasRanking = standings.length > 0 && Boolean(series?.events?.some(event => event.rulesVersion !== FINAL && tournamentsByCode[event.eventCode]?.phase === 'finished'));
   const hasBottomNav = hasEvents && hasRanking;
   const isUsingCache = Boolean(series?.sync?.fromCache || tournaments.some(tournament => tournament.sync?.fromCache));
@@ -162,7 +167,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
 
         {series && (
           <>
-            {isOnline && !isUsingCache && <div className="public-sync" role="status">
+            {isOnline && !isUsingCache && !partial && <div className="public-sync" role="status">
               即時更新中{lastUpdatedAt && `・更新 ${formatUpdateTime(lastUpdatedAt)}`}
             </div>}
             <section id="series-events" className="mb-8">
@@ -175,7 +180,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                       <h3>{event.name}</h3>
                       <div className="public-series-event-meta">
                         <span>#{event.eventCode}</span>
-                        <span>{tournament ? PHASE_LABELS[tournament.phase] || tournament.phase : Object.hasOwn(tournamentsByCode, event.eventCode) ? '尚未公開' : '載入中'}</span>
+                        <span>{failedEvents[event.eventCode] || (tournament ? PHASE_LABELS[tournament.phase] || tournament.phase : Object.hasOwn(tournamentsByCode, event.eventCode) ? '尚未公開' : '載入中')}</span>
                       </div>
                       <p className="public-series-event-rules">
                         {event.judgeCount} 位評審・{event.doubleElimination ? '兩敗淘汰' : '不淘汰'}
@@ -190,6 +195,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
               </div>
             </section>
 
+            {partial && <p role="status">積分暫列 · 已讀取 {loaded}／{scoringEvents.length} 場積分賽</p>}
             {hasRanking ? <section id="series-ranking" className="p-3 sm:p-4 md:p-6 rounded-2xl border border-slate-700 bg-[#161920]">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
                 <h2 className="text-2xl font-black text-[#f1c6a6]">系列積分排名</h2>
@@ -245,7 +251,7 @@ export default function PublicSeriesPage({ initialCode = '' }) {
                   </tbody>
                 </table>
               </div>
-            </section> : <p id="series-ranking" className="public-empty">積分排名將在首場完賽後公布。</p>}
+            </section> : <p id="series-ranking" className="public-empty">{partial ? '等待場次資料以確認積分排名。' : '積分排名將在首場完賽後公布。'}</p>}
           </>
         )}
         </div>

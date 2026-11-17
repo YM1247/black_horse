@@ -23,16 +23,13 @@ const groupRoundMatches = (matches, roundIndex, votesFirst) => matches.reduce((g
   const p2Wins = (votesFirst ? match.p2VotesSnapshot : match.p2WinsSnapshot) || 0;
   const isFloat = !match.isMCMatch && p1Wins !== p2Wins;
   const score = p1Wins + (match.isMCMatch ? p1Wins : p2Wins);
-  const key = votesFirst ? `${Math.max(p1Wins, p2Wins)}:${Math.min(p1Wins, p2Wins)}` : score;
-
-  if (!groups[key]) {
-    groups[key] = {
-      score,
-      isFloat,
-      label: votesFirst ? isFloat ? `${Math.max(p1Wins, p2Wins)} 票 ↔ ${Math.min(p1Wins, p2Wins)} 票` : `${p1Wins} 票組` : isFloat ? '跨組對戰' : `${p1Wins} - ${roundIndex - p1Wins}`,
-      matches: []
-    };
-  }
+  const loss = match.p1LossesSnapshot ?? match.p1.losses ?? Math.max(0, roundIndex - p1Wins);
+  const rightLoss = match.p2LossesSnapshot ?? match.p2.losses ?? Math.max(0, roundIndex - p2Wins);
+  const scores = [p1Wins, p2Wins].sort((a, b) => b - a);
+  let label = isFloat || loss !== rightLoss ? '跨組對戰' : `${p1Wins} - ${loss}`;
+  if (votesFirst) label = isFloat ? `${scores.join(' 票 ↔ ')} 票` : `${p1Wins} 票組`;
+  const key = scores.join(':') + ':' + label;
+  if (!groups[key]) groups[key] = { score, isFloat, label, matches: [] };
   groups[key].matches.push(match);
   return groups;
 }, {});

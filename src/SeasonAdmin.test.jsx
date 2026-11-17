@@ -150,3 +150,19 @@ test('雲端清除失敗時保留名單與確認內容供重試', async () => {
   fireEvent.click(confirmation.getByRole('button', { name: '確認清除內容' }));
   expect(await screen.findByRole('heading', { name: '名單 0／32' })).toBeInTheDocument();
 });
+
+test('CSV 跳過已報名及同一批重複身分，其他有效列照常加入', async () => {
+  saveCloudTournament.mockClear();
+  const event = { ...createEmptyTournament({ rulesVersion: QUALIFIER }), id: 'DUPTEST', revision: 0,
+    players: [{ id: 'old', name: '已有', wins: 0, votes: 0 }] };
+  saveIdentity.mockImplementationOnce(async () => ({ id: 'old', name: '已有' }))
+    .mockImplementationOnce(async () => ({ id: 'new', name: '新手' }))
+    .mockImplementationOnce(async () => ({ id: 'new', name: '新手' }));
+  render(<SeasonAdmin tournament={event} tournaments={[]} online versions={[]} />);
+  fireEvent.change(screen.getByLabelText(/匯入 CSV/), { target: { files: [{
+    text: async () => '本名,電話號碼,打師名\n舊甲,0911111111,已有\n新乙,0922222222,新手\n新乙,0922222222,新手'
+  }] } });
+  expect(await screen.findByText(/已跳過 2 筆重複報名：第 2 列 已有、第 4 列 新手/)).toBeInTheDocument();
+  expect(screen.getByText('已加入本場 1 位')).toBeInTheDocument();
+  expect(saveCloudTournament.mock.calls[0][1].players.map(player => player.id)).toEqual(['old', 'new']);
+});

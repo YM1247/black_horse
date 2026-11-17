@@ -96,3 +96,25 @@ test('只在對戰完成後標示勝方並淡化敗方', () => {
   expect(container.querySelector('.is-winner')).toHaveTextContent('青焰');
   expect(container.querySelector('.is-loser')).toHaveTextContent('夜凪');
 });
+
+test('第三輪補位者的首場顯示零敗，缺少舊快照時按已打對戰回推', () => {
+  const host = { id: 'host', name: '補位者' };
+  render(<PublicEventLive tournament={{ id: 'late', players: [host, first, second], rounds: [
+    ...base.rounds, [{ id: 'third', p1: host, p2: first, p2WinsSnapshot: 1 }]
+  ] }} />);
+  const row = screen.getByRole('article', { name: '第 3 輪對戰 1' });
+  expect(row).toHaveTextContent('補位者0 勝 0 敗');
+});
+
+test('淘汰賽搜尋跳過同選手已打完的八強，定位待打的四強', () => {
+  const old = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = vi.fn();
+  try {
+    const match = { p1: first, p2: second };
+    render(<PublicEventLive tournament={{ ...base, playoffSeeds: [first, second],
+      bracket: { q1: { ...match, isDone: true, p1Votes: 5, p2Votes: 0 }, s1: match } }} />);
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: first.name } });
+    fireEvent.submit(screen.getByRole('searchbox').closest('form'));
+    expect(document.activeElement).toHaveAttribute('data-playoff-game', 's1');
+  } finally { Element.prototype.scrollIntoView = old; }
+});

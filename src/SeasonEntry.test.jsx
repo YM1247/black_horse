@@ -1,8 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import { TournamentAdminApp } from './App';
 import { QUALIFIER } from './seasonTournament';
-import { createCloudTournament, ensureCloudTournament, saveCloudTournament, subscribeAdminTournaments, ensureTournamentSummaries } from './services/tournamentRepository';
+import { createCloudTournament, ensureCloudTournament, saveCloudTournament, subscribeAdminTournaments, ensureTournamentSummaries, subscribeCloudSeries, syncPublicSeriesProjection } from './services/tournamentRepository';
 import { AKASHIKI, AKASHIKI_EVENT, createEmptyTournament } from './tournamentState';
 
 const stored = vi.hoisted(() => new Map());
@@ -32,10 +32,10 @@ vi.mock('./services/tournamentRepository', async (importOriginal) => {
       cb([]);
       return () => {};
     }),
-    subscribeCloudSeries: (_id, cb) => {
+    subscribeCloudSeries: vi.fn((_id, cb) => {
       cb(null);
       return () => {};
-    },
+    }),
     subscribeTournament: (id, cb) => {
       cb(stored.get(id) || null);
       return () => {};
@@ -138,4 +138,43 @@ it('摘要檢查尚未完成時，後台仍立即訂閱賽事列表', async () =
   render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
   expect(subscribeAdminTournaments).toHaveBeenCalled();
   expect(await screen.findByRole('button', { name: /黑馬記念26-27.*進入管理/ })).toBeInTheDocument();
+});
+
+it('登入收到系列與快取摘要時不發布空清單，伺服器摘要到齊後才發布', async () => {
+  subscribeCloudSeries.mockClear();
+  subscribeAdminTournaments.mockClear();
+  syncPublicSeriesProjection.mockClear();
+  render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
+  const [, seriesUpdate] = subscribeCloudSeries.mock.calls.findLast(([id]) => id === 'black-horse-26-27');
+  const [summariesUpdate] = subscribeAdminTournaments.mock.calls.at(-1);
+  await act(async () => {
+    seriesUpdate({ id: 'black-horse-26-27', publicCode: 'BH2627', events: [
+      { name: '第一站', eventCode: 'BH2627S1', rulesVersion: QUALIFIER }
+    ] }, true);
+    summariesUpdate([], false);
+  });
+  expect(syncPublicSeriesProjection).not.toHaveBeenCalled();
+  act(() => summariesUpdate([{ id: 'BH2627S1', seriesId: 'black-horse-26-27', isPublic: true }], true));
+  await waitFor(() => expect(syncPublicSeriesProjection).toHaveBeenCalledWith(
+    expect.objectContaining({ publicCode: 'BH2627' }), [expect.objectContaining({ id: 'BH2627S1' })]));
+});
+
+it('管理網址重新整理後直接載入原本的場次', async () => {
+  stored.set('AKASHIKI', { ...createEmptyTournament(AKASHIKI_EVENT), id: 'AKASHIKI', name: '恢復管理測試', revision: 1 });
+  window.history.replaceState({}, '', '/?admin=1&manage=AKASHIKI');
+  try {
+    render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
+    expect(await screen.findByRole('heading', { name: '恢復管理測試' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '返回賽事管理' }));
+    await waitFor(() => expect(location.search).toBe('?admin=1'));
+  } finally { window.history.replaceState({}, '', '/'); }
+});
+
+it.each(['BH2627S3', 'BH2627F'])('獨立賽不能使用預留場次 %s', async code => {
+  createCloudTournament.mockClear();
+  render(<TournamentAdminApp authenticatedUser={{ uid: 'admin' }} />);
+  fireEvent.change(await screen.findByLabelText('新賽事代碼'), { target: { value: code } });
+  fireEvent.click(screen.getByRole('button', { name: '建立並進入', exact: true }));
+  expect(await screen.findByText(/此代碼已保留給系列場次/)).toBeInTheDocument();
+  expect(createCloudTournament).not.toHaveBeenCalled();
 });

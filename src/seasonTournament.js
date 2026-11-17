@@ -39,7 +39,18 @@ export function groupPoints(wins, losses, place, count) {
 
 export function eventRanking(event, final = event.phase === 'finished') {
   const ranked = rankPlayers(event.players || [], event.rounds || [], event.rulesVersion === AKASHIKI);
-  if (event.rulesVersion === AKASHIKI) return ranked.filter(p => !final || !p.isOrganizer).map(p => ({ ...p, rankingPoints: 0 }));
+  if (event.rulesVersion === AKASHIKI) {
+    const eligible = ranked.filter(player => !final || !player.isOrganizer);
+    const ranks = new Map();
+    const counts = new Map();
+    eligible.forEach(({ displayRank }, index) => {
+      if (!ranks.has(displayRank)) ranks.set(displayRank, index + 1);
+      counts.set(displayRank, (counts.get(displayRank) || 0) + 1);
+    });
+    return eligible.map(p => ({ ...p, rankingPoints: 0,
+      displayRank: p.isWithdrawn ? p.displayRank : ranks.get(p.displayRank),
+      needsTiebreaker: !p.isWithdrawn && counts.get(p.displayRank) > 1 }));
+  }
   if (!isSeasonEvent(event)) return ranked;
   const rows = ranked.filter((player) => !final || !player.isOrganizer);
   const groups = new Map();

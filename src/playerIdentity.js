@@ -33,8 +33,10 @@ export function resolveIdentity(profiles, input, newId, decision) {
   return { id: decision.id || newId, ...row, name: decision.name?.trim() || row.name };
 }
 
-export function readIdentityCsv(text) {
+export function readIdentityCsv(text, { includeLine = false } = {}) {
   const rows = [];
+  let line = 1, startLine = 1;
+  const rowLines = [];
   let row = [],
     cell = '',
     quoted = false;
@@ -52,17 +54,28 @@ export function readIdentityCsv(text) {
     } else if (ch === '\n' && !quoted) {
       row.push(cell.trim());
       rows.push(row);
+      rowLines.push(startLine);
+      startLine = line + 1;
       row = [];
       cell = '';
     } else cell += ch;
+    if (ch === '\n') line++;
   }
   if (quoted) throw new Error('CSV 引號未成對。');
   row.push(cell.trim());
   rows.push(row);
+  rowLines.push(startLine);
+  rowLines.shift();
   const headers = rows.shift().map((s) => s.trim());
   const columns = ['本名', '電話號碼', '打師名'].map((key) => headers.indexOf(key));
   if (columns.includes(-1)) throw new Error('CSV 表頭須包含本名、電話號碼、打師名。');
-  return rows
-    .filter((r) => r.some((s) => s.trim()))
-    .map((r) => normalizeIdentity({ realName: r[columns[0]], phone: r[columns[1]], name: r[columns[2]] }));
+  return rows.flatMap((r, index) => {
+    if (!r.some(s => s.trim())) return [];
+    try {
+      const identity = normalizeIdentity({ realName: r[columns[0]], phone: r[columns[1]], name: r[columns[2]] });
+      return [includeLine ? { ...identity, csvLine: rowLines[index] } : identity];
+    } catch (error) {
+      throw new Error(`CSV 第 ${rowLines[index]} 列：${error.message}`);
+    }
+  });
 }

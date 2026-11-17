@@ -29,7 +29,7 @@ test('new cloud tournaments are public by default', () => {
 });
 
 test('permanent deletion covers immutable versions and audit logs', () => {
-  expect(TOURNAMENT_DELETION_SUBCOLLECTIONS).toEqual(['auditLogs', 'versions']);
+  expect(TOURNAMENT_DELETION_SUBCOLLECTIONS).toEqual(['auditLogs', 'versions', 'clearBackups']);
 });
 
 test('admin home summary excludes players, rounds, and score details', () => {

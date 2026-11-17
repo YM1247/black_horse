@@ -10,7 +10,7 @@ const hasScore = match => Number.isFinite(match?.p1Votes) && Number.isFinite(mat
 export function matchRecord(match, side, roundIndex = 0) {
   const player = match[side];
   const wins = match[`${side}WinsSnapshot`] ?? player?.wins ?? 0;
-  return { wins, losses: Math.max(0, roundIndex - wins), votes: match[`${side}VotesSnapshot`] ?? player?.votes ?? 0 };
+  return { wins, losses: match[`${side}LossesSnapshot`] ?? player?.losses ?? Math.max(0, roundIndex - wins), votes: match[`${side}VotesSnapshot`] ?? player?.votes ?? 0 };
 }
 
 export function groupPublicMatches(matches, roundIndex, votesFirst = false) {
@@ -32,7 +32,7 @@ export function PublicMatch({ match, prominent = false, label, unit, showStatus 
   const scored = hasScore(match);
   const completed = scored && match.isDone !== false;
   const status = completed ? '已完成' : scored ? '進行中' : '等待比分';
-  return <article className={(prominent ? 'public-personal-match' : 'public-match-row') + (highlighted ? ' is-search-match' : '')} aria-label={label} tabIndex={highlighted ? -1 : undefined}>
+  return <article className={(prominent ? 'public-personal-match' : 'public-match-row') + (highlighted ? ' is-search-match' : '')} data-pending={!completed} aria-label={label} tabIndex={highlighted ? -1 : undefined}>
     <div className={'public-match-player' + (completed && match.p1Votes > match.p2Votes ? ' is-winner' : completed && match.p1Votes < match.p2Votes ? ' is-loser' : '')}>
       <strong>{match.p1?.name || '等待選手'}</strong>{showRecord && <small className="public-match-record">{left.wins} 勝 {left.losses} 敗・{left.votes} 票</small>}{match.attackOrder && <small>先攻</small>}
     </div>
@@ -54,14 +54,26 @@ export default function PublicEventLive({ tournament }) {
   useEffect(() => { setQuery(''); setRoundChoice(null); }, [tournament.id]);
   const rounds = tournament.rounds || [];
   const index = Math.min(roundChoice ?? Math.max(0, rounds.length - 1), Math.max(0, rounds.length - 1));
-  const matches = rounds[index] || [];
+  const priorLosses = new Map();
+  for (const m of rounds.slice(0, index).flat()) {
+    if (!hasScore(m) || m.p1Votes === m.p2Votes) continue;
+    const id = m.p1Votes < m.p2Votes ? m.p1.id : m.p2.id;
+    priorLosses.set(id, (priorLosses.get(id) || 0) + 1);
+  }
+  const matches = (rounds[index] || []).map(m => ({ ...m,
+    p1LossesSnapshot: m.p1LossesSnapshot ?? m.p1.losses ?? priorLosses.get(m.p1.id) ?? 0,
+    p2LossesSnapshot: m.p2LossesSnapshot ?? m.p2.losses ?? priorLosses.get(m.p2.id) ?? 0
+  }));
   const term = query.trim().toLocaleLowerCase();
   const players = (tournament.players || []).filter(player => !player.isMC);
   const matchingCount = matches.filter(match => matchesQuery(match, term)).length + gamesFor(tournament).filter(([key]) => tournament.bracket?.[key]?.p1 && tournament.bracket?.[key]?.p2 && matchesQuery(tournament.bracket[key], term)).length;
   const jumpToMatch = event => {
     event.preventDefault();
     if (!term) return;
-    const target = schedule.current?.querySelector('.is-search-match');
+    const results = Array.from(schedule.current?.querySelectorAll('.is-search-match') || []);
+    const target = results.find(el => el.dataset.pending === 'true')
+      || results.filter(el => el.hasAttribute('data-playoff-game')).at(-1)
+      || results.at(-1);
     if (target) {
       target.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' });
       target.focus({ preventScroll: true });
@@ -71,6 +83,7 @@ export default function PublicEventLive({ tournament }) {
   if (!rounds.length && !tournament.playoffSeeds?.length) return <section id="current-round" className="public-live" aria-label="當輪賽況"><p className="public-empty">賽程尚未公布，開賽後會即時更新。</p></section>;
 
   return <section ref={schedule} className="public-live" id="current-round" aria-label="當輪賽況">
+    {index === 0 && players.some(p => p.seedCredit) && <p>首輪種子免賽：{players.filter(p => p.seedCredit).map(p => p.name).join('、')}</p>}
     {players.length > 0 && <PublicPlayerSearch value={query} onChange={setQuery} onSubmit={jumpToMatch}>
       {term && matchingCount === 0 && <p className="public-search-feedback" role="status">目前沒有符合的對戰，可切換其他輪次或確認打師名。</p>}
     </PublicPlayerSearch>}

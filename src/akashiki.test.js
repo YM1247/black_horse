@@ -123,3 +123,10 @@ describe('Akashiki 合作賽', () => {
     expect(changed.bracket.gold).toBeUndefined();
   });
 });
+
+test('主辦不列入完賽共同名次，後續名次按正式選手計算', () => {
+  const players = [{ id: 'host', votes: 9, wins: 3, isOrganizer: true },
+    { id: 'a', votes: 6, wins: 2 }, { id: 'b', votes: 6, wins: 2 }, { id: 'c', votes: 2, wins: 0 }];
+  expect(eventRanking({ players, rounds: [], phase: 'finished', rulesVersion: AKASHIKI })
+    .map(p => [p.id, p.displayRank, p.needsTiebreaker])).toEqual([['a', 1, true], ['b', 1, true], ['c', 3, false]]);
+});
