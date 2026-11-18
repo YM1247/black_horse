@@ -1,3 +1,4 @@
+import EventPublicQr from './EventPublicQr';
 import SeriesEventPoints from './SeriesEventPoints';
 import { FINAL } from './seasonTournament';
 import React, { useEffect, useState } from 'react';
@@ -147,6 +148,7 @@ export default function SeriesAdminDashboard({
                   <div>{event.judgeCount} 位評審・{event.doubleElimination ? '兩敗淘汰' : '瑞士制＋八強單淘汰'}</div>
                   <div>{tournament ? `${tournament.players?.length ?? tournament.playerCount ?? 0} 位選手・${tournament.isPublic ? '公開' : '未公開'}` : '獨立報名名單'}</div>
                 </div>
+                {tournament && <EventPublicQr eventCode={event.eventCode} name={event.name} isPublic={tournament.isPublic} />}
                 <div className="mt-auto pt-4 grid grid-cols-2 gap-2">
                   <button type="button" disabled={isBusy}
                     onClick={() => tournament ? onOpenEvent(series, event, tournament) : onCreateEvent(series, event)}

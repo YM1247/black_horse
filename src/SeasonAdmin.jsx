@@ -24,6 +24,7 @@ import {
 } from './finalTournament';
 import { restoreClearedTournament, subscribeTournamentVersions, saveCloudTournament, saveTournamentVersion } from './services/tournamentRepository';
 import { subscribePlayers } from './services/playerDirectory';
+import EventPublicQr from './EventPublicQr';
 import IdentityRegistration from './IdentityRegistration';
 import PlayoffBracket from './PlayoffBracket';
 import PublicTournamentBracket from './PublicTournamentBracket';
@@ -331,6 +332,7 @@ export default function SeasonAdmin({
           {isAkashiki ? '單場合作賽 · 最多 32 人三輪瑞士制 → 隨機十六強 · 無兩敗淘汰' : isFinal ? '最終戰' : '積分賽'} · {event.judgeCount} 位評審 · {event.id}
         </p>
         {isAkashiki && <p>排名與配對：總票數 → 勝場 → 對手勝率 → 對手的對手勝率。淘汰賽 BO1，冠軍戰 BO3，另設季軍戰。</p>}
+        <EventPublicQr eventCode={event.id} name={event.name} isPublic={event.isPublic} />
       </header>
       {isFinal && !registered && event.qualificationSources && <details>
         <summary>開賽時確認的資格來源</summary>
