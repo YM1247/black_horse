@@ -33,7 +33,13 @@ export function resolveIdentity(profiles, input, newId, decision) {
   return { id: decision.id || newId, ...row, name: decision.name?.trim() || row.name };
 }
 
-export function readIdentityCsv(text, { includeLine = false } = {}) {
+export function normalizeEntryName(value) {
+  const name = String(value || '').trim();
+  if (!name) throw new Error('請填寫打師名。');
+  return name;
+}
+
+export function readIdentityCsv(text, { includeLine = false, nameOnly = false } = {}) {
   const rows = [];
   let line = 1, startLine = 1;
   const rowLines = [];
@@ -67,12 +73,12 @@ export function readIdentityCsv(text, { includeLine = false } = {}) {
   rowLines.push(startLine);
   rowLines.shift();
   const headers = rows.shift().map((s) => s.trim());
-  const columns = ['本名', '電話號碼', '打師名'].map((key) => headers.indexOf(key));
-  if (columns.includes(-1)) throw new Error('CSV 表頭須包含本名、電話號碼、打師名。');
+  const columns = (nameOnly ? ['打師名'] : ['本名', '電話號碼', '打師名']).map((key) => headers.indexOf(key));
+  if (columns.includes(-1)) throw new Error(nameOnly ? 'CSV 表頭須包含打師名。' : 'CSV 表頭須包含本名、電話號碼、打師名。');
   return rows.flatMap((r, index) => {
     if (!r.some(s => s.trim())) return [];
     try {
-      const identity = normalizeIdentity({ realName: r[columns[0]], phone: r[columns[1]], name: r[columns[2]] });
+      const identity = nameOnly ? { name: normalizeEntryName(r[columns[0]]) } : normalizeIdentity({ realName: r[columns[0]], phone: r[columns[1]], name: r[columns[2]] });
       return [includeLine ? { ...identity, csvLine: rowLines[index] } : identity];
     } catch (error) {
       throw new Error(`CSV 第 ${rowLines[index]} 列：${error.message}`);

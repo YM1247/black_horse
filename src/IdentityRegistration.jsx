@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { identityMatches, normalizeIdentity, readIdentityCsv, reviewKey } from './playerIdentity';
+import { identityMatches, normalizeIdentity, normalizeEntryName, readIdentityCsv, reviewKey } from './playerIdentity';
+import { createId } from './tournamentState';
 import { saveIdentity } from './services/playerDirectory';
 
 const blank = { realName: '', phone: '', name: '' };
-export default function IdentityRegistration({ profiles, onPlayer, onPlayers, remaining = 48, onBusyChange, singleEntry = false }) {
+export default function IdentityRegistration({ profiles, onPlayer, onPlayers, remaining = 48, onBusyChange, singleEntry = false, nameOnly = false }) {
   const [form, setForm] = useState(blank);
   const [queue, setQueue] = useState([]);
   const [review, setReview] = useState(null);
@@ -18,7 +19,7 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
     setError('');
     setBusy(true);
     onBusyChange?.(true);
-    let pending = rows;
+    let pending = rows.map(row => ({ ...row }));
     let batch = [];
     const known = [...profiles];
     let processingRow = null;
@@ -42,6 +43,13 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
       if (!onPlayers && rows.length > remaining) throw new Error('名單超過本場人數上限。');
       while (pending.length > batch.length) {
         processingRow = pending[batch.length];
+        if (nameOnly) {
+          const name = normalizeEntryName(processingRow.name);
+          processingRow.id ||= createId();
+          batch.push({ id: processingRow.id, name });
+          if (batch.length >= (onPlayers ? 8 : 1)) await flush();
+          continue;
+        }
         const row = normalizeIdentity(processingRow);
         const matches = identityMatches(known, row);
         const exact = matches.find(
@@ -80,7 +88,7 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
   }
 
   return (
-    <section aria-label={singleEntry ? '新增資格席位選手' : '選手身分核對'}>
+    <section aria-label={singleEntry ? '新增資格席位選手' : nameOnly ? '打師名報名' : '選手身分核對'}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -90,11 +98,11 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
         }}
       >
         <div className="season-fields">
-          {[
+          {(nameOnly ? [['name', '打師名']] : [
             ['realName', '本名'],
             ['phone', '電話號碼'],
             ['name', '打師名']
-          ].map(([key, label]) => (
+          ]).map(([key, label]) => (
             <label key={key}>
               {label}
               <input
@@ -109,7 +117,7 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
         <button disabled={busy || !remaining || Boolean(queue.length)}>{singleEntry ? '儲存並填入席位' : '登錄選手'}</button>
       </form>
       {!singleEntry && <label>
-        匯入 CSV（本名、電話號碼、打師名）
+        {nameOnly ? '匯入 CSV（打師名）' : '匯入 CSV（本名、電話號碼、打師名）'}
         <input
           type="file"
           accept=".csv"
@@ -121,7 +129,7 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
             try {
               setAddedCount(0);
               setSkipped([]);
-              await process(readIdentityCsv(await file.text(), { includeLine: true }));
+              await process(readIdentityCsv(await file.text(), { includeLine: true, nameOnly }));
             } catch (err) {
               setError(err.message);
             }

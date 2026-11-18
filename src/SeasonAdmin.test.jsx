@@ -206,3 +206,27 @@ test('淘汰賽棄賽需確認後保存全票判負，瑞士比分更正不改�
   expect(saveCloudTournament.mock.calls[1][1].bracket).toEqual(saved.bracket);
   expect(saveCloudTournament.mock.calls[1][1].playoffSeeds).toEqual(saved.playoffSeeds);
 });
+
+
+test('赤式只填打師名，CSV 只讀打師名並跳過既有與同批重複，不寫私人名錄', async () => {
+  saveCloudTournament.mockClear();
+  saveIdentity.mockClear();
+  const event = { ...createEmptyTournament({ rulesVersion: AKASHIKI }), id: 'AKASHIKI', revision: 0, players: [] };
+  render(<SeasonAdmin tournament={event} tournaments={[]} online versions={[]} />);
+  expect(screen.queryByLabelText('本名')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('電話號碼')).not.toBeInTheDocument();
+  for (const name of ['甲', '乙']) {
+    fireEvent.change(screen.getByLabelText('打師名'), { target: { value: name } });
+    fireEvent.click(screen.getByRole('button', { name: '登錄選手' }));
+    await waitFor(() => expect(screen.getByLabelText('打師名')).toHaveValue(''));
+  }
+  fireEvent.change(screen.getByLabelText('匯入 CSV（打師名）'), { target: { files: [{
+    text: async () => '打師名\n甲\n丙\n丙'
+  }] } });
+  expect(await screen.findByText(/已跳過 2 筆重複報名/)).toBeInTheDocument();
+  const saved = saveCloudTournament.mock.calls.at(-1)[1].players;
+  expect(saved.map(p => p.name)).toEqual(['甲', '乙', '丙']);
+  expect(new Set(saved.map(p => p.id)).size).toBe(3);
+  expect(saved.every(p => !('realName' in p) && !('phone' in p))).toBe(true);
+  expect(saveIdentity).not.toHaveBeenCalled();
+});

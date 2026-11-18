@@ -142,9 +142,9 @@ export default function SeasonAdmin({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyRows, setHistoryRows] = useState([]);
   useEffect(() => {
-    if (registered) return subscribePlayers(setProfiles, err => setError(err.message));
+    if (registered && !isAkashiki) return subscribePlayers(setProfiles, err => setError(err.message));
     setProfiles([]);
-  }, [registered]);
+  }, [registered, isAkashiki]);
   useEffect(() => {
     if (finished && historyOpen) return subscribeTournamentVersions(event.id, setHistoryRows, err => setError(err.message));
   }, [event.id, finished, historyOpen]);
@@ -479,6 +479,7 @@ export default function SeasonAdmin({
             ) : (
               <div className="registration-layout">
                 <IdentityRegistration
+                  nameOnly={isAkashiki}
                   onBusyChange={setRegistering}
                   profiles={profiles}
                   remaining={limit - event.players.length}
@@ -486,10 +487,12 @@ export default function SeasonAdmin({
                     const current = latest.current;
                     if (current.phase !== 'registration') throw new Error('賽事已開打，無法新增報名。');
                     const ids = new Set(current.players.map(player => player.id));
+                    const names = new Set(current.players.map(player => player.name.trim()));
                     const duplicates = [];
                     const fresh = additions.filter((player, index) => {
-                      if (ids.has(player.id)) { duplicates.push(index); return false; }
+                      if (ids.has(player.id) || (isAkashiki && names.has(player.name.trim()))) { duplicates.push(index); return false; }
                       ids.add(player.id);
+                      names.add(player.name.trim());
                       return true;
                     });
                     if (fresh.length) await write({ ...current, players: registeredPlayers(current.players, fresh, limit) },
