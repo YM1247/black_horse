@@ -6,6 +6,7 @@ import { saveIdentity } from './services/playerDirectory';
 const blank = { realName: '', phone: '', name: '' };
 export default function IdentityRegistration({ profiles, onPlayer, onPlayers, remaining = 48, onBusyChange, singleEntry = false, nameOnly = false }) {
   const [form, setForm] = useState(blank);
+  const [nameList, setNameList] = useState('');
   const [queue, setQueue] = useState([]);
   const [review, setReview] = useState(null);
   const [error, setError] = useState('');
@@ -116,6 +117,32 @@ export default function IdentityRegistration({ profiles, onPlayer, onPlayers, re
         </div>
         <button disabled={busy || !remaining || Boolean(queue.length)}>{singleEntry ? '儲存並填入席位' : '登錄選手'}</button>
       </form>
+      {nameOnly && !singleEntry && <form className="my-4"
+        onSubmit={e => {
+          e.preventDefault();
+          const rows = nameList.split(/\r\n|\n|\r/).flatMap((line, index) =>
+            line.trim() ? [{ name: line.trim(), csvLine: index + 1 }] : []);
+          if (!rows.length) return;
+          setAddedCount(0);
+          setSkipped([]);
+          process(rows);
+        }}
+      >
+        <label>
+          貼上名單（每行一個打師名）
+          <textarea
+            rows={6}
+            value={nameList}
+            disabled={busy || Boolean(queue.length)}
+            onChange={e => setNameList(e.target.value)}
+            className="min-w-0 resize-y text-base"
+          />
+        </label>
+        <p>不需表頭；空白行會略過，同場重複的打師名會跳過。</p>
+        <button disabled={busy || Boolean(queue.length) || !nameList.trim() || !remaining}>
+          加入貼上名單
+        </button>
+      </form>}
       {!singleEntry && <label>
         {nameOnly ? '匯入 CSV（打師名）' : '匯入 CSV（本名、電話號碼、打師名）'}
         <input

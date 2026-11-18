@@ -230,3 +230,20 @@ test('赤式只填打師名，CSV 只讀打師名並跳過既有與同批重複�
   expect(saved.every(p => !('realName' in p) && !('phone' in p))).toBe(true);
   expect(saveIdentity).not.toHaveBeenCalled();
 });
+
+
+test('赤式貼上名單依換行分人，略過空白並排除重複，保留名稱內空格與逗號', async () => {
+  saveCloudTournament.mockClear();
+  saveIdentity.mockClear();
+  const event = { ...createEmptyTournament({ rulesVersion: AKASHIKI }), id: 'AKASHIKI', revision: 0,
+    players: [publicPlayer({ id: 'old', name: '已有' })] };
+  render(<SeasonAdmin tournament={event} tournaments={[]} online versions={[]} />);
+  const submit = screen.getByRole('button', { name: '加入貼上名單' });
+  expect(submit).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('貼上名單（每行一個打師名）'), { target: { value: ' 已有 \r\n\r\n 新人 A \n新人 A\n甲,乙' } });
+  fireEvent.click(submit);
+  expect(await screen.findByText(/已跳過 2 筆重複報名/)).toBeInTheDocument();
+  expect(screen.getByText('已加入本場 2 位')).toBeInTheDocument();
+  expect(saveCloudTournament.mock.calls.at(-1)[1].players.map(p => p.name)).toEqual(['已有', '新人 A', '甲,乙']);
+  expect(saveIdentity).not.toHaveBeenCalled();
+});

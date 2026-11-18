@@ -111,7 +111,7 @@
 .season-admin a { text-decoration: underline; color: #b6d2d4; }
 .season-body { display: grid; gap: 1.25rem; min-width: 0; margin-top: 1rem; }
 .season-body > section, .season-review { border: 1px solid #343e48; border-radius: .85rem; background: #161920; padding: clamp(1rem,3vw,1.75rem); min-width: 0; }
-.season-admin input, .season-admin select { display: block; width: 100%; max-width: 26rem; color: #ebedef; background: #0d0f12; padding: .55rem .7rem; border: 1px solid #62727e; border-radius: .35rem; margin: .25rem 0 .6rem; }
+.season-admin input, .season-admin select, .season-admin textarea { display: block; width: 100%; max-width: 26rem; color: #ebedef; background: #0d0f12; padding: .55rem .7rem; border: 1px solid #62727e; border-radius: .35rem; margin: .25rem 0 .6rem; }
 .season-admin label { display: block; margin: .5rem 0; color: #cbd7dc; }
 .season-admin button { min-height: 44px; margin: .2rem; padding: .35rem .85rem; background: #202c34; color: #dae6e9; border: 1px solid #616f79; border-radius: .45rem; }
 .season-admin button:hover:enabled, .season-admin button[aria-pressed="true"] { background: #b6d2d4; color: #0d0f12; }
