@@ -2,8 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { vi } from 'vitest';
 import SeasonAdmin from './SeasonAdmin';
 import { AKASHIKI, createEmptyTournament } from './tournamentState';
-import { FINAL, QUALIFIER } from './seasonTournament';
+import { FINAL, QUALIFIER, publicPlayer, nextSwissRound, scoreSwiss } from './seasonTournament';
 import { saveCloudTournament } from './services/tournamentRepository';
+import { seedPlayoff, playoffSelection } from './finalTournament';
 import { saveIdentity } from './services/playerDirectory';
 
 vi.mock('./services/playerDirectory', () => ({
@@ -165,4 +166,43 @@ test('CSV 跳過已報名及同一批重複身分，其他有效列照常加入'
   expect(await screen.findByText(/已跳過 2 筆重複報名：第 2 列 已有、第 4 列 新手/)).toBeInTheDocument();
   expect(screen.getByText('已加入本場 1 位')).toBeInTheDocument();
   expect(saveCloudTournament.mock.calls[0][1].players.map(player => player.id)).toEqual(['old', 'new']);
+});
+
+test('合作賽未滿 32 人可以開賽', async () => {
+  saveCloudTournament.mockClear();
+  const event = { ...createEmptyTournament({ rulesVersion: AKASHIKI }), id: 'AKASHIKI', revision: 0,
+    players: ['a', 'b', 'c'].map(id => publicPlayer({ id, name: id })) };
+  render(<SeasonAdmin tournament={event} tournaments={[]} online versions={[]} />);
+  fireEvent.click(screen.getByRole('button', { name: '開始第一輪' }));
+  await waitFor(() => expect(saveCloudTournament).toHaveBeenCalledTimes(1));
+  expect(saveCloudTournament.mock.calls[0][1].rounds[0]).toHaveLength(2);
+});
+
+test('淘汰賽棄賽需確認後保存全票判負，瑞士比分更正不改已抽出籤表', async () => {
+  saveCloudTournament.mockClear();
+  let event = { ...createEmptyTournament({ rulesVersion: AKASHIKI }), id: 'AKASHIKI', revision: 0,
+    players: Array.from({ length: 20 }, (_, i) => publicPlayer({ id: String(i), name: '選手' + i })) };
+  for (let r = 0; r < 3; r++) {
+    event = nextSwissRound(event);
+    for (const match of event.rounds[r]) event = scoreSwiss(event, r, match.id, 3);
+  }
+  const decisions = Object.fromEntries(playoffSelection(event).ties.map(({ key, group }) => [key, group.map(p => p.id)]));
+  event = seedPlayoff(event, decisions);
+  render(<SeasonAdmin tournament={event} tournaments={[]} online versions={[]} />);
+  fireEvent.click(screen.getByRole('button', { name: event.bracket.r1.p1.name + ' 本場棄賽' }));
+  const review = within(screen.getByRole('region', { name: '確認更正' }));
+  expect(saveCloudTournament).not.toHaveBeenCalled();
+  fireEvent.change(review.getByLabelText('原因'), { target: { value: '現場選手通知棄賽' } });
+  fireEvent.click(review.getByRole('button', { name: '確認變更' }));
+  await waitFor(() => expect(saveCloudTournament).toHaveBeenCalledTimes(1));
+  const saved = saveCloudTournament.mock.calls[0][1];
+  expect(saved.bracket.r1).toMatchObject({ p1Votes: 0, p2Votes: 3, isDone: true });
+  const swiss = within(screen.getByRole('group', { name: '第 1 輪 第 1 場' }));
+  fireEvent.click(swiss.getByRole('button', { name: '0 : 3' }));
+  const correction = within(screen.getByRole('region', { name: '確認更正' }));
+  fireEvent.change(correction.getByLabelText('原因'), { target: { value: '更正誤植' } });
+  fireEvent.click(correction.getByRole('button', { name: '確認變更' }));
+  await waitFor(() => expect(saveCloudTournament).toHaveBeenCalledTimes(2));
+  expect(saveCloudTournament.mock.calls[1][1].bracket).toEqual(saved.bracket);
+  expect(saveCloudTournament.mock.calls[1][1].playoffSeeds).toEqual(saved.playoffSeeds);
 });

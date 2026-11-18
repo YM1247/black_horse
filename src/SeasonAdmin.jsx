@@ -14,6 +14,7 @@ import { AKASHIKI, clearTournamentContents } from './tournamentState';
 import { buildSeriesStandings } from './series';
 import {
   displacedGames,
+  forfeitPlayoff,
   gamesFor,
   playoffSelection,
   qualification,
@@ -52,16 +53,17 @@ const stateKeys = [
 const stateOf = (data) =>
   Object.fromEntries(stateKeys.filter((key) => data[key] !== undefined).map((key) => [key, data[key]]));
 
-function TieOrder({ ties, onResolve }) {
+function TieOrder({ ties, onResolve, playoff = false }) {
   const [orders, setOrders] = useState({});
   return ties.map(({ key, group }) => {
     const ids = orders[key] || [];
     return (
       <fieldset key={key}>
-        <legend>同分裁定 · 第 {group[0].displayRank} 名</legend>
+        <legend>{playoff ? '加賽結果' : '同分裁定'} · 第 {group[0].displayRank} 名</legend>
+        {playoff && <p>請先完成入圍線加賽，再依結果登錄順序；此處不會抽籤。</p>}
         {group.map((_, i) => (
           <label key={i}>
-            裁定順序 {i + 1}
+            {playoff ? '加賽結果順序' : '裁定順序'} {i + 1}
             <select
               value={ids[i] || ''}
               onChange={(e) => {
@@ -80,7 +82,7 @@ function TieOrder({ ties, onResolve }) {
           </label>
         ))}
         <button disabled={new Set(ids.filter(Boolean)).size !== group.length} onClick={() => onResolve(key, ids)}>
-          確認裁定順序
+          {playoff ? '確認加賽結果順序' : '確認裁定順序'}
         </button>
       </fieldset>
     );
@@ -124,7 +126,6 @@ export default function SeasonAdmin({
     if (reviewing) reviewPanel.current?.focus();
   }, [reviewing]);
   const [reason, setReason] = useState('');
-  const [reviveId, setReviveId] = useState('');
   const [substituteName, setSubstituteName] = useState('');
   const [confirmed, setConfirmed] = useState(tournament);
   const latest = useRef(tournament);
@@ -233,8 +234,6 @@ export default function SeasonAdmin({
     if (match.p1Votes === left) return;
     const next = correctSwissScore(event, index, match.id, left);
     const details = { round: index + 1, matchId: match.id, before: match.p1Votes, after: left };
-    if (next.rounds.length < event.rounds.length)
-      details.redrawRounds = event.rounds.slice(next.rounds.length).map((_, i) => next.rounds.length + i + 1);
     if (finished || index !== event.rounds.length - 1 || match.isDone) propose(next, '更正瑞士比分', details);
     else run(() => write(next, '登錄瑞士比分', details));
   }
@@ -246,13 +245,7 @@ export default function SeasonAdmin({
     if (before != null || finished) propose(next, '更正淘汰賽比分', details);
     else run(() => write(next, '登錄淘汰賽比分', details));
   }
-  let revised = review?.next,
-    reviewTies = [];
-  if (review && event.playoffSeeds?.length && !review.sourceVersion && review.action === '更正瑞士比分') {
-    const selection = playoffSelection(revised, review.decisions);
-    reviewTies = selection.ties;
-    if (!reviewTies.length) revised = seedPlayoff(revised, review.decisions);
-  }
+  const revised = review?.next;
   async function confirmReview() {
     if (review.revision !== latest.current.revision) throw new Error('賽事已有更新，請重新開啟更正。');
     const affected = displacedGames(event, revised);
@@ -289,7 +282,6 @@ export default function SeasonAdmin({
     });
     setClearRequest(null);
     setClearCode('');
-    setReviveId('');
     setSubstituteName('');
     setNewPlayerSlot(null);
     setNotice('已清除選手與賽程，賽事回到報名狀態。賽事名稱、代碼與賽制已保留。');
@@ -336,7 +328,7 @@ export default function SeasonAdmin({
         </nav>
         <h1>{event.name}</h1>
         <p>
-          {isAkashiki ? '單場合作賽 · 32 人三輪瑞士制 → 隨機十六強 · 無兩敗淘汰' : isFinal ? '最終戰' : '積分賽'} · {event.judgeCount} 位評審 · {event.id}
+          {isAkashiki ? '單場合作賽 · 最多 32 人三輪瑞士制 → 隨機十六強 · 無兩敗淘汰' : isFinal ? '最終戰' : '積分賽'} · {event.judgeCount} 位評審 · {event.id}
         </p>
         {isAkashiki && <p>排名與配對：總票數 → 勝場 → 對手勝率 → 對手的對手勝率。淘汰賽 BO1，冠軍戰 BO3，另設季軍戰。</p>}
       </header>
@@ -381,23 +373,17 @@ export default function SeasonAdmin({
           <p>
             {review.details.matchId
               ? '左側票數 ' + review.details.before + ' → ' + review.details.after
-              : review.details.game ? `${gamesFor(event).find(([key]) => key === review.details.game)?.[1] || '淘汰賽'}${review.details.gameIndex ? ` 第 ${review.details.gameIndex} 局` : ''}：${review.details.before ?? '未登錄'} → ${review.details.after}` : review.details.id || ''}
+              : review.details.forfeitGame ? `${review.details.forfeitGame}：${review.details.name} 棄賽，對手獲勝` : review.details.game ? `${gamesFor(event).find(([key]) => key === review.details.game)?.[1] || '淘汰賽'}${review.details.gameIndex ? ` 第 ${review.details.gameIndex} 局` : ''}：${review.details.before ?? '未登錄'} → ${review.details.after}` : review.details.id || ''}
           </p>
-          <TieOrder
-            ties={reviewTies}
-            onResolve={(key, ids) => setReview({ ...review, decisions: { ...review.decisions, [key]: ids } })}
-          />
-          {review.details.redrawRounds?.length > 0 && (
-            <p>將清除並重新配對第 {review.details.redrawRounds.join('、')} 輪。</p>
-          )}
-          {!reviewTies.length && <p>需重新登錄比分：{displacedGames(event, revised).join('、') || '無'}</p>}
+          {review.action === '更正瑞士比分' && <p>重新計算戰績與排名，保留已產生的配對、淘汰賽名單及已登錄比分。</p>}
+          <p>需重新登錄比分：{displacedGames(event, revised).join('、') || '無'}</p>
           {isAkashiki && event.bracket?.gold?.isDone && !revised.bracket?.gold?.isDone && <p>冠軍戰尚未結束，確認後將重新開放記分。</p>}
           <label>
             原因
             <input value={reason} onChange={(e) => setReason(e.target.value)} />
           </label>
           <button
-            disabled={busy || offline || !reason.trim() || Boolean(reviewTies.length)}
+            disabled={busy || offline || !reason.trim()}
             onClick={() => run(confirmReview)}
           >
             確認變更
@@ -515,7 +501,7 @@ export default function SeasonAdmin({
                   <div className="roster-heading">
                     <h3 id="registration-roster">名單 {event.players.length}／{limit}</h3>
                     <button
-                      disabled={registering || (isAkashiki ? event.players.length !== 32 : event.players.length < 2)}
+                      disabled={registering || event.players.length < 2}
                       onClick={() => run(() => write(nextSwissRound(event), isAkashiki ? '開始合作賽' : '開始積分賽'))}
                     >
                       開始第一輪
@@ -566,6 +552,22 @@ export default function SeasonAdmin({
                     )}
                   />
                 )}
+                {!finished && event.playoffSeeds?.length > 0 && (
+                  <details>
+                    <summary>淘汰賽棄賽</summary>
+                    <p>只判本場對手全票獲勝；四強棄賽者仍可參加季軍戰。{isAkashiki && '冠軍戰 BO3 保留已完成局數，其餘局由對手全票獲勝至兩勝。'}</p>
+                    {gamesFor(event).filter(([key]) => event.bracket?.[key] && !event.bracket[key].isDone).map(([key, label]) => (
+                      <fieldset key={key}>
+                        <legend>{label}</legend>
+                        {[event.bracket[key].p1, event.bracket[key].p2].map(p => (
+                          <button key={p.id} onClick={() => propose(forfeitPlayoff(event, key, p.id), '淘汰賽棄賽', { id: p.id, name: p.name, forfeitGame: label })}>
+                            {p.name} 本場棄賽
+                          </button>
+                        ))}
+                      </fieldset>
+                    ))}
+                  </details>
+                )}
                 <section className="score-panel">
                   <h2>瑞士制樹狀圖與記分</h2>
                   {isFinal && <p>種子首輪各記一勝五票：{event.players.filter((p) => p.seedCredit).map((p) => p.name).join('、')}</p>}
@@ -599,17 +601,7 @@ export default function SeasonAdmin({
                       {event.rounds.length < 3 && (
                         <>
                           {decision.revival?.length > 1 && (
-                            <label>
-                              裁定復活選手
-                              <select value={reviveId} onChange={(e) => setReviveId(e.target.value)}>
-                                <option value="">請選擇</option>
-                                {decision.revival.map((p) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                            <p>復活抽籤候選：{decision.revival.map(p => p.name).join('、')}。產生下一輪時隨機抽出一位，結果會隨配對保存。</p>
                           )}
                           {decision.revival?.length === 1 && <p>下一輪復活：{decision.revival[0].name}</p>}
                           {decision.substitute && (
@@ -621,12 +613,15 @@ export default function SeasonAdmin({
                           <button
                             disabled={event.rounds.at(-1).some((m) => !m.isDone)}
                             onClick={() =>
-                              run(() =>
-                                write(nextSwissRound(event, { reviveId, substituteName }), '產生下一輪', {
-                                  reviveId: decision.revival?.length === 1 ? decision.revival[0].id : reviveId,
-                                  substituteName
-                                })
-                              )
+                              run(() => {
+                                  const next = nextSwissRound(event, { substituteName });
+                                  return write(next, '產生下一輪', {
+                                    reviveId: next.players.find(p => p.revivedRound === next.rounds.length)?.id || null,
+                                    revivalCandidates: decision.revival?.map(p => p.id) || [],
+                                    revivalMethod: decision.revival?.length > 1 ? 'random' : 'highest-ranked',
+                                    substituteName
+                                  });
+                              })
                             }
                           >
                             產生第 {event.rounds.length + 1} 輪
@@ -652,11 +647,12 @@ export default function SeasonAdmin({
                         <>
                           <TieOrder
                             ties={playoffSelection(event).ties}
+                            playoff={isAkashiki}
                             onResolve={(key, ids) =>
                               run(() =>
                                 write(
                                   { ...event, playoffDecisions: { ...event.playoffDecisions, [key]: ids } },
-                                  isAkashiki ? '十六強入圍裁定' : '八強種子裁定',
+                                  isAkashiki ? '十六強入圍加賽結果' : '八強種子裁定',
                                   { ids }
                                 )
                               )

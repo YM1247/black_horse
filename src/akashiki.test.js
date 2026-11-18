@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AKASHIKI, createEmptyTournament, normalizeTournamentData } from './tournamentState';
 import { eventRanking, nextSwissRound, publicPlayer, registeredPlayers, scoreSwiss, withdrawPlayer } from './seasonTournament';
 import { pairVoteSwissRound, rankPlayers } from './tournament';
-import { displacedGames, gamesFor, playoffSelection, resultPlayer, scorePlayoff, seedPlayoff } from './finalTournament';
+import { forfeitPlayoff, displacedGames, gamesFor, playoffSelection, resultPlayer, scorePlayoff, seedPlayoff } from './finalTournament';
 import { decodeTournamentFromFirestore, encodeTournamentForFirestore } from './services/tournamentRepository';
 
 const players = (n = 32) => Array.from({ length: n }, (_, i) => publicPlayer({ id: `p${i}`, name: `選手${i}` }));
@@ -28,7 +28,9 @@ describe('Akashiki 合作賽', () => {
   it('固定三票與無兩敗淘汰，限制 32 人且獨立保存規則與 BO3 每局', () => {
     const state = createEmptyTournament({ rulesVersion: AKASHIKI, judgeCount: 5, doubleElimination: true });
     expect(state).toMatchObject({ rulesVersion: AKASHIKI, judgeCount: 3, doubleElimination: false });
-    expect(() => nextSwissRound({ ...state, players: players(31) })).toThrow('32');
+    expect(nextSwissRound({ ...state, players: players(31) }).rounds[0]).toHaveLength(16);
+    expect(nextSwissRound({ ...state, players: players(20) }).rounds[0]).toHaveLength(10);
+    expect(() => nextSwissRound({ ...state, players: players(33) })).toThrow('32');
     expect(() => registeredPlayers(players(), players(1), 32)).toThrow();
     let event = scorePlayoff(medalEvent(), 'gold', 3, 0);
     event = scorePlayoff(event, 'gold', 0, 1);
@@ -129,4 +131,39 @@ test('主辦不列入完賽共同名次，後續名次按正式選手計算', ()
     { id: 'a', votes: 6, wins: 2 }, { id: 'b', votes: 6, wins: 2 }, { id: 'c', votes: 2, wins: 0 }];
   expect(eventRanking({ players, rounds: [], phase: 'finished', rulesVersion: AKASHIKI })
     .map(p => [p.id, p.displayRank, p.needsTiebreaker])).toEqual([['a', 1, true], ['b', 1, true], ['c', 3, false]]);
+});
+
+it('十六強抽籤前棄賽依排名遞補，抽籤後棄賽保留籤位且對手全票晉級', () => {
+  const original = { ...createEmptyTournament({ rulesVersion: AKASHIKI }), players: players().map((p, i) => ({ ...p, votes: 32 - i })), rounds: [[], [], []] };
+  const withdrawn = { ...original, players: original.players.map(p => p.id === 'p0' ? { ...p, isWithdrawn: true } : p) };
+  const drawn = seedPlayoff(withdrawn, {}, () => 0);
+  expect(drawn.playoffSeeds.map(p => p.id)).not.toContain('p0');
+  expect(drawn.playoffSeeds.map(p => p.id)).toContain('p16');
+  const match = drawn.bracket.r1;
+  const next = forfeitPlayoff(drawn, 'r1', match.p1.id);
+  expect(next.bracket.r1).toMatchObject({ p1Votes: 0, p2Votes: 3, isDone: true });
+  expect(next.playoffSeeds).toEqual(drawn.playoffSeeds);
+  expect(() => forfeitPlayoff(next, 'r1', match.p1.id)).toThrow();
+});
+
+it('四強棄賽只判該場負，仍進入未完成的季軍戰', () => {
+  let event = draw(swissComplete());
+  for (const [key] of gamesFor(event)) if (key.startsWith('r') || key.startsWith('q')) event = scorePlayoff(event, key, 3);
+  const loser = event.bracket.s1.p1.id;
+  event = forfeitPlayoff(event, 's1', loser);
+  event = scorePlayoff(event, 's2', 3);
+  expect([event.bracket.bronze.p1.id, event.bracket.bronze.p2.id]).toContain(loser);
+  expect(event.bracket.bronze.isDone).toBe(false);
+});
+
+it.each([0, 1])('BO3 棄賽保留已完成局，棄賽方 %s，其餘局全票至對手兩勝', side => {
+  let event = medalEvent();
+  event = scorePlayoff(event, 'gold', side === 0 ? 2 : 1, 0);
+  const first = event.bracket.gold.games[0];
+  const loser = side === 0 ? event.bracket.gold.p1 : event.bracket.gold.p2;
+  const next = forfeitPlayoff(event, 'gold', loser.id);
+  expect(next.bracket.gold.games[0]).toEqual(first);
+  expect(next.bracket.gold.games.slice(1)).toEqual(Array(2).fill(side === 0 ? { p1Votes: 0, p2Votes: 3 } : { p1Votes: 3, p2Votes: 0 }));
+  expect(next.bracket.gold.isDone).toBe(true);
+  expect(resultPlayer(next.bracket.gold).id).not.toBe(loser.id);
 });

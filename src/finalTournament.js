@@ -151,6 +151,20 @@ export function scorePlayoff(event, key, left, gameIndex) {
   return { ...event, bracket: buildPlayoff(event.playoffSeeds, updated, gamesFor(event)) };
 }
 
+// A withdrawal applies to this bout only; a semifinal loser can still play for bronze.
+export function forfeitPlayoff(event, key, loserId) {
+  const match = event.bracket?.[key];
+  if (!match || match.isDone || ![match.p1.id, match.p2.id].includes(loserId))
+    throw new Error('只能登錄尚未完成對戰的參賽者棄賽。');
+  const left = match.p1.id === loserId ? 0 : (event.rulesVersion === AKASHIKI ? 3 : 5);
+  let next = event;
+  if (event.rulesVersion === AKASHIKI && key === 'gold') {
+    while (!next.bracket.gold.isDone)
+      next = scorePlayoff(next, key, left, next.bracket.gold.games?.length || 0);
+  } else next = scorePlayoff(event, key, left);
+  return next;
+}
+
 function scoreFinalGame(event, left, gameIndex) {
   const match = event.bracket?.gold;
   const games = [...(match?.games || [])];

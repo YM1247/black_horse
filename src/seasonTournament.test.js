@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  correctSwissScore,
   eventRanking,
   groupPoints,
   nextRoundDecision,
@@ -47,8 +48,9 @@ describe('新制積分賽', () => {
     });
     state.players[5].isWithdrawn = true;
     expect(nextRoundDecision(state).revival.map((p) => p.id)).toEqual(['3', '4']);
-    expect(() => nextSwissRound(state)).toThrow('裁定');
-    expect(nextSwissRound(state, { reviveId: '4' }).rounds[2]).toHaveLength(2);
+    const drawn = nextSwissRound(state, { random: () => 0.99 });
+    expect(drawn.players.find(p => p.revivedRound === 3).id).toBe('4');
+    expect(drawn.rounds[2]).toHaveLength(2);
     state.rounds = [[]];
     expect(() => nextSwissRound(state)).toThrow('補位');
     expect(nextSwissRound(state, { substituteName: '補位甲' }).players.at(-1).isOrganizer).toBe(true);
@@ -80,4 +82,27 @@ it('主辦名次領先仍先移除；跨分界並列者領取相同積分', () =
   const rows = eventRanking(state, true);
   expect(rows.map((p) => p.displayRank)).toEqual([1, 2, 2, 4, 4, 4]);
   expect(rows.map((p) => p.rankingPoints)).toEqual([55, 55, 55, 47, 47, 47]);
+});
+
+ it('復活排除主辦，即使主辦排名較高；沒有正式候選時改用補位', () => {
+  const state = event(5);
+  state.rounds = [[], []];
+  state.players[3] = { ...state.players[3], isEliminated: true, isOrganizer: true, votes: 6 };
+  state.players[4].isEliminated = true;
+  expect(nextRoundDecision(state).revival.map(p => p.id)).toEqual(['4']);
+  state.players[4].isWithdrawn = true;
+  expect(nextRoundDecision(state)).toEqual({ substitute: true });
+});
+
+it.each([false, true])('更正前輪保留後輪配對與已登錄比分（後輪完賽 %s）', (done) => {
+  let state = finishRound(nextSwissRound(event(8)));
+  state = nextSwissRound(state);
+  if (done) state = finishRound(state);
+  const historical = state.rounds[1];
+  const changed = correctSwissScore(state, 0, state.rounds[0][0].id, 0);
+  expect(changed.rounds).toHaveLength(2);
+  expect(changed.rounds[1]).toEqual(historical);
+  expect(changed.rounds[0][0].p1Votes).toBe(0);
+  expect(changed.players.find(p => p.id === state.rounds[0][0].p1.id).wins)
+    .toBe(state.players.find(p => p.id === state.rounds[0][0].p1.id).wins - 1);
 });

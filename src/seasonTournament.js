@@ -97,26 +97,24 @@ export function nextRoundDecision(event) {
   const active = event.players.filter((player) => !player.isWithdrawn && !player.isEliminated);
   if (active.length % 2 === 0) return {};
   if (event.rounds.length === 2 && event.doubleElimination) {
-    const eligible = eventRanking(event, false).filter((player) => player.isEliminated && !player.isWithdrawn);
+    const eligible = eventRanking(event, false).filter((player) => player.isEliminated && !player.isWithdrawn && !player.isOrganizer);
     if (eligible.length)
       return { revival: eligible.filter((player) => player.displayRank === eligible[0].displayRank) };
   }
   return { substitute: true };
 }
 
-export function nextSwissRound(event, { reviveId, substituteName } = {}) {
+export function nextSwissRound(event, { substituteName, random = Math.random } = {}) {
   const roundNum = event.rounds.length + 1;
   if (roundNum > 3 || event.rounds.flat().some((match) => !match.isDone))
     throw new Error('請先完成當輪全部比分。');
   let players = [...event.players];
   if (roundNum === 1 && players.length < 2) throw new Error('至少需要兩位選手。');
-  if (roundNum === 1 && event.rulesVersion === AKASHIKI && players.length !== 32) throw new Error('合作賽需確認 32 位選手後開賽。');
   if (roundNum === 1 && players.length > playerLimit(event)) throw new Error(`正式選手上限為 ${playerLimit(event)} 人。`);
   if (roundNum === 1 && players.length % 2) players.push(organizer());
   const decision = nextRoundDecision({ ...event, players });
   if (decision.revival) {
-    const id = decision.revival.length === 1 ? decision.revival[0].id : reviveId;
-    if (!decision.revival.some((player) => player.id === id)) throw new Error('請裁定一位並列的復活選手。');
+    const id = decision.revival[Math.floor(random() * decision.revival.length)].id;
     players = players.map((player) =>
       player.id === id ? { ...player, isEliminated: false, revivedRound: roundNum } : player
     );
@@ -142,20 +140,8 @@ export function scoreSwiss(event, index, matchId, left) {
 }
 
 export function correctSwissScore(event, index, matchId, left) {
-  // Once results or playoff seeds are published, Swiss opponents are historical facts.
-  if (event.phase === 'finished' || event.playoffSeeds?.length || index === event.rounds.length - 1) {
-    return scoreSwiss(event, index, matchId, left);
-  }
-  const rounds = event.rounds.slice(0, index + 1);
-  const retained = new Set(rounds.flat().flatMap((match) => [match.p1.id, match.p2.id]));
-  const players = event.players
-    .filter((player) => !player.isOrganizer || retained.has(player.id))
-    .map((player) => {
-      if (!player.revivedRound || player.revivedRound <= rounds.length) return player;
-      const { revivedRound, ...original } = player;
-      return original;
-    });
-  return scoreSwiss({ ...event, rounds, players, currentRoundNum: rounds.length }, index, matchId, left);
+  // Published pairings are historical facts, even before their first score is entered.
+  return scoreSwiss(event, index, matchId, left);
 }
 
 export function withdrawPlayer(event, id) {
