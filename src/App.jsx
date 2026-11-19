@@ -1434,7 +1434,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
       {/* Cloud admin modal */}
       {isCloudModalOpen && isFirebaseConfigured && (
         <FullScreenCloudManager inert={Boolean(confirmAction || renamePlayerId)}>
-            <div className="flex justify-between items-center p-5 border-b" style={{ borderColor: COLORS.cardBorder, backgroundColor: COLORS.card }}>
+            <div className="flex justify-between items-center p-5 border-b" style={{ borderColor: COLORS.cardBorder, backgroundColor: COLORS.bg }}>
               <div>
                 <h2 className="text-xl font-black text-white">{selectedSeries ? `${selectedSeries.name}系列賽` : '雲端賽事管理'}</h2>
                 <p className="text-xs font-bold mt-1" style={{ color: COLORS.textMuted }}>{selectedSeries ? '分場管理與系列積分排名' : '建立或選擇賽事後，所有進度都會自動保存至雲端'}</p>

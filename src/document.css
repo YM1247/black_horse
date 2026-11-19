@@ -1,0 +1,55 @@
+/* Own the canvas before React mounts, including loading and error screens.
+   Keep the outer edge the same color as Safari's browser chrome. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --canvas-color: #242728;
+  --public-hero-height: clamp(800px, 216.7vw, 1100px);
+  color-scheme: dark;
+  color: #eeeae3;
+  background-color: var(--canvas-color);
+  background-image:
+    linear-gradient(#242728 0px, transparent calc(var(--safe-top) + 96px)),
+    linear-gradient(transparent 45%, #242728 100%),
+    url('/brand/ink-wash.webp'),
+    linear-gradient(#242728 0%, transparent 18%, transparent 82%, #242728 100%),
+    url('/brand/ink-repeat.webp');
+  background-position: center top, center top, center top, center 400px, center 400px;
+  background-size: 100% var(--public-hero-height), 100% var(--public-hero-height), 100% var(--public-hero-height), 100% 1000px, 100% 1000px;
+  background-repeat: no-repeat, no-repeat, no-repeat, repeat-y, repeat-y;
+  overscroll-behavior-y: none;
+}
+:root[data-surface="admin"] {
+  --canvas-color: #0d0f12;
+  background-image: none;
+}
+html, body { margin: 0; min-height: 100%; }
+body { background: transparent; overscroll-behavior-y: none; }
+#root { min-height: 100vh; min-height: 100dvh; }
+.admin-viewport {
+  box-sizing: border-box;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+.admin-viewport > * {
+  min-height: calc(100vh - var(--safe-top) - var(--safe-bottom));
+  min-height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
+}
+.admin-viewport [role="dialog"] {
+  background: linear-gradient(var(--canvas-color), rgb(0 0 0 / .8) calc(var(--safe-top) + 24px));
+  padding-top: max(1rem, var(--safe-top));
+  padding-right: max(1rem, var(--safe-right));
+  padding-bottom: max(1rem, var(--safe-bottom));
+  padding-left: max(1rem, var(--safe-left));
+  overflow-y: auto;
+}
+
+/* The fixed manager bypasses its parent's padding; inset its contents itself. */
+.cloud-management-viewport {
+  box-sizing: border-box;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  background: #0d0f12;
+}

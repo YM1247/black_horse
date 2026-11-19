@@ -1,0 +1,21 @@
+import {render, screen, waitFor} from '@testing-library/react';
+import {vi} from 'vitest';
+import AppRouter from './AppRouter';
+vi.mock('./PublicTournamentPage',()=>({default:()=> <main>公開單場</main>}));
+vi.mock('./PublicSeriesPage',()=>({default:()=> <main>公開系列</main>}));
+vi.mock('./App',()=>({default:()=> <main>管理入口</main>}));
+afterEach(()=>{window.history.replaceState({},'', '/');document.querySelector('meta[name="theme-color"]')?.remove();delete document.documentElement.dataset.surface;});
+test('管理入口到公開系列切換同步最外層背景與瀏覽器底色，安全區外框只包後台',async()=>{
+ const meta=document.createElement('meta');meta.name='theme-color';document.head.append(meta);
+ window.history.replaceState({},'', '/?admin=1');
+ const view=render(<AppRouter/>);
+ expect(document.documentElement.dataset.surface).toBe('admin');
+ expect(meta.content).toBe('#0d0f12');
+ await waitFor(()=>expect(screen.getByText('管理入口').closest('.admin-viewport')).not.toBeNull());
+ window.history.replaceState({},'', '/?series=BH2627');view.rerender(<AppRouter/>);
+ expect(document.documentElement.dataset.surface).toBe('public');expect(meta.content).toBe('#242728');
+ expect(screen.getByText('公開系列').closest('.admin-viewport')).toBeNull();
+ window.history.replaceState({},'', '/?event=AKASHIKI');view.rerender(<AppRouter/>);
+ expect(screen.getByText('公開單場')).toBeInTheDocument();
+ expect(document.documentElement.dataset.surface).toBe('public');
+});

@@ -17,10 +17,10 @@
 }
 .public-ink *, .public-ink *::before, .public-ink *::after { box-sizing: border-box; }
 .public-ink ::selection { background: #864b51; color: #fff; }
-.public-container { max-width: 78rem; min-height: 100vh; min-height: 100dvh; padding-bottom:calc(4rem + env(safe-area-inset-bottom)); margin: 0 auto; }
+.public-container { max-width: 78rem; min-height: 100vh; min-height: 100dvh; padding-bottom:calc(4rem + var(--safe-bottom, 0px)); margin: 0 auto; }
 .public-ink--no-nav { padding-bottom: 0; }
-.public-ink--no-nav .public-container { min-height: 100vh; min-height: 100dvh; padding-bottom:calc(24px + env(safe-area-inset-bottom)); }
-.public-header { text-align: center; padding-top: calc(2px + env(safe-area-inset-top)); }
+.public-ink--no-nav .public-container { min-height: 100vh; min-height: 100dvh; padding-bottom:calc(24px + var(--safe-bottom, 0px)); }
+.public-header { text-align: center; padding-top: calc(2px + var(--safe-top, 0px)); }
 .public-ink .public-brand { display: block; width: 240px; min-height: 0; margin: 0 auto; }
 .public-brand-window { display: block; position: relative; width: 240px; height: 212px; overflow: hidden; }
 .public-brand-window img { display: block; position: absolute; max-width: none; width: 240px; height: auto; top: -88px; left: 0; filter: invert(1) sepia(.12) brightness(.94); mix-blend-mode: screen; }
@@ -117,7 +117,7 @@
 .public-ink .playoff-entrant.is-winner { color: #e4b5b7; }
 .public-ink .playoff-entrant small { font-size: .75rem; color: #b7cbd0; }
 .public-ink .playoff-source { font-size: .75rem; color: #b7cbd0; }
-.public-ink .public-bottom-nav { position: fixed; inset: auto 0 0; z-index: 20; display: flex; padding: 6px max(12px, calc((100vw - 78rem) / 2)) calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid #566063; background: #242728; }
+.public-ink .public-bottom-nav { position: fixed; inset: auto 0 0; z-index: 20; display: flex; padding: 6px max(12px, calc((100vw - 78rem) / 2)) calc(6px + var(--safe-bottom, 0px)); border-top: 1px solid #566063; background: #242728; }
 .public-ink .public-bottom-nav a { position: relative; flex: 1; min-height: 44px; display: flex; color: #d0d8d7; font-size: .875rem; font-weight: 400; padding: 10px 0; }
 .public-ink .public-bottom-nav a[aria-current] { color: #e4a8ad; }
 .public-bottom-nav a[aria-current]::after { content: ''; position: absolute; bottom: 0; width: 30px; height: 2px; border-radius: 0; background: #d18d90; }
@@ -212,34 +212,15 @@
 .public-match-group { margin-top: 20px; }
 .public-match-group h3 { color: #b7cbd0; font-size: .8125rem; font-weight: 500; padding: 8px 0; border-bottom:1px solid #738184; }
 
-/* Paint the document canvas itself, so Safari safe areas share the same
-   artwork as the page instead of exposing a separate solid-color surface.
-   The first wash fades into the repeating lower wash; backgrounds do not
-   participate in layout and cannot create short-page overflow. */
-html:has(.public-ink) {
-  /* Stop vertical rubber-banding at the document edges without changing
-     the native scrolling container, anchor navigation, or horizontal tables. */
-  overscroll-behavior-y:none;
-  --public-hero-height:clamp(800px, 216.7vw, 1100px);
-  background-color:#242728;
-  background-image:
-    linear-gradient(transparent 45%, #242728 100%),
-    url('/brand/ink-wash.webp'),
-    linear-gradient(#242728 0%, transparent 18%, transparent 82%, #242728 100%),
-    url('/brand/ink-repeat.webp');
-  background-position:center top, center top, center 400px, center 400px;
-  background-size:100% var(--public-hero-height), 100% var(--public-hero-height), 100% 1000px, 100% 1000px;
-  background-repeat:no-repeat, no-repeat, repeat-y, repeat-y;
-}
-html:has(.public-ink) body { background:transparent; overscroll-behavior-y:none; }
-.public-container { position:relative; background:none; }
+/* The document canvas is initialized in document.css before the app loads. */
+.public-container { position:relative; background:none; padding-left:var(--safe-left, 0px); padding-right:var(--safe-right, 0px); }
 
 /* Event pages share navigation but never stack their content. */
 .public-event-page { max-width: 58rem; margin-inline: auto; }
 .public-event-page[hidden] { display: none; }
 
-.public-header--with-back { position: relative; padding-top: calc(52px + env(safe-area-inset-top)); }
-.public-ink .public-back-link { position: absolute; top: calc(6px + env(safe-area-inset-top)); left: max(18px, env(safe-area-inset-left)); display: inline-flex; align-items: center; min-height:44px; padding:8px 12px; font-size:.8125rem; border:1px solid #566063; background:rgb(36 39 40 / .38); }
+.public-header--with-back { position: relative; padding-top: calc(52px + var(--safe-top, 0px)); }
+.public-ink .public-back-link { position: absolute; top: calc(6px + var(--safe-top, 0px)); left: max(18px, var(--safe-left, 0px)); display: inline-flex; align-items: center; min-height:44px; padding:8px 12px; font-size:.8125rem; border:1px solid #566063; background:rgb(36 39 40 / .38); }
 .public-update-time { display:block; font-size:.75rem; margin-top:4px; color:#b7cbd0; }
 .public-search-feedback { margin:8px 0 0; color:#b7cbd0; font-size:.8125rem; }
 .public-ink .is-search-match { background:rgb(183 203 208 / .12); outline:1px solid #b7cbd0; outline-offset:-1px; scroll-margin-block:80px; }
@@ -270,7 +251,12 @@ html:has(.public-ink) body { background:transparent; overscroll-behavior-y:none;
 .public-ink .public-swiss-heading { margin-top:36px; padding-top:0; border-top:0; }
 
 /* Keep controls clear of notches while the page color fills Safari chrome. */
-.public-content { padding-left:max(18px, env(safe-area-inset-left)); padding-right:max(18px, env(safe-area-inset-right)); }
-.public-ink .public-bottom-nav { padding-left:max(12px, calc((100vw - 78rem) / 2), env(safe-area-inset-left)); padding-right:max(12px, calc((100vw - 78rem) / 2), env(safe-area-inset-right)); }
-@media(min-width:768px) { .public-content { padding-left:max(36px, env(safe-area-inset-left)); padding-right:max(36px, env(safe-area-inset-right)); } }
-@media(max-width:359px) { .public-content { padding-left:max(12px, env(safe-area-inset-left)); padding-right:max(12px, env(safe-area-inset-right)); } }
+.public-content { padding-left:max(18px, var(--safe-left, 0px)); padding-right:max(18px, var(--safe-right, 0px)); }
+.public-ink .public-bottom-nav { padding-left:max(12px, calc((100vw - 78rem) / 2), var(--safe-left, 0px)); padding-right:max(12px, calc((100vw - 78rem) / 2), var(--safe-right, 0px)); }
+@media(min-width:768px) { .public-content { padding-left:max(36px, var(--safe-left, 0px)); padding-right:max(36px, var(--safe-right, 0px)); } }
+@media(max-width:359px) { .public-content { padding-left:max(12px, var(--safe-left, 0px)); padding-right:max(12px, var(--safe-right, 0px)); } }
+
+.public-ink .public-bottom-nav {
+  padding-left: max(12px, calc((100vw - 78rem) / 2), var(--safe-left, 0px));
+  padding-right: max(12px, calc((100vw - 78rem) / 2), var(--safe-right, 0px));
+}
