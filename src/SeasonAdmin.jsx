@@ -24,6 +24,7 @@ import {
 } from './finalTournament';
 import { restoreClearedTournament, subscribeTournamentVersions, saveCloudTournament, saveTournamentVersion } from './services/tournamentRepository';
 import { subscribePlayers } from './services/playerDirectory';
+import TournamentBackupTools from './TournamentBackupTools';
 import EventPublicQr from './EventPublicQr';
 import IdentityRegistration from './IdentityRegistration';
 import PlayoffBracket from './PlayoffBracket';
@@ -715,6 +716,8 @@ export default function SeasonAdmin({
           </ol>
         </details>
       )}
+      <TournamentBackupTools event={event} disabled={busy || registering || reviewing || tournament.sync?.hasPendingWrites}
+        offline={offline} onBusy={setBusy} />
     </main>
   );
 }

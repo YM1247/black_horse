@@ -440,3 +440,30 @@ test('後台儲存後，公開即時訂閱接收到開賽、比分、淘汰籤�
     expect(JSON.stringify(latest)).not.toMatch(/realName|phone/);
   } finally {unsubscribe();}
 });
+
+test('JSON 備份還原已鎖定賽事時保留場次身分、建立版本並拒絕過期預覽', async () => {
+  const { createTournamentBackup, readTournamentBackup } = await import('../src/tournamentBackup');
+  await seedAdmin();
+  const captured = baseTournament({ revision: 2, rounds: [], runId: 'earlier-run' });
+  const file = await createTournamentBackup({ ...captured, id: 'RULES1' });
+  const current = baseTournament({ phase: 'finished', revision: 8, currentVersion: 2, resultLocked: true,
+    currentVersionId: 'run-1-v2', name: '正式場次', isPublic: false });
+  await seedTournament(current);
+  const db = testEnvironment.authenticatedContext('admin-user').firestore();
+  getFirebaseServices.mockReturnValue({ db, auth: { currentUser: { uid: 'admin-user' } } });
+  const event = { ...current, id: 'RULES1' };
+  const backup = await readTournamentBackup(JSON.stringify(file), event);
+  await expect(readTournamentBackup(JSON.stringify(file), { ...event, id: 'OTHER' })).rejects.toThrow('賽事代碼');
+  await expect(readTournamentBackup(JSON.stringify({ ...file, state: {} }), event)).rejects.toThrow('內容已變更');
+  const restore = () => saveTournamentVersion(event.id, backup.state, {
+    type: 'json-restore', expectedRevision: 8, reason: '還原 JSON 備份'
+  });
+  await expect(restore()).resolves.toMatchObject({ version: 3, revision: 9 });
+  await expect(restore()).rejects.toThrow();
+  const ref = doc(db, 'tournaments', event.id);
+  expect((await getDoc(ref)).data()).toMatchObject({ name: '正式場次', isPublic: false, phase: 'playing',
+    players: captured.players, runId: 'run-1', currentVersionId: 'run-1-v3', resultLocked: false });
+  expect((await getDoc(doc(ref, 'versions', 'run-1-v3'))).data().snapshot.phase).toBe('playing');
+  expect((await getDoc(doc(db, 'tournamentSummaries', event.id))).data().revision).toBe(9);
+  expect((await getDocs(collection(ref, 'auditLogs'))).size).toBe(1);
+});

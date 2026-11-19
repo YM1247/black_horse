@@ -274,7 +274,7 @@ export default function ResultCorrectionPanel({
             <h3 className="text-xl font-black text-[#f1c6a6]">版本紀錄</h3>
             <div className="mt-3 space-y-2">
               {versions.map((version) => {
-                const restorable = version.runId === runId && version.version !== currentVersion;
+                const restorable = (version.type !== 'json-restore' || version.snapshot?.phase === 'finished') && version.runId === runId && version.version !== currentVersion;
                 return (
                   <div
                     key={version.id}

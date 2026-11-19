@@ -1,3 +1,4 @@
+import TournamentBackupTools from './TournamentBackupTools';
 import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { Trophy, Users, Swords, UserPlus, Play, Medal, ChevronRight, AlertTriangle, Network, Archive, Trash2, X, Clock, Home, Upload } from 'lucide-react';
@@ -122,6 +123,8 @@ const getDynamicFontSize = (name, isTreeMode = false) => {
 
 export function TournamentAdminApp({ authenticatedUser = null }) {
   const [initialTournament] = useState(createEmptyTournament);
+  const [legacyBackupEvent, setLegacyBackupEvent] = useState(null);
+  const [restoringBackup, setRestoringBackup] = useState(false);
   const [seasonEvent,setSeasonEvent] = useState(null);
   const [newSeasonRules,setNewSeasonRules] = useState(false);
   const [phase, setPhase] = useState(initialTournament.phase); // 'registration', 'playing', 'finished'
@@ -380,6 +383,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         return;
       }
       setSeasonEvent(null);
+      if (!data.sync?.hasPendingWrites) setLegacyBackupEvent(data);
       const normalized = normalizeTournamentData(data);
       const serialized = JSON.stringify(normalized);
       const pendingLocalState = pendingCloudStateRef.current || (
@@ -1740,7 +1744,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
           </div>
         )}
 
-        <div aria-disabled={isEditorReadOnly} className={isEditorReadOnly ? 'pointer-events-none opacity-70' : ''}>
+        <div inert={restoringBackup} aria-disabled={isEditorReadOnly} className={isEditorReadOnly ? 'pointer-events-none opacity-70' : ''}>
 
         {/* Phase 1: Registration */}
         {phase === 'registration' && (
@@ -2035,6 +2039,11 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
         ))}
 
         </div>
+        {adminUser && activeCloudCode && !isCloudModalOpen && legacyBackupEvent?.id === activeCloudCode && (
+          <TournamentBackupTools key={activeCloudCode} event={legacyBackupEvent} offline={!isOnline || cloudSyncStatus === 'offline'}
+            disabled={cloudSyncStatus !== 'synced' || isTransitioning || isCorrectionMode || Boolean(pendingCloudStateRef.current)}
+            onBusy={setRestoringBackup} />
+        )}
 
       </div>
     </div>

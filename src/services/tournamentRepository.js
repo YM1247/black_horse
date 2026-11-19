@@ -418,17 +418,26 @@ export const saveTournamentVersion = async (eventCode, tournament, {
       });
     }
 
+    const restoringJson = type === 'json-restore';
+    if (restoringJson && (!officialEventMatches(code, snapshot.data()) ||
+        (tournament.rulesVersion || 'legacy-v1') !== (snapshot.data().rulesVersion || 'legacy-v1'))) {
+      throw new Error('目前賽事與備份的賽制不符。');
+    }
+    const versionState = restoringJson
+      ? { ...tournament, runId: snapshot.data().runId, runNumber: snapshot.data().runNumber }
+      : tournament;
+    const phase = restoringJson ? tournament.phase : type === 'reseed' ? 'playing' : 'finished';
     const currentVersion = Number(snapshot.data().currentVersion) || 0;
     const nextVersion = currentVersion + 1;
-    const runId = String(tournament.runId || snapshot.data().runId || `legacy-${code.toLowerCase()}`);
+    const runId = String(versionState.runId || snapshot.data().runId || `legacy-${code.toLowerCase()}`);
     const versionId = `${runId}-v${nextVersion}`;
     const nextRevision = actualRevision + 1;
     const lockedTournament = {
-      ...tournament,
-      phase: type === 'reseed' ? 'playing' : 'finished',
-      resultLocked: type !== 'reseed',
+      ...versionState,
+      phase,
+      resultLocked: phase === 'finished',
       runId,
-      runNumber: Number(tournament.runNumber || snapshot.data().runNumber) || 1,
+      runNumber: Number(versionState.runNumber || snapshot.data().runNumber) || 1,
       currentVersion: nextVersion
     };
     const versionRef = doc(tournamentRef, 'versions', versionId);
@@ -449,6 +458,7 @@ export const saveTournamentVersion = async (eventCode, tournament, {
     const tournamentUpdate = {
       ...encodeTournamentForFirestore(lockedTournament),
       currentVersionId: versionId,
+      ...(restoringJson ? { clearBackupId: '' } : {}),
       revision: nextRevision,
       updatedAt: serverTimestamp(),
       clientUpdatedAt: new Date().toISOString(),
@@ -461,7 +471,7 @@ export const saveTournamentVersion = async (eventCode, tournament, {
       updatedBy: user.uid
     });
     createAuditLog(transaction, tournamentRef, user,
-      type === 'completed' || type === 'migration' ? 'TOURNAMENT_FINISHED' : type === 'restore' ? 'RESULT_VERSION_RESTORED' : 'RESULT_CORRECTED',
+      type === 'completed' || type === 'migration' ? 'TOURNAMENT_FINISHED' : (type === 'restore' || restoringJson) ? 'RESULT_VERSION_RESTORED' : 'RESULT_CORRECTED',
       { version: nextVersion, reason: String(reason || '').trim(), changes: cleanData(changes), sourceVersion }
     );
     return { revision: nextRevision, version: nextVersion, versionId };
