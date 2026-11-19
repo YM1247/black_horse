@@ -38,7 +38,11 @@ export function groupPoints(wins, losses, place, count) {
 }
 
 export function eventRanking(event, final = event.phase === 'finished') {
-  const ranked = rankPlayers(event.players || [], event.rounds || [], event.rulesVersion === AKASHIKI);
+  // Rebuild Akashiki totals from the recorded ballots, including events saved
+  // before the winner bonus. Reading standings does not rewrite cloud results.
+  const players = event.rulesVersion === AKASHIKI && event.rounds?.some(round => round.length)
+    ? refreshRecords(event).players : event.players || [];
+  const ranked = rankPlayers(players, event.rounds || [], event.rulesVersion === AKASHIKI);
   if (event.rulesVersion === AKASHIKI) {
     const eligible = ranked.filter(player => !final || !player.isOrganizer);
     const ranks = new Map();
@@ -84,7 +88,7 @@ export function eventRanking(event, final = event.phase === 'finished') {
 }
 
 export function refreshRecords(event) {
-  const players = recalculatePlayerRecords(event.players, event.rounds).map((player) =>
+  const players = recalculatePlayerRecords(event.players, event.rounds, event.rulesVersion === AKASHIKI ? 1 : 0).map((player) =>
     player.seedCredit ? { ...player, wins: player.wins + 1, votes: player.votes + 5 } : player
   );
   const updated = applyDoubleElimination(players, event.rounds, event.doubleElimination).map((player) =>
@@ -105,6 +109,7 @@ export function nextRoundDecision(event) {
 }
 
 export function nextSwissRound(event, { substituteName, random = Math.random } = {}) {
+  if (event.rulesVersion === AKASHIKI) event = refreshRecords(event);
   const roundNum = event.rounds.length + 1;
   if (roundNum > 3 || event.rounds.flat().some((match) => !match.isDone))
     throw new Error('請先完成當輪全部比分。');

@@ -331,7 +331,7 @@ export default function SeasonAdmin({
         <p>
           {isAkashiki ? '單場合作賽 · 最多 32 人三輪瑞士制 → 隨機十六強 · 無兩敗淘汰' : isFinal ? '最終戰' : '積分賽'} · {event.judgeCount} 位評審 · {event.id}
         </p>
-        {isAkashiki && <p>排名與配對：總票數 → 勝場 → 對手勝率 → 對手的對手勝率。淘汰賽 BO1，冠軍戰 BO3，另設季軍戰。</p>}
+        {isAkashiki && <p>排名與配對：總票數 → 勝場 → 對手勝率 → 對手的對手勝率。瑞士制每場勝者總票數另加 1 票（2:1 計為 3 票與 1 票）。淘汰賽 BO1，冠軍戰 BO3，另設季軍戰。</p>}
         <EventPublicQr eventCode={event.id} name={event.name} isPublic={event.isPublic} />
       </header>
       {isFinal && !registered && event.qualificationSources && <details>

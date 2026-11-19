@@ -44,6 +44,7 @@ vi.mock('./services/tournamentRepository', () => ({
         bronze:{p1:c,p2:d,p1Votes:2,p2Votes:1,isDone:code==='KNOCKEND'}
       };
     }
+    if (code === 'AKASHIKI') value.rulesVersion = 'Akashiki';
     if (code === 'SERIES1') value.seriesId = 'black-horse-26-27';
     if (code === 'PLAYNOW') value.phase = 'playing';
     if (code === 'REGNOW') { value.phase = 'registration'; value.rounds = []; }
@@ -56,6 +57,18 @@ vi.mock('./services/tournamentRepository', () => ({
 beforeEach(() => {
   window.history.replaceState({}, '', '/');
   window.scrollTo = vi.fn();
+});
+
+test('赤式排名含勝者加票，切換賽況仍顯示原始三票比分', async () => {
+  render(<PublicTournamentPage initialCode="AKASHIKI" />);
+  const ranking = await screen.findByRole('region', { name: '瑞士制排名' });
+  expect(ranking).toHaveTextContent('勝者總票數另加 1 票');
+  const first = ranking.querySelector('li');
+  expect(first).toHaveTextContent('Alice');
+  expect(first).toHaveTextContent('4 票');
+  fireEvent.click(screen.getByRole('link', { name: '賽況', exact: true }));
+  expect(screen.getByRole('region', { name: '本輪對戰' })).toHaveTextContent('3 : 0');
+  expect(screen.getByRole('region', { name: '本輪對戰' })).not.toHaveTextContent('4 : 0');
 });
 
 test('已完賽預設只顯示排名，可切換獨立賽況頁並保留賽事', async () => {

@@ -36,7 +36,7 @@ export function PublicTournamentRanking({ tournament, rankedPlayers, prominent =
   const title = isFinal ? '瑞士制排名' : isFinished ? '最終排名' : '即時排名';
   return <section id="event-ranking" aria-label={title} className={'event-board ' + (prominent ? 'mb-8' : '')}>
     <h2>{title}</h2>
-    {tournament.rulesVersion === AKASHIKI && <p>總票數 → 勝場 → 對手勝率 → 對手的對手勝率</p>}
+    {tournament.rulesVersion === AKASHIKI && <p>總票數 → 勝場 → 對手勝率 → 對手的對手勝率。瑞士制每場勝者總票數另加 1 票（2:1 計為 3 票與 1 票）。</p>}
     {rankedPlayers.length === 0 && <p className="text-slate-300">尚無選手排名。</p>}
     <ol>{rankedPlayers.map(player => <li key={player.id}>
       <span className="place">{player.displayRank}</span>

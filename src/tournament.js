@@ -190,7 +190,7 @@ export const updateMatchScore = (rounds, roundIndex, matchId, p1Votes, p2Votes) 
     match.id === matchId ? { ...match, p1Votes, p2Votes, isDone: true } : match
   ));
 
-export const recalculatePlayerRecords = (players, rounds) => {
+export const recalculatePlayerRecords = (players, rounds, winnerVoteBonus = 0) => {
   const recalculated = players.map(player => ({ ...player, wins: 0, votes: 0, losses: 0 }));
   const byId = new Map(recalculated.map(player => [player.id, player]));
 
@@ -200,12 +200,18 @@ export const recalculatePlayerRecords = (players, rounds) => {
     const p2 = byId.get(match.p2.id);
     if (p1 && !p1.isMC) {
       p1.votes += match.p1Votes;
-      if (match.p1Votes > match.p2Votes) p1.wins += 1;
+      if (match.p1Votes > match.p2Votes) {
+        p1.wins += 1;
+        p1.votes += winnerVoteBonus;
+      }
       if (match.p1Votes < match.p2Votes) p1.losses += 1;
     }
     if (p2 && !p2.isMC) {
       p2.votes += match.p2Votes;
-      if (match.p2Votes > match.p1Votes) p2.wins += 1;
+      if (match.p2Votes > match.p1Votes) {
+        p2.wins += 1;
+        p2.votes += winnerVoteBonus;
+      }
       if (match.p2Votes < match.p1Votes) p2.losses += 1;
     }
   });

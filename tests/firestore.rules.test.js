@@ -282,6 +282,8 @@ test('合作賽保存十六強與 BO3；鎖定後須建立更正版本，1:1 可
   expect(data.bracket.gold.games).toHaveLength(3);
   expect(data.playoffSeeds).toHaveLength(16);
   expect(data.rounds.map(r => r.length)).toEqual([16, 16, 16]);
+  expect(data.players.every(p => p.votes === p.wins * 4)).toBe(true);
+  expect(data.rounds.flat().every(m => m.p1Votes === 3 && m.p2Votes === 0)).toBe(true);
   expect(JSON.stringify(data)).not.toMatch(/realName|phone|seriesId/);
 });
 

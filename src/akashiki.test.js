@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AKASHIKI, createEmptyTournament, normalizeTournamentData } from './tournamentState';
-import { eventRanking, nextSwissRound, publicPlayer, registeredPlayers, scoreSwiss, withdrawPlayer } from './seasonTournament';
+import { correctSwissScore, eventRanking, nextSwissRound, publicPlayer, refreshRecords, registeredPlayers, scoreSwiss, withdrawPlayer, QUALIFIER, FINAL } from './seasonTournament';
 import { pairVoteSwissRound, rankPlayers } from './tournament';
 import { forfeitPlayoff, displacedGames, gamesFor, playoffSelection, resultPlayer, scorePlayoff, seedPlayoff } from './finalTournament';
 import { decodeTournamentFromFirestore, encodeTournamentForFirestore } from './services/tournamentRepository';
@@ -25,6 +25,65 @@ function medalEvent() {
 }
 
 describe('Akashiki 合作賽', () => {
+  it.each([[2, 3, 1], [1, 1, 3], [3, 4, 0], [0, 0, 4]])('瑞士制左側 %s 票時只給勝者額外一票，原始比分保留三票', (left, a, b) => {
+    let event = nextSwissRound({ ...createEmptyTournament({ rulesVersion: AKASHIKI }), players: players(2) });
+    const match = event.rounds[0][0];
+    event = scoreSwiss(event, 0, match.id, left);
+    const totals = new Map(event.players.map(p => [p.id, p.votes]));
+    expect([totals.get(match.p1.id), totals.get(match.p2.id)]).toEqual([a, b]);
+    expect(event.rounds[0][0]).toMatchObject({ p1Votes: left, p2Votes: 3 - left });
+    expect(refreshRecords(event).players).toEqual(event.players);
+    const next = nextSwissRound(event);
+    const snapshots = new Map(next.rounds[1].flatMap(m => [[m.p1.id, m.p1VotesSnapshot], [m.p2.id, m.p2VotesSnapshot]]));
+    expect(snapshots).toEqual(totals);
+  });
+
+  it('舊存檔的排名與新配對從原始票數重算加成，不修改已保存的比分或配對', () => {
+    let event = nextSwissRound({ ...createEmptyTournament({ rulesVersion: AKASHIKI }), players: players(2) });
+    const match = event.rounds[0][0];
+    event = scoreSwiss(event, 0, match.id, 2);
+    const legacy = { ...event, players: event.players.map(p => ({ ...p, votes: p.id === match.p1.id ? 2 : 1 })) };
+    const saved = JSON.stringify(legacy);
+    const ranked = eventRanking(legacy);
+    expect(ranked.map(p => [p.id, p.votes])).toEqual([[match.p1.id, 3], [match.p2.id, 1]]);
+    expect(JSON.stringify(legacy)).toBe(saved);
+    expect(eventRanking({ ...legacy, phase: 'finished', resultLocked: true })).toEqual(ranked);
+    const next = nextSwissRound(legacy);
+    expect(next.rounds[0]).toEqual(legacy.rounds[0]);
+    expect(next.rounds[1][0][next.rounds[1][0].p1.id === match.p1.id ? 'p1VotesSnapshot' : 'p2VotesSnapshot']).toBe(3);
+  });
+
+  it('更正比分會撤回原勝者加成，改給新勝者；重算與反覆更正不累加', () => {
+    let event = nextSwissRound({ ...createEmptyTournament({ rulesVersion: AKASHIKI }), players: players(2) });
+    const match = event.rounds[0][0];
+    event = scoreSwiss(event, 0, match.id, 2);
+    const next = nextSwissRound(event);
+    const corrected = correctSwissScore(next, 0, match.id, 1);
+    expect(corrected.players.find(p => p.id === match.p1.id).votes).toBe(1);
+    expect(corrected.players.find(p => p.id === match.p2.id).votes).toBe(3);
+    expect(corrected.rounds[1]).toEqual(next.rounds[1]);
+    expect(correctSwissScore(corrected, 0, match.id, 1).players).toEqual(corrected.players);
+    expect(correctSwissScore(corrected, 0, match.id, 2).players).toEqual(event.players);
+  });
+
+  it('瑞士制棄賽判負後對手計四票，淘汰賽與 BO3 不改瑞士總票數', () => {
+    let event = nextSwissRound({ ...createEmptyTournament({ rulesVersion: AKASHIKI }), players: players(2) });
+    const match = event.rounds[0][0];
+    event = withdrawPlayer(event, match.p1.id);
+    expect(event.players.find(p => p.id === match.p2.id).votes).toBe(4);
+    const knockout = medalEvent();
+    expect(scorePlayoff(knockout, 'r1', 0).players).toEqual(knockout.players);
+    expect(scorePlayoff(knockout, 'gold', 2, 0).players).toEqual(knockout.players);
+    expect(scorePlayoff(knockout, 'gold', 2, 0).bracket.gold.games).toEqual([{ p1Votes: 2, p2Votes: 1 }]);
+  });
+
+  it.each([undefined, QUALIFIER, FINAL])('其他賽制 %s 沿用原票數，不加勝者票', rulesVersion => {
+    const event = createEmptyTournament({ rulesVersion });
+    const [a, b] = players(2);
+    const state = scoreSwiss({ ...event, players: [a, b], rounds: [[{ id: 'other', p1: a, p2: b }]] }, 0, 'other', 2);
+    expect(state.players.map(p => p.votes)).toEqual([2, event.judgeCount - 2]);
+  });
+
   it('固定三票與無兩敗淘汰，限制 32 人且獨立保存規則與 BO3 每局', () => {
     const state = createEmptyTournament({ rulesVersion: AKASHIKI, judgeCount: 5, doubleElimination: true });
     expect(state).toMatchObject({ rulesVersion: AKASHIKI, judgeCount: 3, doubleElimination: false });
