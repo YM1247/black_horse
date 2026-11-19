@@ -61,7 +61,7 @@ test('分組及戰績使用該輪快照，區分跨組與票數組', async () =>
     {id:'b',p1:{wins:2},p2:{wins:2},p1WinsSnapshot:1,p2WinsSnapshot:1},
     {id:'c',p1:{wins:2},p2:{wins:1},p1WinsSnapshot:2,p2WinsSnapshot:1}
   ];
-  expect(groupPublicMatches(matches,2).map(g=>g.label)).toEqual(['2-0 組','跨組（2-0／1-1）','1-1 組']);
+  expect(groupPublicMatches(matches,2).map(g=>g.label)).toEqual(['1-1 組','跨組（2-0／1-1）','2-0 組']);
   expect(matchRecord(matches[0],'p1',2)).toEqual({wins:2,losses:0,votes:5});
   expect(groupPublicMatches(matches.slice(0,1),2,true)[0].label).toBe('跨組（6 票／5 票）');
 });
@@ -117,4 +117,13 @@ test('淘汰賽搜尋跳過同選手已打完的八強，定位待打的四強',
     fireEvent.submit(screen.getByRole('searchbox').closest('form'));
     expect(document.activeElement).toHaveAttribute('data-playoff-game', 's1');
   } finally { Element.prototype.scrollIntoView = old; }
+});
+
+
+test('公開票數組依賽前快照由低到高，維持同組順序與原始資料', async () => {
+  const { groupPublicMatches } = await import('./PublicEventLive');
+  const bout = (id, votes) => ({ id, p1: { name: id }, p2: { name: '對手' }, p1VotesSnapshot: votes, p2VotesSnapshot: votes });
+  const matches = [bout('high', 6), bout('low1', 2), bout('low2', 2), bout('middle', 4)];
+  expect(groupPublicMatches(matches, 2, true).flatMap(g => g.matches.map(m => m.id))).toEqual(['low1', 'low2', 'middle', 'high']);
+  expect(matches.map(m => m.id)).toEqual(['high', 'low1', 'low2', 'middle']);
 });

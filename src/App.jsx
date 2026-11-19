@@ -1238,7 +1238,7 @@ export function TournamentAdminApp({ authenticatedUser = null }) {
             acc[score].matches.push(match); return acc;
           }, {});
 
-          const sortedScores = Object.keys(groups).map(Number).sort((a, b) => b - a);
+          const sortedScores = Object.keys(groups).map(Number).sort((a, b) => a - b);
           const isCurrentRound = (rIdx + 1 === currentRoundNum);
 
           return (

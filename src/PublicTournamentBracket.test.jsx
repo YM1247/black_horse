@@ -49,7 +49,7 @@ const adminMatch = (id, wins) => ({
 });
 
 test('後台樹狀圖分組排序後仍保留每輪原始場次編號及記分對象', () => {
-  const rounds = [[], [adminMatch('low', 0), adminMatch('high', 1)]];
+  const rounds = [[], [adminMatch('high', 1), adminMatch('low', 0)]];
   const onScore = vi.fn();
   render(<PublicTournamentBracket rounds={rounds} renderScore={(bout, round) => (
     <button onClick={() => onScore(round, bout.id)}>記分</button>
@@ -58,7 +58,7 @@ test('後台樹狀圖分組排序後仍保留每輪原始場次編號及記分�
   expect(groups[0]).toHaveAccessibleName('第 2 輪 第 2 場');
   expect(groups[1]).toHaveAccessibleName('第 2 輪 第 1 場');
   fireEvent.click(within(groups[0]).getByRole('button', { name: '記分' }));
-  expect(onScore).toHaveBeenCalledWith(1, 'high');
+  expect(onScore).toHaveBeenCalledWith(1, 'low');
 });
 
 test('公開樹狀圖不顯示後台場次編號或記分控制', () => {
@@ -66,4 +66,16 @@ test('公開樹狀圖不顯示後台場次編號或記分控制', () => {
   expect(screen.queryByRole('group')).not.toBeInTheDocument();
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
   expect(screen.queryByText(/第.*場/)).not.toBeInTheDocument();
+});
+
+
+test('票數制每輪從低票到高票，跨組介於兩組之間且不依當場比分重排', () => {
+  const high = { ...adminMatch('high', 0), p1VotesSnapshot: 6, p2VotesSnapshot: 6, p1Votes: 0, p2Votes: 3 };
+  const low = { ...adminMatch('low', 2), p1VotesSnapshot: 2, p2VotesSnapshot: 2, p1Votes: 3, p2Votes: 0 };
+  const mixed = { ...adminMatch('mixed', 1), p1VotesSnapshot: 6, p2VotesSnapshot: 2 };
+  render(<PublicTournamentBracket rounds={[[high, mixed, low], [high, mixed, low]]} votesFirst renderScore={() => null} />);
+  expect(screen.getAllByRole('group').map(el => el.getAttribute('aria-label'))).toEqual([
+    '第 1 輪 第 3 場', '第 1 輪 第 2 場', '第 1 輪 第 1 場',
+    '第 2 輪 第 3 場', '第 2 輪 第 2 場', '第 2 輪 第 1 場'
+  ]);
 });

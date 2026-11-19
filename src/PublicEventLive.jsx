@@ -23,7 +23,7 @@ export function groupPublicMatches(matches, roundIndex, votesFirst = false) {
     if (!groups.has(label)) groups.set(label, { label, score: votesFirst ? a.votes+b.votes : a.wins+b.wins, matches: [] });
     groups.get(label).matches.push(match);
   }
-  return [...groups.values()].sort((a,b)=>b.score-a.score);
+  return [...groups.values()].sort((a,b)=>a.score-b.score);
 }
 
 export function PublicMatch({ match, prominent = false, label, unit, showStatus = true, showRecord = false, roundIndex = 0, highlighted = false }) {

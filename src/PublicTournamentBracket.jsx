@@ -41,7 +41,7 @@ export default function PublicTournamentBracket({ rounds = [], renderScore, vote
       <div className={`${renderScore ? 'admin-swiss-rounds' : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3'} gap-5 md:gap-8 md:p-2 items-start`}>
         {rounds.map((matches, roundIndex) => {
           const groups = groupRoundMatches(matches, roundIndex, votesFirst);
-          const sortedScores = Object.keys(groups).sort((first, second) => groups[second].score - groups[first].score);
+          const sortedScores = Object.keys(groups).sort((first, second) => groups[first].score - groups[second].score);
 
           return (
             <div key={roundIndex} className="flex flex-col gap-6 w-full">
