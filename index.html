@@ -12,14 +12,19 @@
     <meta name="apple-mobile-web-app-title" content="黑馬記念" />
     <link rel="apple-touch-icon" sizes="180x180" href="/black_horse/brand/icon-180.png" />
     <link rel="manifest" href="/black_horse/manifest.json?v=20261116" />
-    <style>html,body{margin:0;min-height:100%;background:#242728;color:#eeeae3;color-scheme:dark}#root{min-height:100vh;min-height:100dvh}</style>
+    <script>
+      // Set the canvas and browser chrome before either app bundle loads.
+      const adminSurface = new URLSearchParams(window.location.search).has('admin');
+      document.documentElement.dataset.surface = adminSurface ? 'admin' : 'public';
+      document.querySelector('meta[name="theme-color"]').content = adminSurface ? '#0d0f12' : '#242728';
+    </script>
     <title>黑馬記念積分賽系統</title>
-    <script type="module" crossorigin src="/black_horse/assets/index-x7vDsACV.js"></script>
+    <script type="module" crossorigin src="/black_horse/assets/index-DAZ9XiR8.js"></script>
     <link rel="modulepreload" crossorigin href="/black_horse/assets/rolldown-runtime-CbXtAM7H.js">
-    <link rel="modulepreload" crossorigin href="/black_horse/assets/PublicTournamentPage-C6uklWx9.js">
-    <link rel="modulepreload" crossorigin href="/black_horse/assets/PublicSeriesPage-DqTXStkI.js">
-    <link rel="stylesheet" crossorigin href="/black_horse/assets/PublicTournamentPage-BIWhwRsR.css">
-    <link rel="stylesheet" crossorigin href="/black_horse/assets/index-XKL1RikV.css">
+    <link rel="modulepreload" crossorigin href="/black_horse/assets/PublicTournamentPage-DDPVsBev.js">
+    <link rel="modulepreload" crossorigin href="/black_horse/assets/PublicSeriesPage-h-O0DpFv.js">
+    <link rel="stylesheet" crossorigin href="/black_horse/assets/PublicTournamentPage-vSFcq5kJ.css">
+    <link rel="stylesheet" crossorigin href="/black_horse/assets/index-DK_uiY2U.css">
   </head>
   <body>
     <noscript>此賽事系統需要啟用 JavaScript。</noscript>
