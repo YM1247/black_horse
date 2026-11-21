@@ -226,3 +226,24 @@ it.each([0, 1])('BO3 棄賽保留已完成局，棄賽方 %s，其餘局全票�
   expect(next.bracket.gold.isDone).toBe(true);
   expect(resultPlayer(next.bracket.gold).id).not.toBe(loser.id);
 });
+
+it('draws across configured groups only in the opening round', () => {
+  const pool = players(12);
+  const ids = pool.map(p => p.id);
+  const groups = { left: ids.slice(0, 5), right: ids.slice(5, 10) };
+  const initial = { ...createEmptyTournament({ rulesVersion: AKASHIKI }), players: pool,
+    qualificationConfig: { firstRoundGroups: groups } };
+  const draw = random => nextSwissRound(initial, { random }).rounds[0];
+  const opponents = matches => groups.left.map(id => {
+    const pair = matches.find(m => [m.p1.id, m.p2.id].includes(id));
+    return pair.p1.id === id ? pair.p2.id : pair.p1.id;
+  });
+  const matches = draw(() => 0);
+  expect(new Set(opponents(matches))).toEqual(new Set(groups.right));
+  expect(matches.flatMap(m => [m.p1.id, m.p2.id]).sort()).toEqual([...ids].sort());
+  expect(opponents(draw(() => 0.99))).not.toEqual(opponents(matches));
+  const options = { players: pool, rounds: [matches], roundNum: 2, random: () => 0 };
+  const pairs = ms => ms.map(m => [m.p1.id, m.p2.id]);
+  expect(pairs(pairVoteSwissRound({ ...options, firstRoundGroups: groups })))
+    .toEqual(pairs(pairVoteSwissRound(options)));
+});

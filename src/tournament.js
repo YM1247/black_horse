@@ -162,7 +162,21 @@ export const pairSwissRound = ({ players, rounds = [], roundNum, random = Math.r
 
 // Retain the Black Horse group/floater mechanism, using votes as the group
 // score and the complete Akashiki ranking to order entrants within each group.
-export const pairVoteSwissRound = ({ players, rounds, roundNum, random = Math.random }) => {
+export const pairVoteSwissRound = ({ players, rounds, roundNum, firstRoundGroups, random = Math.random }) => {
+  if (roundNum === 1 && firstRoundGroups) {
+    const { left, right } = firstRoundGroups;
+    const byId = new Map(players.filter(p => !p.isWithdrawn && !p.isEliminated && !p.isMC).map(p => [p.id, p]));
+    if (!Array.isArray(left) || !Array.isArray(right) || !left.length || left.length !== right.length)
+      throw new Error('請確認首輪配對名單。');
+    const grouped = new Set([...left, ...right]);
+    if (grouped.size !== 2 * left.length || [...grouped].some(id => !byId.has(id)))
+      throw new Error('首輪名單與報名資料不符，請確認選手。');
+    const opponents = shuffle(right, random);
+    const matches = left.map((id, i) => createMatch(byId.get(id), byId.get(opponents[i])));
+    const remaining = players.filter(p => !grouped.has(p.id));
+    matches.push(...pairSwissRound({ players: remaining, rounds, roundNum, random }));
+    return shuffle(matches, random).map(match => assignAttackOrder(match, random));
+  }
   if (roundNum === 1) return pairSwissRound({ players, rounds, roundNum, random, assignSides: true });
   const pool = rankPlayers(players, rounds, true).filter(p => !p.isWithdrawn && !p.isEliminated);
   const history = buildOpponentHistory(rounds);

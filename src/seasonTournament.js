@@ -129,7 +129,8 @@ export function nextSwissRound(event, { substituteName, random = Math.random } =
     players.push(organizer(substituteName.trim(), createId()));
   }
   const pair = event.rulesVersion === AKASHIKI ? pairVoteSwissRound : pairSwissRound;
-  const matches = pair({ players, rounds: event.rounds, roundNum, assignSides: true });
+  const matches = pair({ players, rounds: event.rounds, roundNum, assignSides: true, random,
+    firstRoundGroups: event.qualificationConfig?.firstRoundGroups });
   const active = players.filter((player) => !player.isWithdrawn && !player.isEliminated);
   if (!matches.length || matches.length * 2 !== active.length || matches.some((match) => match.isMCMatch))
     throw new Error('無法為所有在賽選手建立對戰。');
